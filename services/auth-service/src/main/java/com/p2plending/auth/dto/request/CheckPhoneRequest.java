@@ -5,7 +5,7 @@ import jakarta.validation.constraints.Pattern;
 import lombok.Data;
 
 @Data
-public class LoginRequest {
+public class CheckPhoneRequest {
 
     @NotBlank(message = "Phone number is required")
     @Pattern(
@@ -13,7 +13,4 @@ public class LoginRequest {
         message = "Invalid Vietnamese phone number"
     )
     private String phone;
-
-    @NotBlank(message = "Password is required")
-    private String password;
 }

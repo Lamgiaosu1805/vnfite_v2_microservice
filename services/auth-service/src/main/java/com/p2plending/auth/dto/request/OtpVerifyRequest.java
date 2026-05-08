@@ -2,10 +2,11 @@ package com.p2plending.auth.dto.request;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
 import lombok.Data;
 
 @Data
-public class LoginRequest {
+public class OtpVerifyRequest {
 
     @NotBlank(message = "Phone number is required")
     @Pattern(
@@ -14,6 +15,8 @@ public class LoginRequest {
     )
     private String phone;
 
-    @NotBlank(message = "Password is required")
-    private String password;
+    @NotBlank(message = "OTP is required")
+    @Size(min = 6, max = 6, message = "OTP must be 6 digits")
+    @Pattern(regexp = "^[0-9]{6}$", message = "OTP must contain digits only")
+    private String otp;
 }

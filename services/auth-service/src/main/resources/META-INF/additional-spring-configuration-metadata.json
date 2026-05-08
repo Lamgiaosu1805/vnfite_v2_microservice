@@ -1,0 +1,10 @@
+{
+  "properties": [
+    {
+      "name": "app.otp.mock",
+      "type": "java.lang.Boolean",
+      "description": "When true, OTP is always '000000' and SMS/ZNS sending is skipped (dev/test only).",
+      "defaultValue": false
+    }
+  ]
+}

@@ -42,18 +42,18 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
 
         String token = authHeader.substring(7);
-        String email = null;
+        String phone = null;
 
         try {
-            email = jwtService.extractSubject(token);
+            phone = jwtService.extractSubject(token);
         } catch (ExpiredJwtException e) {
             log.debug("Expired JWT on {}", request.getRequestURI());
         } catch (JwtException e) {
             log.debug("Invalid JWT on {}: {}", request.getRequestURI(), e.getMessage());
         }
 
-        if (email != null && SecurityContextHolder.getContext().getAuthentication() == null) {
-            UserDetails userDetails = userDetailsService.loadUserByUsername(email);
+        if (phone != null && SecurityContextHolder.getContext().getAuthentication() == null) {
+            UserDetails userDetails = userDetailsService.loadUserByUsername(phone);
 
             if (jwtService.isAccessTokenValid(token, userDetails)) {
                 UsernamePasswordAuthenticationToken auth =

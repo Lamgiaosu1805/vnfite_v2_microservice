@@ -20,13 +20,13 @@ public class UserDetailsServiceImpl implements UserDetailsService {
 
     @Override
     @Transactional(readOnly = true)
-    public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {
-        return userRepository.findByEmail(email)
+    public UserDetails loadUserByUsername(String phone) throws UsernameNotFoundException {
+        return userRepository.findByPhone(phone)
                 .map(user -> new User(
-                        user.getEmail(),
+                        user.getPhone(),
                         user.getPassword(),
                         List.of(new SimpleGrantedAuthority("ROLE_" + user.getRole().name()))
                 ))
-                .orElseThrow(() -> new UsernameNotFoundException("User not found: " + email));
+                .orElseThrow(() -> new UsernameNotFoundException("User not found: " + phone));
     }
 }

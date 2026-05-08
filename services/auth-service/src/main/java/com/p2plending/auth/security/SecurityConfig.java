@@ -35,7 +35,9 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         // Public endpoints
                         .requestMatchers(
+                                "/api/auth/check-phone",
                                 "/api/auth/register",
+                                "/api/auth/register/verify",
                                 "/api/auth/login",
                                 "/api/auth/refresh"
                         ).permitAll()
