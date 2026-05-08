@@ -1,0 +1,275 @@
+services:
+  # ─── Infrastructure ───────────────────────────────────────────
+  mysql:
+    image: mysql:8.0
+    container_name: p2p-mysql
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_USER: p2p_user
+      MYSQL_PASSWORD: p2p_pass
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./infra/mysql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      - p2p-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-proot"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+
+  redis:
+    image: redis:7-alpine
+    container_name: p2p-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - p2p-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: p2p-zookeeper
+    ports:
+      - "2181:2181"
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    volumes:
+      - zookeeper_data:/var/lib/zookeeper/data
+      - zookeeper_log:/var/lib/zookeeper/log
+    networks:
+      - p2p-network
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "2181"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: p2p-kafka
+    ports:
+      - "9092:9092"
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    networks:
+      - p2p-network
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+
+  # ─── Application Services ─────────────────────────────────────
+  auth-service:
+    build:
+      context: ./services/auth-service
+      dockerfile: Dockerfile
+    container_name: p2p-auth-service
+    ports:
+      - "8084:8081"
+    environment:
+      MYSQL_HOST: ${MYSQL_HOST:-mysql}
+      MYSQL_PORT: ${MYSQL_PORT:-3306}
+      AUTH_DB: ${AUTH_DB:-auth_db}
+      DB_USERNAME: ${DB_USERNAME:-p2p_user}
+      DB_PASSWORD: ${DB_PASSWORD:-p2p_pass}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      RSA_PRIVATE_KEY: ${RSA_PRIVATE_KEY:-}
+      RSA_PUBLIC_KEY: ${RSA_PUBLIC_KEY:-}
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    networks:
+      - p2p-network
+    restart: on-failure
+
+  loan-service:
+    build:
+      context: ./services/loan-service
+      dockerfile: Dockerfile
+    container_name: p2p-loan-service
+    ports:
+      - "8082:8082"
+    environment:
+      MYSQL_HOST: ${MYSQL_HOST:-mysql}
+      MYSQL_PORT: ${MYSQL_PORT:-3306}
+      LOAN_DB: ${LOAN_DB:-loan_db}
+      DB_USERNAME: ${DB_USERNAME:-p2p_user}
+      DB_PASSWORD: ${DB_PASSWORD:-p2p_pass}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      RSA_PUBLIC_KEY: ${RSA_PUBLIC_KEY:-}
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    networks:
+      - p2p-network
+    restart: on-failure
+
+  matching-service:
+    build:
+      context: ./services/matching-service
+      dockerfile: Dockerfile
+    container_name: p2p-matching-service
+    ports:
+      - "8083:8083"
+    environment:
+      MYSQL_HOST: ${MYSQL_HOST:-mysql}
+      MYSQL_PORT: ${MYSQL_PORT:-3306}
+      MATCHING_DB: ${MATCHING_DB:-matching_db}
+      DB_USERNAME: ${DB_USERNAME:-p2p_user}
+      DB_PASSWORD: ${DB_PASSWORD:-p2p_pass}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      RSA_PUBLIC_KEY: ${RSA_PUBLIC_KEY:-}
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    networks:
+      - p2p-network
+    restart: on-failure
+
+  cms-service:
+    build:
+      context: ./services/cms-service
+      dockerfile: Dockerfile
+    container_name: p2p-cms-service
+    ports:
+      - "8090:8090"
+    environment:
+      MYSQL_HOST: ${MYSQL_HOST:-mysql}
+      MYSQL_PORT: ${MYSQL_PORT:-3306}
+      CUSTOMER_DB: ${CUSTOMER_DB:-customer_db}
+      DB_USERNAME: ${DB_USERNAME:-p2p_user}
+      DB_PASSWORD: ${DB_PASSWORD:-p2p_pass}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      RSA_PUBLIC_KEY: ${RSA_PUBLIC_KEY:-}
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    networks:
+      - p2p-network
+    restart: on-failure
+
+  notification-service:
+    build:
+      context: ./services/notification-service
+      dockerfile: Dockerfile
+    container_name: p2p-notification-service
+    ports:
+      - "8085:8084"
+    environment:
+      MYSQL_HOST: ${MYSQL_HOST:-mysql}
+      MYSQL_PORT: ${MYSQL_PORT:-3306}
+      NOTIFICATION_DB: ${NOTIFICATION_DB:-notification_db}
+      DB_USERNAME: ${DB_USERNAME:-p2p_user}
+      DB_PASSWORD: ${DB_PASSWORD:-p2p_pass}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      RSA_PUBLIC_KEY: ${RSA_PUBLIC_KEY:-}
+      SMTP_HOST: ${SMTP_HOST:-localhost}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    networks:
+      - p2p-network
+    restart: on-failure
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: kafka-ui
+    ports:
+      - "8989:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
+    depends_on:
+      kafka:
+        condition: service_healthy
+    networks:
+      - p2p-network
+    restart: unless-stopped
+
+  # ─── Reverse Proxy ────────────────────────────────────────────
+  nginx:
+    image: nginx:1.25-alpine
+    container_name: p2p-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - auth-service
+      - loan-service
+      - matching-service
+      - cms-service
+      - notification-service
+    networks:
+      - p2p-network
+    restart: unless-stopped
+
+volumes:
+  mysql_data:
+  redis_data:
+  kafka_data:
+  zookeeper_data:
+  zookeeper_log:
+
+networks:
+  p2p-network:
+    driver: bridge

@@ -1,0 +1,19 @@
+# Environment — contains real credentials, never commit
+.env
+**/application-local.yml
+
+# Maven
+target/
+*.class
+*.jar
+*.war
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.claude/
+
+# OS
+.DS_Store
+Thumbs.db
