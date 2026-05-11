@@ -1,7 +1,6 @@
 package com.p2plending.auth.domain.enums;
 
 public enum Role {
-    BORROWER,
-    LENDER,
+    USER,
     ADMIN
 }

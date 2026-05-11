@@ -9,9 +9,9 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 
-public interface InvestorPreferenceRepository extends JpaRepository<InvestorPreference, Long> {
+public interface InvestorPreferenceRepository extends JpaRepository<InvestorPreference, String> {
 
-    Optional<InvestorPreference> findByInvestorIdAndActiveTrue(Long investorId);
+    Optional<InvestorPreference> findByInvestorIdAndActiveTrue(String investorId);
 
     /**
      * Finds all active investor preferences whose range fully covers the given loan criteria.

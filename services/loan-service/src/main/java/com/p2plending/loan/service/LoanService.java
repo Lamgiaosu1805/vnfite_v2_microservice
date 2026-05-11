@@ -57,7 +57,7 @@ public class LoanService {
 
     @Transactional
     @CacheEvict(value = CacheConfig.CACHE_LOANS, allEntries = true)
-    public LoanResponse createLoan(LoanCreateRequest request, Long borrowerId) {
+    public LoanResponse createLoan(LoanCreateRequest request, String borrowerId) {
         LoanRequest loan = loanRequestMapper.toEntity(request);
         loan.setBorrowerId(borrowerId);
         loan.setStatus(LoanStatus.PENDING);
@@ -83,7 +83,7 @@ public class LoanService {
 
     @Transactional(readOnly = true)
     @Cacheable(value = CacheConfig.CACHE_LOAN_BY_ID, key = "#id")
-    public LoanResponse getLoanById(Long id) {
+    public LoanResponse getLoanById(String id) {
         LoanRequest loan = findLoanOrThrow(id);
         return buildResponse(loan, true);
     }
@@ -95,12 +95,12 @@ public class LoanService {
         @CacheEvict(value = CacheConfig.CACHE_LOANS,      allEntries = true),
         @CacheEvict(value = CacheConfig.CACHE_LOAN_BY_ID, key = "#loanId")
     })
-    public LoanOfferResponse createOffer(Long loanId, LoanOfferCreateRequest request, Long investorId) {
+    public LoanOfferResponse createOffer(String loanId, LoanOfferCreateRequest request, String investorId) {
         LoanRequest loan = findLoanOrThrow(loanId);
 
         if (!OFFERABLE_STATUSES.contains(loan.getStatus())) {
             throw new InvalidLoanStateException(
-                    "Loan %d is not accepting offers — current status: %s".formatted(loanId, loan.getStatus()));
+                    "Loan %s is not accepting offers — current status: %s".formatted(loanId, loan.getStatus()));
         }
         if (investorId.equals(loan.getBorrowerId())) {
             throw new InvalidLoanStateException("Borrower cannot invest in their own loan");
@@ -143,12 +143,12 @@ public class LoanService {
         @CacheEvict(value = CacheConfig.CACHE_LOANS,      allEntries = true),
         @CacheEvict(value = CacheConfig.CACHE_LOAN_BY_ID, key = "#loanId")
     })
-    public LoanResponse updateStatus(Long loanId, LoanStatusUpdateRequest request) {
+    public LoanResponse updateStatus(String loanId, LoanStatusUpdateRequest request) {
         LoanRequest loan = findLoanOrThrow(loanId);
 
         if (!UPDATABLE_STATUSES.contains(loan.getStatus())) {
             throw new InvalidLoanStateException(
-                    "Cannot update loan %d — terminal status: %s".formatted(loanId, loan.getStatus()));
+                    "Cannot update loan %s — terminal status: %s".formatted(loanId, loan.getStatus()));
         }
 
         LoanStatus prev = loan.getStatus();
@@ -181,7 +181,7 @@ public class LoanService {
 
     // ── Internals ─────────────────────────────────────────────────
 
-    private LoanRequest findLoanOrThrow(Long id) {
+    private LoanRequest findLoanOrThrow(String id) {
         return loanRequestRepository.findById(id)
                 .orElseThrow(() -> new LoanNotFoundException(id));
     }

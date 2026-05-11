@@ -6,7 +6,7 @@ import org.springframework.data.jpa.repository.Query;
 
 import java.util.List;
 
-public interface PendingLoanRepository extends JpaRepository<PendingLoan, Long> {
+public interface PendingLoanRepository extends JpaRepository<PendingLoan, String> {
 
     /** Loans still open for matching (not yet fully funded). */
     @Query("SELECT l FROM PendingLoan l WHERE l.fullyFunded = false ORDER BY l.lastMatchedAt ASC NULLS FIRST")

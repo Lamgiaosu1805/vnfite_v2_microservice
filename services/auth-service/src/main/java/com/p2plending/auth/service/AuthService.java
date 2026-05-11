@@ -37,7 +37,6 @@ import org.springframework.util.StringUtils;
 
 import java.time.Duration;
 import java.util.List;
-import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -110,9 +109,8 @@ public class AuthService {
         User user = User.builder()
                 .phone(pending.getPhone())
                 .password(pending.getHashedPassword())
-                .role(Role.BORROWER)
+                .role(Role.USER)
                 .kycStatus(KycStatus.NONE)
-                .referralCode(generateUniqueReferralCode())
                 .referredBy(pending.getReferrerPhone())
                 .build();
 
@@ -166,7 +164,7 @@ public class AuthService {
     // ── KYC submit ────────────────────────────────────────────────
 
     @Transactional
-    public KycDocumentResponse submitKyc(Long userId, KycSubmitRequest request) {
+    public KycDocumentResponse submitKyc(String userId, KycSubmitRequest request) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found: " + userId));
 
@@ -191,7 +189,7 @@ public class AuthService {
     // ── Helper ────────────────────────────────────────────────────
 
     @Transactional(readOnly = true)
-    public Long getUserIdByPhone(String phone) {
+    public String getUserIdByPhone(String phone) {
         return userRepository.findByPhone(phone)
                 .map(User::getId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found: " + phone));
@@ -228,11 +226,4 @@ public class AuthService {
         return REFRESH_TOKEN_PREFIX + phone;
     }
 
-    private String generateUniqueReferralCode() {
-        String code;
-        do {
-            code = UUID.randomUUID().toString().replace("-", "").substring(0, 8).toUpperCase();
-        } while (userRepository.existsByReferralCode(code));
-        return code;
-    }
 }

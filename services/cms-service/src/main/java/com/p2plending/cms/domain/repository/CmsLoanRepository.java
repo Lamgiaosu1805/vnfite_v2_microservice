@@ -9,7 +9,7 @@ import org.springframework.data.repository.query.Param;
 
 import java.math.BigDecimal;
 
-public interface CmsLoanRepository extends JpaRepository<CmsLoan, Long> {
+public interface CmsLoanRepository extends JpaRepository<CmsLoan, String> {
 
     @Query("""
         SELECT l FROM CmsLoan l
@@ -18,7 +18,7 @@ public interface CmsLoanRepository extends JpaRepository<CmsLoan, Long> {
         """)
     Page<CmsLoan> findWithFilters(
             @Param("status")     String status,
-            @Param("borrowerId") Long   borrowerId,
+            @Param("borrowerId") String borrowerId,
             Pageable pageable);
 
     long countByStatus(String status);

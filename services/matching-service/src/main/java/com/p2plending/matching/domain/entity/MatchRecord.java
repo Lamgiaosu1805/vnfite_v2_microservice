@@ -27,14 +27,14 @@ import java.time.LocalDateTime;
 public class MatchRecord {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    @GeneratedValue(strategy = GenerationType.UUID)
+    private String id;
 
     @Column(nullable = false)
-    private Long loanId;
+    private String loanId;
 
     @Column(nullable = false)
-    private Long investorId;
+    private String investorId;
 
     /** Match quality score 0.00–1.00 (higher = better fit). */
     @Column(nullable = false, precision = 4, scale = 3)
@@ -44,6 +44,10 @@ public class MatchRecord {
     @Column(nullable = false, length = 20)
     @Builder.Default
     private MatchStatus status = MatchStatus.PENDING;
+
+    @Column(nullable = false)
+    @Builder.Default
+    private boolean isDeleted = false;
 
     @CreationTimestamp
     @Column(updatable = false)

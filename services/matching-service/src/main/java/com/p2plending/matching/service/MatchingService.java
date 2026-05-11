@@ -67,7 +67,7 @@ public class MatchingService {
     // ── Trigger from Kafka loan.funded ────────────────────────────
 
     @Transactional
-    public void onLoanFunded(Long loanId) {
+    public void onLoanFunded(String loanId) {
         pendingLoanRepository.findById(loanId).ifPresent(loan -> {
             loan.setFullyFunded(true);
             pendingLoanRepository.save(loan);
@@ -95,7 +95,7 @@ public class MatchingService {
     // ── Investor preference management ───────────────────────────
 
     @Transactional
-    public void upsertPreference(Long investorId, InvestorPreferenceRequest request) {
+    public void upsertPreference(String investorId, InvestorPreferenceRequest request) {
         InvestorPreference pref = preferenceRepository
                 .findByInvestorIdAndActiveTrue(investorId)
                 .orElse(InvestorPreference.builder().investorId(investorId).build());
@@ -115,7 +115,7 @@ public class MatchingService {
     // ── Query ─────────────────────────────────────────────────────
 
     @Transactional(readOnly = true)
-    public List<MatchRecordResponse> getMatchesForLoan(Long loanId) {
+    public List<MatchRecordResponse> getMatchesForLoan(String loanId) {
         if (!pendingLoanRepository.existsById(loanId)) {
             throw new ResourceNotFoundException("No matching data found for loan: " + loanId);
         }
@@ -242,5 +242,5 @@ public class MatchingService {
                 .build();
     }
 
-    private record ScoredCandidate(Long investorId, double score) {}
+    private record ScoredCandidate(String investorId, double score) {}
 }

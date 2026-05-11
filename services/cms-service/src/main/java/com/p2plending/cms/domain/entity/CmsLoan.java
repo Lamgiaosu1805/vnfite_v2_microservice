@@ -20,10 +20,10 @@ import java.time.LocalDateTime;
 public class CmsLoan {
 
     @Id
-    private Long loanId;
+    private String loanId;
 
     @Column(nullable = false)
-    private Long borrowerId;
+    private String borrowerId;
 
     @Column(nullable = false, precision = 15, scale = 2)
     private BigDecimal amount;
@@ -40,6 +40,10 @@ public class CmsLoan {
     @Column(nullable = false, length = 20)
     @Builder.Default
     private String status = "PENDING";
+
+    @Column(nullable = false)
+    @Builder.Default
+    private boolean isDeleted = false;
 
     private LocalDateTime createdAt;
 

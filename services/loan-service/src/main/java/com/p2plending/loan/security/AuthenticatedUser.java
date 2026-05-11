@@ -10,7 +10,7 @@ import java.util.Collection;
  * Available via @AuthenticationPrincipal in controllers.
  */
 public record AuthenticatedUser(
-        Long userId,
+        String userId,
         String email,
         Collection<? extends GrantedAuthority> authorities
 ) implements UserDetails {

@@ -42,12 +42,12 @@ public class CmsKafkaConsumerService {
     @CacheEvict(value = {CACHE_DASHBOARD_STATS, CACHE_DASHBOARD_CHART}, allEntries = true)
     public void onUserRegistered(ConsumerRecord<String, String> rec, Acknowledgment ack) {
         process(rec, ack, "user.registered", node -> {
-            Long userId = node.get("userId").asLong();
+            String userId = node.get("userId").asText();
             if (!userRepo.existsById(userId)) {
                 userRepo.save(CmsUser.builder()
                         .userId(userId)
-                        .email(node.get("email").asText())
-                        .fullName(node.get("fullName").asText())
+                        .phone(node.has("phone") ? node.get("phone").asText(null) : null)
+                        .fullName(node.has("fullName") && !node.get("fullName").isNull() ? node.get("fullName").asText() : null)
                         .role(node.get("role").asText())
                         .createdAt(LocalDateTime.now())
                         .build());
@@ -65,7 +65,7 @@ public class CmsKafkaConsumerService {
     @CacheEvict(value = CACHE_DASHBOARD_STATS, allEntries = true)
     public void onKycSubmitted(ConsumerRecord<String, String> rec, Acknowledgment ack) {
         process(rec, ack, "kyc.submitted", node -> {
-            Long userId = node.get("userId").asLong();
+            String userId = node.get("userId").asText();
             userRepo.findById(userId).ifPresent(u -> {
                 u.setKycStatus("PENDING");
                 userRepo.save(u);
@@ -82,12 +82,12 @@ public class CmsKafkaConsumerService {
     @CacheEvict(value = {CACHE_DASHBOARD_STATS, CACHE_DASHBOARD_CHART}, allEntries = true)
     public void onLoanCreated(ConsumerRecord<String, String> rec, Acknowledgment ack) {
         process(rec, ack, "loan.created", node -> {
-            Long loanId = node.get("loanId").asLong();
+            String loanId = node.get("loanId").asText();
             if (!loanRepo.existsById(loanId)) {
                 BigDecimal amount = new BigDecimal(node.get("amount").asText());
                 loanRepo.save(CmsLoan.builder()
                         .loanId(loanId)
-                        .borrowerId(node.get("borrowerId").asLong())
+                        .borrowerId(node.get("borrowerId").asText())
                         .amount(amount)
                         .interestRate(new BigDecimal(node.get("interestRate").asText()))
                         .termMonths(node.get("termMonths").asInt())
@@ -109,7 +109,7 @@ public class CmsKafkaConsumerService {
     @CacheEvict(value = {CACHE_DASHBOARD_STATS, CACHE_DASHBOARD_CHART}, allEntries = true)
     public void onLoanFunded(ConsumerRecord<String, String> rec, Acknowledgment ack) {
         process(rec, ack, "loan.funded", node -> {
-            Long loanId = node.get("loanId").asLong();
+            String loanId = node.get("loanId").asText();
             loanRepo.findById(loanId).ifPresent(l -> {
                 l.setStatus("FUNDED");
                 loanRepo.save(l);

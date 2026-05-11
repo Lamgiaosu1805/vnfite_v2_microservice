@@ -21,12 +21,12 @@ import java.time.LocalDateTime;
 public class CmsUser {
 
     @Id
-    private Long userId;
+    private String userId;
 
-    @Column(nullable = false, length = 150)
+    @Column(length = 150)
     private String email;
 
-    @Column(nullable = false, length = 100)
+    @Column(length = 100)
     private String fullName;
 
     @Column(length = 20)
@@ -43,6 +43,10 @@ public class CmsUser {
     @Column(nullable = false, length = 20)
     @Builder.Default
     private UserAccountStatus accountStatus = UserAccountStatus.ACTIVE;
+
+    @Column(nullable = false)
+    @Builder.Default
+    private boolean isDeleted = false;
 
     private LocalDateTime createdAt;
 

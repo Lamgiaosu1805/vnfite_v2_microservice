@@ -26,14 +26,14 @@ import java.time.LocalDateTime;
 public class LoanOffer {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    @GeneratedValue(strategy = GenerationType.UUID)
+    private String id;
 
     @Column(nullable = false)
-    private Long loanRequestId;
+    private String loanRequestId;
 
     @Column(nullable = false)
-    private Long investorId;
+    private String investorId;
 
     @Column(nullable = false, precision = 15, scale = 2)
     private BigDecimal amount;
@@ -42,6 +42,10 @@ public class LoanOffer {
     @Column(nullable = false, length = 20)
     @Builder.Default
     private OfferStatus status = OfferStatus.ACCEPTED;
+
+    @Column(nullable = false)
+    @Builder.Default
+    private boolean isDeleted = false;
 
     @CreationTimestamp
     @Column(updatable = false)

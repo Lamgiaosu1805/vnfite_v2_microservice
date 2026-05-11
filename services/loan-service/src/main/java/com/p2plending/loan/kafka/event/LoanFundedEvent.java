@@ -13,8 +13,8 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 public class LoanFundedEvent {
-    private Long loanId;
-    private Long borrowerId;
+    private String loanId;
+    private String borrowerId;
     private BigDecimal totalAmount;
     private LocalDateTime fundedAt;
 }

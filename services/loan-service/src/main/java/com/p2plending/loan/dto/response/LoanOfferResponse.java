@@ -10,9 +10,9 @@ import java.time.LocalDateTime;
 @Data
 @Builder
 public class LoanOfferResponse {
-    private Long id;
-    private Long loanRequestId;
-    private Long investorId;
+    private String id;
+    private String loanRequestId;
+    private String investorId;
     private BigDecimal amount;
     private OfferStatus status;
     private LocalDateTime createdAt;

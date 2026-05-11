@@ -10,19 +10,19 @@ import org.springframework.data.repository.query.Param;
 import java.util.List;
 import java.util.Optional;
 
-public interface MatchRecordRepository extends JpaRepository<MatchRecord, Long> {
+public interface MatchRecordRepository extends JpaRepository<MatchRecord, String> {
 
-    List<MatchRecord> findByLoanIdOrderByScoreDesc(Long loanId);
+    List<MatchRecord> findByLoanIdOrderByScoreDesc(String loanId);
 
-    List<MatchRecord> findByInvestorId(Long investorId);
+    List<MatchRecord> findByInvestorId(String investorId);
 
-    Optional<MatchRecord> findByLoanIdAndInvestorId(Long loanId, Long investorId);
+    Optional<MatchRecord> findByLoanIdAndInvestorId(String loanId, String investorId);
 
-    boolean existsByLoanIdAndInvestorId(Long loanId, Long investorId);
+    boolean existsByLoanIdAndInvestorId(String loanId, String investorId);
 
-    List<MatchRecord> findByLoanIdAndStatus(Long loanId, MatchStatus status);
+    List<MatchRecord> findByLoanIdAndStatus(String loanId, MatchStatus status);
 
     @Modifying
     @Query("UPDATE MatchRecord m SET m.status = 'EXPIRED' WHERE m.loanId = :loanId AND m.status IN ('PENDING','NOTIFIED')")
-    int expireByLoanId(@Param("loanId") Long loanId);
+    int expireByLoanId(@Param("loanId") String loanId);
 }

@@ -25,11 +25,11 @@ import java.time.LocalDateTime;
 public class KycDocument {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    @GeneratedValue(strategy = GenerationType.UUID)
+    private String id;
 
     @Column(nullable = false)
-    private Long userId;
+    private String userId;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 30)
@@ -42,6 +42,10 @@ public class KycDocument {
     @Column(nullable = false, length = 20)
     @Builder.Default
     private KycStatus status = KycStatus.PENDING;
+
+    @Column(nullable = false)
+    @Builder.Default
+    private boolean isDeleted = false;
 
     @CreationTimestamp
     @Column(updatable = false)

@@ -1,3 +1,3 @@
 package com.p2plending.cms.security;
 
-public record CmsPrincipal(Long userId, String email) {}
+public record CmsPrincipal(String userId, String email) {}

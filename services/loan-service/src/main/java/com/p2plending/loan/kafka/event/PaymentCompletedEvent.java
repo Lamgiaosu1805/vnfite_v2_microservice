@@ -13,8 +13,8 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 public class PaymentCompletedEvent {
-    private Long loanId;
-    private Long paymentId;
+    private String loanId;
+    private String paymentId;
     private BigDecimal amount;
     private boolean finalPayment;
     private LocalDateTime paidAt;

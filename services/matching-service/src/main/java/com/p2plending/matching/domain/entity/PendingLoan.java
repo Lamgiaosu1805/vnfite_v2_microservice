@@ -23,10 +23,10 @@ import java.time.LocalDateTime;
 public class PendingLoan {
 
     @Id
-    private Long loanId;   // same as loan-service ID — no auto-generate
+    private String loanId;   // same as loan-service ID — no auto-generate
 
     @Column(nullable = false)
-    private Long borrowerId;
+    private String borrowerId;
 
     @Column(nullable = false, precision = 15, scale = 2)
     private BigDecimal amount;
@@ -44,9 +44,16 @@ public class PendingLoan {
     @Builder.Default
     private boolean fullyFunded = false;
 
+    @Column(nullable = false)
+    @Builder.Default
+    private boolean isDeleted = false;
+
     @CreationTimestamp
     @Column(updatable = false)
     private LocalDateTime receivedAt;
 
     private LocalDateTime lastMatchedAt;
+
+    @UpdateTimestamp
+    private LocalDateTime updatedAt;
 }

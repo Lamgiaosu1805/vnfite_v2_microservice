@@ -32,14 +32,14 @@ public class UserManagementController {
     }
 
     @GetMapping("/{userId}")
-    public ResponseEntity<UserSummaryResponse> getUser(@PathVariable Long userId) {
+    public ResponseEntity<UserSummaryResponse> getUser(@PathVariable String userId) {
         return ResponseEntity.ok(userService.getUser(userId));
     }
 
     @PutMapping("/{userId}/kyc")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<UserSummaryResponse> decideKyc(
-            @PathVariable Long userId,
+            @PathVariable String userId,
             @Valid @RequestBody KycDecisionRequest req) {
         return ResponseEntity.ok(userService.decideKyc(userId, req));
     }
@@ -47,7 +47,7 @@ public class UserManagementController {
     @PutMapping("/{userId}/status")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<UserSummaryResponse> updateStatus(
-            @PathVariable Long userId,
+            @PathVariable String userId,
             @Valid @RequestBody UserStatusRequest req) {
         return ResponseEntity.ok(userService.updateStatus(userId, req));
     }

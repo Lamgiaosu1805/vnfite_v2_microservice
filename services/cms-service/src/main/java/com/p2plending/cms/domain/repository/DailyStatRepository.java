@@ -7,7 +7,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
-public interface DailyStatRepository extends JpaRepository<DailyStat, Long> {
+public interface DailyStatRepository extends JpaRepository<DailyStat, String> {
 
     Optional<DailyStat> findByStatDate(LocalDate date);
 

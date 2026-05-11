@@ -24,7 +24,7 @@ public class MatchController {
      */
     @GetMapping("/{loanId}")
     public ResponseEntity<List<MatchRecordResponse>> getMatchesForLoan(
-            @PathVariable Long loanId) {
+            @PathVariable String loanId) {
         return ResponseEntity.ok(matchingService.getMatchesForLoan(loanId));
     }
 
@@ -35,7 +35,7 @@ public class MatchController {
      */
     @PostMapping("/preferences")
     public ResponseEntity<Void> upsertPreference(
-            @RequestHeader("X-Investor-Id") Long investorId,
+            @RequestHeader("X-Investor-Id") String investorId,
             @Valid @RequestBody InvestorPreferenceRequest request) {
         matchingService.upsertPreference(investorId, request);
         return ResponseEntity.status(HttpStatus.NO_CONTENT).build();

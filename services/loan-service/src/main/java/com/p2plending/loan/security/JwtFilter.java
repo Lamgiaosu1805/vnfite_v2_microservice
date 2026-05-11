@@ -53,7 +53,7 @@ public class JwtFilter extends OncePerRequestFilter {
         try {
             Claims claims = parseClaims(token);
 
-            Long   userId = claims.get("userId", Long.class);
+            String userId = claims.get("userId", String.class);
             String email  = claims.getSubject();
 
             @SuppressWarnings("unchecked")

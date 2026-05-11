@@ -11,13 +11,13 @@ import org.springframework.data.repository.query.Param;
 import java.util.List;
 
 public interface LoanRequestRepository
-        extends JpaRepository<LoanRequest, Long>, JpaSpecificationExecutor<LoanRequest> {
+        extends JpaRepository<LoanRequest, String>, JpaSpecificationExecutor<LoanRequest> {
 
-    List<LoanRequest> findByBorrowerId(Long borrowerId);
+    List<LoanRequest> findByBorrowerId(String borrowerId);
 
     List<LoanRequest> findByStatus(LoanStatus status);
 
     @Modifying
     @Query("UPDATE LoanRequest l SET l.status = :status WHERE l.id = :id")
-    int updateStatus(@Param("id") Long id, @Param("status") LoanStatus status);
+    int updateStatus(@Param("id") String id, @Param("status") LoanStatus status);
 }

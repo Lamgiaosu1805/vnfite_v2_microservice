@@ -12,8 +12,8 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 public class KycSubmittedEvent {
-    private Long userId;
-    private Long documentId;
+    private String userId;
+    private String documentId;
     private String docType;
     private LocalDateTime submittedAt;
 }

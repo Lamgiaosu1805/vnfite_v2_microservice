@@ -21,7 +21,7 @@ public class LoanManagementController {
     @GetMapping
     public ResponseEntity<PagedResponse<LoanSummaryResponse>> getLoans(
             @RequestParam(required = false) String status,
-            @RequestParam(required = false) Long borrowerId,
+            @RequestParam(required = false) String borrowerId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
         return ResponseEntity.ok(loanService.getLoans(status, borrowerId, page, size));
@@ -30,7 +30,7 @@ public class LoanManagementController {
     @PutMapping("/{loanId}/approve")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<LoanSummaryResponse> approve(
-            @PathVariable Long loanId,
+            @PathVariable String loanId,
             @Valid @RequestBody LoanActionRequest req) {
         return ResponseEntity.ok(loanService.approve(loanId, req));
     }
@@ -38,7 +38,7 @@ public class LoanManagementController {
     @PutMapping("/{loanId}/reject")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<LoanSummaryResponse> reject(
-            @PathVariable Long loanId,
+            @PathVariable String loanId,
             @Valid @RequestBody LoanActionRequest req) {
         return ResponseEntity.ok(loanService.reject(loanId, req));
     }

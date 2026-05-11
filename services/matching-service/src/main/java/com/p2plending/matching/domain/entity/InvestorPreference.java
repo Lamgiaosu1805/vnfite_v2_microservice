@@ -24,11 +24,11 @@ import java.time.LocalDateTime;
 public class InvestorPreference {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    @GeneratedValue(strategy = GenerationType.UUID)
+    private String id;
 
     @Column(nullable = false)
-    private Long investorId;
+    private String investorId;
 
     /** Minimum loan amount the investor is willing to fund. */
     @Column(nullable = false, precision = 15, scale = 2)
@@ -57,6 +57,10 @@ public class InvestorPreference {
     @Column(nullable = false)
     @Builder.Default
     private boolean active = true;
+
+    @Column(nullable = false)
+    @Builder.Default
+    private boolean isDeleted = false;
 
     @CreationTimestamp
     @Column(updatable = false)

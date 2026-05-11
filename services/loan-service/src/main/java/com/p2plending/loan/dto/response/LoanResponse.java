@@ -13,8 +13,8 @@ import java.util.List;
 @Builder
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class LoanResponse {
-    private Long id;
-    private Long borrowerId;
+    private String id;
+    private String borrowerId;
     private BigDecimal amount;
     private BigDecimal interestRate;
     private Integer termMonths;

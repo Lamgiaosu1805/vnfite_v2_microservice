@@ -8,11 +8,11 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import java.util.List;
 import java.util.Optional;
 
-public interface KycDocumentRepository extends JpaRepository<KycDocument, Long> {
+public interface KycDocumentRepository extends JpaRepository<KycDocument, String> {
 
-    List<KycDocument> findByUserId(Long userId);
+    List<KycDocument> findByUserId(String userId);
 
-    Optional<KycDocument> findByUserIdAndDocType(Long userId, DocType docType);
+    Optional<KycDocument> findByUserIdAndDocType(String userId, DocType docType);
 
     List<KycDocument> findByStatus(KycStatus status);
 }

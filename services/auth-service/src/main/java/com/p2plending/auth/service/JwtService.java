@@ -47,7 +47,7 @@ public class JwtService {
 
     // ── Token generation ──────────────────────────────────────────
 
-    public String generateAccessToken(UserDetails userDetails, Long userId) {
+    public String generateAccessToken(UserDetails userDetails, String userId) {
         List<String> roles = userDetails.getAuthorities().stream()
                 .map(GrantedAuthority::getAuthority)
                 .toList();

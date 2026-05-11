@@ -83,7 +83,7 @@ public class AuthController {
             @Valid @RequestBody KycSubmitRequest request,
             @AuthenticationPrincipal UserDetails principal
     ) {
-        Long userId = authService.getUserIdByPhone(principal.getUsername());
+        String userId = authService.getUserIdByPhone(principal.getUsername());
         return ResponseEntity.status(HttpStatus.CREATED).body(authService.submitKyc(userId, request));
     }
 }

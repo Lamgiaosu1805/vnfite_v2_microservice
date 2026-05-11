@@ -10,8 +10,8 @@ import java.time.LocalDateTime;
 @Data
 @Builder
 public class KycDocumentResponse {
-    private Long id;
-    private Long userId;
+    private String id;
+    private String userId;
     private DocType docType;
     private String docUrl;
     private KycStatus status;

@@ -14,7 +14,7 @@ import java.math.BigDecimal;
 public class LoanFilterParams {
 
     private LoanStatus status;
-    private Long borrowerId;
+    private String borrowerId;
     private BigDecimal minAmount;
     private BigDecimal maxAmount;
 

@@ -19,27 +19,27 @@ public class LoanManagementService {
     private final CmsLoanRepository loanRepo;
 
     @Transactional(readOnly = true)
-    public PagedResponse<LoanSummaryResponse> getLoans(String status, Long borrowerId, int page, int size) {
+    public PagedResponse<LoanSummaryResponse> getLoans(String status, String borrowerId, int page, int size) {
         var pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
         return PagedResponse.from(
                 loanRepo.findWithFilters(status, borrowerId, pageable).map(this::toResponse));
     }
 
     @Transactional
-    public LoanSummaryResponse approve(Long loanId, LoanActionRequest req) {
+    public LoanSummaryResponse approve(String loanId, LoanActionRequest req) {
         CmsLoan loan = findOrThrow(loanId);
         loan.setStatus("ACTIVE");
         return toResponse(loanRepo.save(loan));
     }
 
     @Transactional
-    public LoanSummaryResponse reject(Long loanId, LoanActionRequest req) {
+    public LoanSummaryResponse reject(String loanId, LoanActionRequest req) {
         CmsLoan loan = findOrThrow(loanId);
         loan.setStatus("REJECTED");
         return toResponse(loanRepo.save(loan));
     }
 
-    private CmsLoan findOrThrow(Long id) {
+    private CmsLoan findOrThrow(String id) {
         return loanRepo.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Loan not found: " + id));
     }

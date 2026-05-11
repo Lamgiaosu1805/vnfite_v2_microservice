@@ -10,8 +10,8 @@ import java.time.LocalDateTime;
 
 @Data @Builder @NoArgsConstructor @AllArgsConstructor
 public class MatchFoundEvent {
-    private Long loanId;
-    private Long investorId;
+    private String loanId;
+    private String investorId;
     private BigDecimal score;
     private BigDecimal loanAmount;
     private BigDecimal interestRate;

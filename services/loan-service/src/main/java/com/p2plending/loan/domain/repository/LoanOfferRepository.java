@@ -9,19 +9,19 @@ import org.springframework.data.repository.query.Param;
 import java.math.BigDecimal;
 import java.util.List;
 
-public interface LoanOfferRepository extends JpaRepository<LoanOffer, Long> {
+public interface LoanOfferRepository extends JpaRepository<LoanOffer, String> {
 
-    List<LoanOffer> findByLoanRequestId(Long loanRequestId);
+    List<LoanOffer> findByLoanRequestId(String loanRequestId);
 
-    List<LoanOffer> findByLoanRequestIdAndStatus(Long loanRequestId, OfferStatus status);
+    List<LoanOffer> findByLoanRequestIdAndStatus(String loanRequestId, OfferStatus status);
 
-    List<LoanOffer> findByInvestorId(Long investorId);
+    List<LoanOffer> findByInvestorId(String investorId);
 
-    boolean existsByLoanRequestIdAndInvestorId(Long loanRequestId, Long investorId);
+    boolean existsByLoanRequestIdAndInvestorId(String loanRequestId, String investorId);
 
     @Query("SELECT COALESCE(SUM(o.amount), 0) FROM LoanOffer o " +
            "WHERE o.loanRequestId = :loanRequestId AND o.status = :status")
     BigDecimal sumAmountByLoanRequestIdAndStatus(
-            @Param("loanRequestId") Long loanRequestId,
+            @Param("loanRequestId") String loanRequestId,
             @Param("status") OfferStatus status);
 }

@@ -60,7 +60,7 @@ public class LoanController {
      * Response cached in Redis for 10 minutes.
      */
     @GetMapping("/{id}")
-    public ResponseEntity<LoanResponse> getLoanById(@PathVariable Long id) {
+    public ResponseEntity<LoanResponse> getLoanById(@PathVariable String id) {
         return ResponseEntity.ok(loanService.getLoanById(id));
     }
 
@@ -72,7 +72,7 @@ public class LoanController {
     @PostMapping("/{id}/offer")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<LoanOfferResponse> createOffer(
-            @PathVariable Long id,
+            @PathVariable String id,
             @Valid @RequestBody LoanOfferCreateRequest request,
             @AuthenticationPrincipal AuthenticatedUser principal
     ) {
@@ -89,7 +89,7 @@ public class LoanController {
     @PutMapping("/{id}/status")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<LoanResponse> updateStatus(
-            @PathVariable Long id,
+            @PathVariable String id,
             @Valid @RequestBody LoanStatusUpdateRequest request
     ) {
         return ResponseEntity.ok(loanService.updateStatus(id, request));

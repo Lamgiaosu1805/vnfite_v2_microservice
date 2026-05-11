@@ -31,25 +31,25 @@ public class UserManagementService {
     }
 
     @Transactional(readOnly = true)
-    public UserSummaryResponse getUser(Long userId) {
+    public UserSummaryResponse getUser(String userId) {
         return toResponse(findOrThrow(userId));
     }
 
     @Transactional
-    public UserSummaryResponse decideKyc(Long userId, KycDecisionRequest req) {
+    public UserSummaryResponse decideKyc(String userId, KycDecisionRequest req) {
         CmsUser user = findOrThrow(userId);
         user.setKycStatus(req.getDecision().name());
         return toResponse(userRepo.save(user));
     }
 
     @Transactional
-    public UserSummaryResponse updateStatus(Long userId, UserStatusRequest req) {
+    public UserSummaryResponse updateStatus(String userId, UserStatusRequest req) {
         CmsUser user = findOrThrow(userId);
         user.setAccountStatus(req.getStatus());
         return toResponse(userRepo.save(user));
     }
 
-    private CmsUser findOrThrow(Long id) {
+    private CmsUser findOrThrow(String id) {
         return userRepo.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found: " + id));
     }

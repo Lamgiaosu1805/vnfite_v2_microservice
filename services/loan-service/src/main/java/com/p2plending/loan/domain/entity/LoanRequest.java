@@ -26,11 +26,11 @@ import java.time.LocalDateTime;
 public class LoanRequest {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    @GeneratedValue(strategy = GenerationType.UUID)
+    private String id;
 
     @Column(nullable = false)
-    private Long borrowerId;
+    private String borrowerId;
 
     @Column(nullable = false, precision = 15, scale = 2)
     private BigDecimal amount;
@@ -54,6 +54,10 @@ public class LoanRequest {
     @Column(nullable = false, precision = 15, scale = 2)
     @Builder.Default
     private BigDecimal fundedAmount = BigDecimal.ZERO;
+
+    @Column(nullable = false)
+    @Builder.Default
+    private boolean isDeleted = false;
 
     @CreationTimestamp
     @Column(updatable = false)

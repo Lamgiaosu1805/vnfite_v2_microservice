@@ -46,7 +46,7 @@ public class JwtFilter extends OncePerRequestFilter {
             try {
                 Claims claims = Jwts.parser().verifyWith(publicKey).build()
                         .parseSignedClaims(header.substring(7)).getPayload();
-                Long userId = claims.get("userId", Long.class);
+                String userId = claims.get("userId", String.class);
                 @SuppressWarnings("unchecked")
                 List<String> roles = claims.get("roles", List.class);
                 List<SimpleGrantedAuthority> authorities =

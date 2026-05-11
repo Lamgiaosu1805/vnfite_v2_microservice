@@ -22,12 +22,15 @@ public class KafkaProducerService {
     private final KafkaTemplate<String, String> kafkaTemplate;
     private final ObjectMapper objectMapper;
 
-    public void publishUserRegistered(Long userId, String email, String fullName, String role) {
+    public void publishUserRegistered(String userId, String phone, String fullName, String role) {
         try {
-            String payload = objectMapper.writeValueAsString(
-                java.util.Map.of("userId", userId, "email", email, "fullName", fullName, "role", role,
-                                 "registeredAt", java.time.LocalDateTime.now().toString()));
-            kafkaTemplate.send(TOPIC_USER_REGISTERED, userId.toString(), payload)
+            java.util.Map<String, Object> data = new java.util.HashMap<>();
+            data.put("userId", userId);
+            data.put("phone", phone);
+            data.put("fullName", fullName);
+            data.put("role", role);
+            data.put("registeredAt", LocalDateTime.now().toString());
+            kafkaTemplate.send(TOPIC_USER_REGISTERED, userId.toString(), objectMapper.writeValueAsString(data))
                     .whenComplete((r, ex) -> {
                         if (ex != null) log.error("Failed to publish user.registered userId={}: {}", userId, ex.getMessage());
                     });
@@ -36,7 +39,7 @@ public class KafkaProducerService {
         }
     }
 
-    public void publishKycSubmitted(Long userId, Long documentId, DocType docType) {
+    public void publishKycSubmitted(String userId, String documentId, DocType docType) {
         KycSubmittedEvent event = KycSubmittedEvent.builder()
                 .userId(userId)
                 .documentId(documentId)

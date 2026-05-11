@@ -8,8 +8,8 @@ import java.time.LocalDateTime;
 
 @Data @Builder
 public class LoanSummaryResponse {
-    private Long loanId;
-    private Long borrowerId;
+    private String loanId;
+    private String borrowerId;
     private BigDecimal amount;
     private BigDecimal interestRate;
     private Integer termMonths;

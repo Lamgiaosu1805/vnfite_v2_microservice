@@ -9,9 +9,9 @@ import java.time.LocalDateTime;
 
 @Data @Builder
 public class MatchRecordResponse {
-    private Long id;
-    private Long loanId;
-    private Long investorId;
+    private String id;
+    private String loanId;
+    private String investorId;
     private BigDecimal score;
     private MatchStatus status;
     private LocalDateTime createdAt;

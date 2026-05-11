@@ -8,7 +8,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-public interface CmsUserRepository extends JpaRepository<CmsUser, Long> {
+public interface CmsUserRepository extends JpaRepository<CmsUser, String> {
 
     @Query("""
         SELECT u FROM CmsUser u
