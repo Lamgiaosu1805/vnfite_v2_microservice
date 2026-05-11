@@ -1,18 +1,21 @@
 package com.p2plending.auth.controller;
 
 import com.p2plending.auth.dto.request.CheckPhoneRequest;
-import com.p2plending.auth.dto.request.KycSubmitRequest;
+import com.p2plending.auth.dto.request.KycInitRequest;
+import com.p2plending.auth.dto.request.KycVerifyRequest;
 import com.p2plending.auth.dto.request.LoginRequest;
 import com.p2plending.auth.dto.request.OtpVerifyRequest;
 import com.p2plending.auth.dto.request.RefreshTokenRequest;
 import com.p2plending.auth.dto.request.RegisterRequest;
 import com.p2plending.auth.dto.response.AuthResponse;
-import com.p2plending.auth.dto.response.KycDocumentResponse;
+import com.p2plending.auth.dto.response.KycSubmissionResponse;
 import com.p2plending.auth.dto.response.RegisterInitResponse;
 import com.p2plending.auth.service.AuthService;
+import com.p2plending.auth.service.KycService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -27,6 +30,7 @@ import java.util.Map;
 public class AuthController {
 
     private final AuthService authService;
+    private final KycService  kycService;
 
     /**
      * POST /api/auth/check-phone
@@ -74,16 +78,30 @@ public class AuthController {
     }
 
     /**
-     * POST /api/auth/kyc/submit
-     * Yêu cầu đăng nhập. EKYC có thể thực hiện bất kỳ lúc nào.
+     * POST /api/auth/kyc/init
+     * Bước 1: Kiểm tra CCCD, upload ảnh, gửi OTP.
      */
-    @PostMapping("/kyc/submit")
+    @PostMapping(value = "/kyc/init", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<KycDocumentResponse> submitKyc(
-            @Valid @RequestBody KycSubmitRequest request,
+    public ResponseEntity<Map<String, String>> kycInit(
+            @Valid @ModelAttribute KycInitRequest request,
             @AuthenticationPrincipal UserDetails principal
     ) {
         String userId = authService.getUserIdByPhone(principal.getUsername());
-        return ResponseEntity.status(HttpStatus.CREATED).body(authService.submitKyc(userId, request));
+        return ResponseEntity.ok(kycService.initKyc(userId, request));
+    }
+
+    /**
+     * POST /api/auth/kyc/verify
+     * Bước 2: Xác thực OTP → lưu thông tin KYC.
+     */
+    @PostMapping("/kyc/verify")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<KycSubmissionResponse> kycVerify(
+            @Valid @RequestBody KycVerifyRequest request,
+            @AuthenticationPrincipal UserDetails principal
+    ) {
+        String userId = authService.getUserIdByPhone(principal.getUsername());
+        return ResponseEntity.status(HttpStatus.CREATED).body(kycService.verifyKyc(userId, request));
     }
 }

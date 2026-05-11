@@ -48,6 +48,30 @@ CREATE TABLE IF NOT EXISTS refresh_tokens (
   UNIQUE KEY uq_refresh_token (token)
 );
 
+CREATE TABLE IF NOT EXISTS kyc_submissions (
+  id                VARCHAR(36)  PRIMARY KEY,
+  user_id           VARCHAR(36)  NOT NULL,
+  cccd_number       VARCHAR(20)  NOT NULL,
+  full_name         VARCHAR(100) NOT NULL,
+  gender            ENUM('MALE','FEMALE') NOT NULL,
+  date_of_birth     DATE         NOT NULL,
+  permanent_address VARCHAR(500) NOT NULL,
+  hometown          VARCHAR(255) NOT NULL,
+  issue_date        DATE         NOT NULL,
+  issuing_authority VARCHAR(255) NOT NULL,
+  expiry_date       DATE,
+  front_image_id    VARCHAR(255) NOT NULL,
+  back_image_id     VARCHAR(255) NOT NULL,
+  portrait_image_id VARCHAR(255) NOT NULL,
+  status            ENUM('NONE','PENDING','APPROVED','REJECTED') NOT NULL DEFAULT 'PENDING',
+  is_deleted        TINYINT(1)   NOT NULL DEFAULT 0,
+  created_at        DATETIME     DEFAULT CURRENT_TIMESTAMP,
+  updated_at        DATETIME     DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_kyc_cccd (cccd_number),
+  KEY idx_kyc_user_id (user_id),
+  KEY idx_kyc_status  (status)
+);
+
 -- ─── LOAN DB ──────────────────────────────────────────────────────
 CREATE DATABASE IF NOT EXISTS loan_db
     CHARACTER SET utf8mb4

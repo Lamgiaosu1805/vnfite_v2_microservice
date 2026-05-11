@@ -180,7 +180,7 @@ public class AuthService {
         user.setKycStatus(KycStatus.PENDING);
         userRepository.save(user);
 
-        kafkaProducerService.publishKycSubmitted(userId, saved.getId(), request.getDocType());
+        kafkaProducerService.publishKycSubmitted(userId, saved.getId());
 
         log.info("KYC submitted: userId={} documentId={} docType={}", userId, saved.getId(), request.getDocType());
         return kycDocumentMapper.toResponse(saved);

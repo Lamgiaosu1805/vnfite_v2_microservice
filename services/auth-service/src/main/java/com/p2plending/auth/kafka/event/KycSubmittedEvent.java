@@ -14,6 +14,5 @@ import java.time.LocalDateTime;
 public class KycSubmittedEvent {
     private String userId;
     private String documentId;
-    private String docType;
     private LocalDateTime submittedAt;
 }

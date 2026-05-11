@@ -2,7 +2,6 @@ package com.p2plending.auth.kafka;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.p2plending.auth.domain.enums.DocType;
 import com.p2plending.auth.kafka.event.KycSubmittedEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -39,11 +38,10 @@ public class KafkaProducerService {
         }
     }
 
-    public void publishKycSubmitted(String userId, String documentId, DocType docType) {
+    public void publishKycSubmitted(String userId, String documentId) {
         KycSubmittedEvent event = KycSubmittedEvent.builder()
                 .userId(userId)
                 .documentId(documentId)
-                .docType(docType.name())
                 .submittedAt(LocalDateTime.now())
                 .build();
         try {
