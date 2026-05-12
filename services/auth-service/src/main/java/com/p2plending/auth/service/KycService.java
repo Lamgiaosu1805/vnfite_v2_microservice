@@ -47,6 +47,7 @@ public class KycService {
 
     // ── Bước 1: kiểm tra CCCD, upload ảnh mock, gửi OTP ─────────────
 
+    @Transactional(readOnly = true)
     public Map<String, String> initKyc(String userId, KycInitRequest request) {
         if (kycSubmissionRepository.existsByCccdNumber(request.getCccdNumber())) {
             throw new DuplicateCccdException("Số CCCD đã được đăng ký trong hệ thống");

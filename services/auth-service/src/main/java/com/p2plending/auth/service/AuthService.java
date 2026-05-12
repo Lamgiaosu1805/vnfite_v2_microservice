@@ -61,12 +61,14 @@ public class AuthService {
 
     // ── Check phone ───────────────────────────────────────────────
 
+    @Transactional(readOnly = true)
     public boolean isPhoneAvailable(String phone) {
         return !userRepository.existsByPhone(phone);
     }
 
     // ── Register step 1: validate + send OTP ─────────────────────
 
+    @Transactional(readOnly = true)
     public RegisterInitResponse registerInit(RegisterRequest request) {
         if (userRepository.existsByPhone(request.getPhone())) {
             throw new UserAlreadyExistsException("Số điện thoại đã được đăng ký");
@@ -123,6 +125,7 @@ public class AuthService {
 
     // ── Login ─────────────────────────────────────────────────────
 
+    @Transactional(readOnly = true)
     public AuthResponse login(LoginRequest request) {
         User user = userRepository.findByPhone(request.getPhone())
                 .orElseThrow(() -> new InvalidCredentialsException("Số điện thoại hoặc mật khẩu không đúng"));
