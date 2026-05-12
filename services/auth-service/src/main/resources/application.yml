@@ -51,6 +51,11 @@ spring:
 
 server:
   port: 8081
+  servlet:
+    encoding:
+      charset: UTF-8
+      force-response: true
+      enabled: true
 
 # JWT RS256 config
 # Set RSA_PRIVATE_KEY / RSA_PUBLIC_KEY env vars in production (PKCS8/X509 base64, PEM headers optional)

@@ -9,5 +9,7 @@ public interface KycSubmissionRepository extends JpaRepository<KycSubmission, St
 
     boolean existsByCccdNumber(String cccdNumber);
 
+    boolean existsByUserIdAndCccdNumber(String userId, String cccdNumber);
+
     List<KycSubmission> findByUserId(String userId);
 }

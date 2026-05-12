@@ -63,6 +63,10 @@ server:
   port: 8084
   servlet:
     context-path: /
+    encoding:
+      charset: UTF-8
+      force-response: true
+      enabled: true
 
 management:
   endpoints:

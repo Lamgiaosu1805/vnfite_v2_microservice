@@ -1,6 +1,10 @@
 package com.p2plending.auth.controller;
 
 import com.p2plending.auth.dto.request.CheckPhoneRequest;
+import com.p2plending.auth.dto.request.ForgotPasswordCheckRequest;
+import com.p2plending.auth.dto.request.ForgotPasswordOtpVerifyRequest;
+import com.p2plending.auth.dto.request.ForgotPasswordRequest;
+import com.p2plending.auth.dto.request.ForgotPasswordResetRequest;
 import com.p2plending.auth.dto.request.KycInitRequest;
 import com.p2plending.auth.dto.request.KycVerifyRequest;
 import com.p2plending.auth.dto.request.LoginRequest;
@@ -12,6 +16,7 @@ import com.p2plending.auth.dto.response.KycSubmissionResponse;
 import com.p2plending.auth.dto.response.RegisterInitResponse;
 import com.p2plending.auth.service.AuthService;
 import com.p2plending.auth.service.KycService;
+import com.p2plending.auth.service.PasswordResetService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -29,8 +34,9 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class AuthController {
 
-    private final AuthService authService;
-    private final KycService  kycService;
+    private final AuthService          authService;
+    private final KycService           kycService;
+    private final PasswordResetService passwordResetService;
 
     /**
      * POST /api/auth/check-phone
@@ -75,6 +81,50 @@ public class AuthController {
     @PostMapping("/refresh")
     public ResponseEntity<AuthResponse> refresh(@Valid @RequestBody RefreshTokenRequest request) {
         return ResponseEntity.ok(authService.refreshToken(request));
+    }
+
+    /**
+     * POST /api/auth/forgot-password/check
+     * Bước 0: Kiểm tra phone → trả về { "requiresCccd": boolean }.
+     * Frontend dùng để quyết định hiện/ẩn ô nhập CCCD trước khi gửi OTP.
+     */
+    @PostMapping("/forgot-password/check")
+    public ResponseEntity<Map<String, Object>> forgotPasswordCheck(
+            @Valid @RequestBody ForgotPasswordCheckRequest request) {
+        return ResponseEntity.ok(passwordResetService.checkPhone(request));
+    }
+
+    /**
+     * POST /api/auth/forgot-password
+     * Bước 1: Xác minh danh tính, gửi OTP đặt lại mật khẩu.
+     * - Chưa eKYC: chỉ cần phone.
+     * - Đã eKYC: phone + cccdNumber.
+     */
+    @PostMapping("/forgot-password")
+    public ResponseEntity<Map<String, String>> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
+        return ResponseEntity.ok(passwordResetService.initReset(request));
+    }
+
+    /**
+     * POST /api/auth/forgot-password/verify-otp
+     * Bước 2: Xác thực OTP → trả về resetToken (TTL 10 phút).
+     * Frontend dùng resetToken này để gọi bước tiếp theo.
+     */
+    @PostMapping("/forgot-password/verify-otp")
+    public ResponseEntity<Map<String, String>> forgotPasswordVerifyOtp(
+            @Valid @RequestBody ForgotPasswordOtpVerifyRequest request) {
+        return ResponseEntity.ok(passwordResetService.verifyOtp(request));
+    }
+
+    /**
+     * POST /api/auth/forgot-password/reset
+     * Bước 3: Dùng resetToken + mật khẩu mới → hoàn tất đặt lại mật khẩu.
+     */
+    @PostMapping("/forgot-password/reset")
+    public ResponseEntity<Map<String, String>> forgotPasswordReset(
+            @Valid @RequestBody ForgotPasswordResetRequest request) {
+        passwordResetService.resetPassword(request);
+        return ResponseEntity.ok(Map.of("message", "Mật khẩu đã được đặt lại thành công. Vui lòng đăng nhập lại."));
     }
 
     /**
