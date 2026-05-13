@@ -1,5 +1,7 @@
 package com.p2plending.auth.controller;
 
+import com.p2plending.auth.dto.request.ChangePasswordInitRequest;
+import com.p2plending.auth.dto.request.ChangePasswordVerifyRequest;
 import com.p2plending.auth.dto.request.CheckPhoneRequest;
 import com.p2plending.auth.dto.request.ForgotPasswordCheckRequest;
 import com.p2plending.auth.dto.request.ForgotPasswordOtpVerifyRequest;
@@ -15,6 +17,7 @@ import com.p2plending.auth.dto.response.AuthResponse;
 import com.p2plending.auth.dto.response.KycSubmissionResponse;
 import com.p2plending.auth.dto.response.RegisterInitResponse;
 import com.p2plending.auth.service.AuthService;
+import com.p2plending.auth.service.ChangePasswordService;
 import com.p2plending.auth.service.KycService;
 import com.p2plending.auth.service.PasswordResetService;
 import jakarta.validation.Valid;
@@ -34,9 +37,10 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class AuthController {
 
-    private final AuthService          authService;
-    private final KycService           kycService;
-    private final PasswordResetService passwordResetService;
+    private final AuthService           authService;
+    private final KycService            kycService;
+    private final PasswordResetService  passwordResetService;
+    private final ChangePasswordService changePasswordService;
 
     /**
      * POST /api/auth/check-phone
@@ -125,6 +129,35 @@ public class AuthController {
             @Valid @RequestBody ForgotPasswordResetRequest request) {
         passwordResetService.resetPassword(request);
         return ResponseEntity.ok(Map.of("message", "Mật khẩu đã được đặt lại thành công. Vui lòng đăng nhập lại."));
+    }
+
+    /**
+     * POST /api/auth/change-password/init
+     * Bước 1: Xác minh mật khẩu hiện tại → gửi OTP xác nhận đổi mật khẩu.
+     */
+    @PostMapping("/change-password/init")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<Map<String, String>> changePasswordInit(
+            @Valid @RequestBody ChangePasswordInitRequest request,
+            @AuthenticationPrincipal UserDetails principal
+    ) {
+        String userId = authService.getUserIdByPhone(principal.getUsername());
+        return ResponseEntity.ok(changePasswordService.initChange(userId, principal.getUsername(), request));
+    }
+
+    /**
+     * POST /api/auth/change-password/verify
+     * Bước 2: Xác thực OTP → đặt mật khẩu mới, vô hiệu hoá phiên cũ.
+     */
+    @PostMapping("/change-password/verify")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<Map<String, String>> changePasswordVerify(
+            @Valid @RequestBody ChangePasswordVerifyRequest request,
+            @AuthenticationPrincipal UserDetails principal
+    ) {
+        String userId = authService.getUserIdByPhone(principal.getUsername());
+        changePasswordService.verifyChange(userId, principal.getUsername(), request);
+        return ResponseEntity.ok(Map.of("message", "Mật khẩu đã được thay đổi thành công. Vui lòng đăng nhập lại."));
     }
 
     /**
