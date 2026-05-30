@@ -163,6 +163,22 @@ CREATE TABLE IF NOT EXISTS daily_stats (
   UNIQUE KEY idx_ds_date (stat_date)
 );
 
+CREATE TABLE IF NOT EXISTS cms_admin_users (
+  id         VARCHAR(36)  PRIMARY KEY,
+  username   VARCHAR(60)  NOT NULL,
+  email      VARCHAR(150) NOT NULL,
+  full_name  VARCHAR(100) NOT NULL,
+  password   VARCHAR(255) NOT NULL,
+  role       VARCHAR(20)  NOT NULL,
+  active     TINYINT(1)   NOT NULL DEFAULT 1,
+  is_deleted TINYINT(1)   NOT NULL DEFAULT 0,
+  created_at DATETIME     DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME     DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_cms_admin_username (username),
+  UNIQUE KEY uq_cms_admin_email (email),
+  KEY idx_cms_admin_role (role)
+);
+
 -- ─── MATCHING DB ──────────────────────────────────────────────────
 CREATE DATABASE IF NOT EXISTS matching_db
     CHARACTER SET utf8mb4

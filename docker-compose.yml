@@ -86,7 +86,7 @@ services:
   # ─── Application Services ─────────────────────────────────────
   auth-service:
     build:
-      context: ./services/auth-service
+      context: ./apps/api/auth-service
       dockerfile: Dockerfile
     container_name: p2p-auth-service
     ports:
@@ -115,7 +115,7 @@ services:
 
   loan-service:
     build:
-      context: ./services/loan-service
+      context: ./apps/api/loan-service
       dockerfile: Dockerfile
     container_name: p2p-loan-service
     ports:
@@ -129,7 +129,12 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
-      RSA_PUBLIC_KEY: ${RSA_PUBLIC_KEY:-}
+      CMS_JWT_SECRET: ${CMS_JWT_SECRET:-dev-only-cms-jwt-secret-change-me-at-least-32-bytes}
+      CMS_ACCESS_TOKEN_EXPIRY: ${CMS_ACCESS_TOKEN_EXPIRY:-28800}
+      CMS_ADMIN_USERNAME: ${CMS_ADMIN_USERNAME:-admin}
+      CMS_ADMIN_PASSWORD: ${CMS_ADMIN_PASSWORD:-Admin@123456}
+      CMS_ADMIN_EMAIL: ${CMS_ADMIN_EMAIL:-admin@p2plending.local}
+      CMS_ADMIN_FULL_NAME: ${CMS_ADMIN_FULL_NAME:-CMS Administrator}
     depends_on:
       mysql:
         condition: service_healthy
@@ -143,7 +148,7 @@ services:
 
   matching-service:
     build:
-      context: ./services/matching-service
+      context: ./apps/api/matching-service
       dockerfile: Dockerfile
     container_name: p2p-matching-service
     ports:
@@ -171,7 +176,7 @@ services:
 
   cms-service:
     build:
-      context: ./services/cms-service
+      context: ./apps/api/cms-service
       dockerfile: Dockerfile
     container_name: p2p-cms-service
     ports:
@@ -199,7 +204,7 @@ services:
 
   notification-service:
     build:
-      context: ./services/notification-service
+      context: ./apps/api/notification-service
       dockerfile: Dockerfile
     container_name: p2p-notification-service
     ports:

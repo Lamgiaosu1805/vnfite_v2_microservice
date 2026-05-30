@@ -1,0 +1,58 @@
+package com.p2plending.cms.service;
+
+import com.p2plending.cms.domain.entity.CmsAdminUser;
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.security.Keys;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
+
+import javax.crypto.SecretKey;
+import java.nio.charset.StandardCharsets;
+import java.time.Instant;
+import java.util.Date;
+import java.util.List;
+
+@Service
+public class CmsJwtService {
+
+    private final SecretKey key;
+    private final long accessTokenExpiry;
+
+    public CmsJwtService(
+            @Value("${cms.jwt.secret:}") String rawSecret,
+            @Value("${cms.jwt.access-token-expiry:28800}") long accessTokenExpiry
+    ) {
+        String secret = StringUtils.hasText(rawSecret)
+                ? rawSecret
+                : "dev-only-cms-jwt-secret-change-me-at-least-32-bytes";
+        this.key = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
+        this.accessTokenExpiry = accessTokenExpiry;
+    }
+
+    public String generateAccessToken(CmsAdminUser admin) {
+        Instant now = Instant.now();
+        return Jwts.builder()
+                .subject(admin.getUsername())
+                .claim("adminUserId", admin.getId())
+                .claim("email", admin.getEmail())
+                .claim("roles", List.of("ROLE_" + admin.getRole()))
+                .issuedAt(Date.from(now))
+                .expiration(Date.from(now.plusSeconds(accessTokenExpiry)))
+                .signWith(key)
+                .compact();
+    }
+
+    public Claims parse(String token) {
+        return Jwts.parser()
+                .verifyWith(key)
+                .build()
+                .parseSignedClaims(token)
+                .getPayload();
+    }
+
+    public long getAccessTokenExpiry() {
+        return accessTokenExpiry;
+    }
+}

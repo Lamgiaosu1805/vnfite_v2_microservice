@@ -11,11 +11,11 @@
     <name>P2P Lending Platform</name>
 
     <modules>
-        <module>services/auth-service</module>
-        <module>services/loan-service</module>
-        <module>services/matching-service</module>
-        <module>services/cms-service</module>
-        <module>services/notification-service</module>
+        <module>apps/api/auth-service</module>
+        <module>apps/api/loan-service</module>
+        <module>apps/api/matching-service</module>
+        <module>apps/api/cms-service</module>
+        <module>apps/api/notification-service</module>
     </modules>
 
     <properties>
