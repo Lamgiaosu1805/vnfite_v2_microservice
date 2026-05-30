@@ -202,21 +202,6 @@ services:
       - p2p-network
     restart: on-failure
 
-  cms-web:
-    build:
-      context: ./apps/cms
-      dockerfile: Dockerfile
-      args:
-        VITE_CMS_API_BASE: ${VITE_CMS_API_BASE:-}
-    container_name: p2p-cms-web
-    ports:
-      - "3000:80"
-    depends_on:
-      - cms-service
-    networks:
-      - p2p-network
-    restart: on-failure
-
   notification-service:
     build:
       context: ./apps/api/notification-service
@@ -278,7 +263,6 @@ services:
       - loan-service
       - matching-service
       - cms-service
-      - cms-web
       - notification-service
     networks:
       - p2p-network
