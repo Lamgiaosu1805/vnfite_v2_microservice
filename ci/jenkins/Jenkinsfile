@@ -1,0 +1,250 @@
+pipeline {
+  agent any
+
+  options {
+    timestamps()
+    disableConcurrentBuilds()
+    skipDefaultCheckout(true)
+    buildDiscarder(logRotator(numToKeepStr: '30'))
+  }
+
+  parameters {
+    choice(
+      name: 'TARGET_SERVICE',
+      choices: ['auto', 'all', 'auth-service', 'loan-service', 'matching-service', 'cms-service', 'notification-service', 'cms-web'],
+      description: 'auto = detect service changed from Git diff'
+    )
+    choice(
+      name: 'DEPLOY_ENV',
+      choices: ['none', 'test', 'prod'],
+      description: 'Production deploy always requires manual confirmation'
+    )
+    booleanParam(
+      name: 'AUTO_DEPLOY_TEST',
+      defaultValue: true,
+      description: 'Deploy automatically when DEPLOY_ENV=test'
+    )
+    string(
+      name: 'GIT_BRANCH',
+      defaultValue: 'main',
+      description: 'Branch to deploy on test/prod servers'
+    )
+    string(
+      name: 'TEST_SERVER_HOST',
+      defaultValue: '',
+      description: 'Empty = deploy on the Jenkins server. Set IP/hostname to deploy test via SSH.'
+    )
+    string(
+      name: 'TEST_SERVER_USER',
+      defaultValue: 'deploy',
+      description: 'SSH user for test server'
+    )
+    string(
+      name: 'TEST_REPO_DIR',
+      defaultValue: '/opt/p2p-lending',
+      description: 'Repository path on test server'
+    )
+    string(
+      name: 'TEST_SSH_CREDENTIAL_ID',
+      defaultValue: 'p2p-test-ssh-key',
+      description: 'Jenkins SSH private key credential ID for test server'
+    )
+    string(
+      name: 'TEST_ENV_FILE_CREDENTIAL_ID',
+      defaultValue: 'p2p-test-env-file',
+      description: 'Jenkins Secret file credential ID containing test .env'
+    )
+    string(
+      name: 'PROD_SERVER_HOST',
+      defaultValue: '',
+      description: 'Empty = deploy on the Jenkins server. Set IP/hostname to deploy prod via SSH.'
+    )
+    string(
+      name: 'PROD_SERVER_USER',
+      defaultValue: 'deploy',
+      description: 'SSH user for production server'
+    )
+    string(
+      name: 'PROD_REPO_DIR',
+      defaultValue: '/opt/p2p-lending',
+      description: 'Repository path on production server'
+    )
+    string(
+      name: 'PROD_SSH_CREDENTIAL_ID',
+      defaultValue: 'p2p-prod-ssh-key',
+      description: 'Jenkins SSH private key credential ID for production server'
+    )
+    string(
+      name: 'PROD_ENV_FILE_CREDENTIAL_ID',
+      defaultValue: 'p2p-prod-env-file',
+      description: 'Jenkins Secret file credential ID containing production .env'
+    )
+  }
+
+  environment {
+    SERVICES_FILE = 'scripts/ci/.services-to-build'
+  }
+
+  stages {
+    stage('Init') {
+      steps {
+        script {
+          env.DEPLOY_WORKSPACE = env.P2P_REPO_DIR?.trim() ? env.P2P_REPO_DIR : env.WORKSPACE
+          echo "Deploy workspace: ${env.DEPLOY_WORKSPACE}"
+        }
+      }
+    }
+
+    stage('Checkout') {
+      steps {
+        dir(env.DEPLOY_WORKSPACE) {
+          checkout scm
+        }
+      }
+    }
+
+    stage('Resolve services') {
+      steps {
+        dir(env.DEPLOY_WORKSPACE) {
+          sh '''
+            set -eu
+            mkdir -p scripts/ci
+
+            case "$TARGET_SERVICE" in
+              auto)
+                BASE_REF="${GIT_PREVIOUS_SUCCESSFUL_COMMIT:-}"
+                ./scripts/ci/detect-changed-services.sh "$BASE_REF" "${GIT_COMMIT:-HEAD}" > "$SERVICES_FILE"
+                ;;
+              all)
+                awk -F'|' 'NF == 4 && $1 !~ /^#/ { print $1 }' scripts/ci/services.conf > "$SERVICES_FILE"
+                ;;
+              *)
+                printf '%s\\n' "$TARGET_SERVICE" > "$SERVICES_FILE"
+                ;;
+            esac
+
+            if [ ! -s "$SERVICES_FILE" ]; then
+              echo "No service changes detected."
+            else
+              echo "Services selected:"
+              cat "$SERVICES_FILE"
+            fi
+          '''
+        }
+      }
+    }
+
+    stage('Build') {
+      when {
+        expression {
+          def selected = "${env.DEPLOY_WORKSPACE}/${env.SERVICES_FILE}"
+          return fileExists(selected) && readFile(selected).trim()
+        }
+      }
+      steps {
+        dir(env.DEPLOY_WORKSPACE) {
+          sh '''
+            set -eu
+            while IFS= read -r service; do
+              [ -z "$service" ] && continue
+              echo "Building $service"
+              ./scripts/ci/build-service.sh "$service"
+            done < "$SERVICES_FILE"
+          '''
+        }
+      }
+    }
+
+    stage('Deploy test') {
+      when {
+        allOf {
+          expression { params.DEPLOY_ENV == 'test' && params.AUTO_DEPLOY_TEST }
+          expression {
+            def selected = "${env.DEPLOY_WORKSPACE}/${env.SERVICES_FILE}"
+            return fileExists(selected) && readFile(selected).trim()
+          }
+        }
+      }
+      steps {
+        script {
+          deploySelectedServices(
+            'test',
+            params.TEST_SERVER_HOST,
+            params.TEST_SERVER_USER,
+            params.TEST_REPO_DIR,
+            params.TEST_SSH_CREDENTIAL_ID,
+            params.TEST_ENV_FILE_CREDENTIAL_ID,
+            params.GIT_BRANCH
+          )
+        }
+      }
+    }
+
+    stage('Deploy production') {
+      when {
+        allOf {
+          expression { params.DEPLOY_ENV == 'prod' }
+          expression {
+            def selected = "${env.DEPLOY_WORKSPACE}/${env.SERVICES_FILE}"
+            return fileExists(selected) && readFile(selected).trim()
+          }
+        }
+      }
+      steps {
+        input message: 'Deploy selected services to PRODUCTION?', ok: 'Deploy'
+        script {
+          deploySelectedServices(
+            'prod',
+            params.PROD_SERVER_HOST,
+            params.PROD_SERVER_USER,
+            params.PROD_REPO_DIR,
+            params.PROD_SSH_CREDENTIAL_ID,
+            params.PROD_ENV_FILE_CREDENTIAL_ID,
+            params.GIT_BRANCH
+          )
+        }
+      }
+    }
+  }
+
+  post {
+    always {
+      dir(env.DEPLOY_WORKSPACE) {
+        archiveArtifacts artifacts: 'scripts/ci/.services-to-build', allowEmptyArchive: true
+      }
+    }
+  }
+}
+
+def deploySelectedServices(environmentName, serverHost, serverUser, repoDir, sshCredentialId, envFileCredentialId, gitBranch) {
+  def selectedFile = env.SERVICES_FILE
+  def host = serverHost?.trim()
+  def branch = gitBranch?.trim() ? gitBranch.trim() : 'main'
+
+  dir(env.DEPLOY_WORKSPACE) {
+    withCredentials([file(credentialsId: envFileCredentialId, variable: 'DEPLOY_ENV_FILE')]) {
+      if (host) {
+        sshagent(credentials: [sshCredentialId]) {
+          sh """
+            set -eu
+            while IFS= read -r service; do
+              [ -z "\$service" ] && continue
+              echo "Deploying \$service to ${environmentName} server ${host}"
+              ./scripts/ci/deploy-remote-service.sh "\$service" "${environmentName}" "${serverUser}" "${host}" "${repoDir}" "${branch}" "\$DEPLOY_ENV_FILE"
+            done < "${selectedFile}"
+          """
+        }
+      } else {
+        sh """
+          set -eu
+          install -m 600 "\$DEPLOY_ENV_FILE" .env
+          while IFS= read -r service; do
+            [ -z "\$service" ] && continue
+            echo "Deploying \$service to local ${environmentName} server"
+            ./scripts/ci/deploy-service.sh "\$service" "${environmentName}"
+          done < "${selectedFile}"
+        """
+      }
+    }
+  }
+}

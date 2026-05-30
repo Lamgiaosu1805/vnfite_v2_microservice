@@ -1,4 +1,4 @@
-const API_BASE = import.meta.env.VITE_CMS_API_BASE || 'http://localhost:8090';
+const API_BASE = import.meta.env.VITE_CMS_API_BASE || '';
 const TOKEN_KEY = 'p2p_cms_token';
 const ADMIN_KEY = 'p2p_cms_admin';
 
