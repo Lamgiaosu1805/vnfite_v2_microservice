@@ -1,7 +1,25 @@
 services:
   # ─── Infrastructure ───────────────────────────────────────────
-  # MySQL không chạy trong Docker — dùng MySQL native của server
-  # MYSQL_HOST trong .env phải trỏ tới 172.18.0.1 (Docker gateway)
+  mysql:
+    image: mysql:8.0
+    container_name: p2p-mysql
+    # Không expose port ra host để tránh conflict với MySQL native trên server
+    # App services kết nối qua Docker network dùng hostname "mysql"
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
+      MYSQL_USER: ${DB_USERNAME:-p2p_user}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-p2p_pass}
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./infra/mysql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      - p2p-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-root}"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
 
   redis:
     image: redis:7-alpine
@@ -86,6 +104,8 @@ services:
       RSA_PRIVATE_KEY: ${RSA_PRIVATE_KEY:-}
       RSA_PUBLIC_KEY: ${RSA_PUBLIC_KEY:-}
     depends_on:
+      mysql:
+        condition: service_healthy
       redis:
         condition: service_healthy
       kafka:
@@ -118,6 +138,8 @@ services:
       CMS_ADMIN_EMAIL: ${CMS_ADMIN_EMAIL:-admin@p2plending.local}
       CMS_ADMIN_FULL_NAME: ${CMS_ADMIN_FULL_NAME:-CMS Administrator}
     depends_on:
+      mysql:
+        condition: service_healthy
       redis:
         condition: service_healthy
       kafka:
@@ -145,6 +167,8 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       RSA_PUBLIC_KEY: ${RSA_PUBLIC_KEY:-}
     depends_on:
+      mysql:
+        condition: service_healthy
       redis:
         condition: service_healthy
       kafka:
@@ -172,6 +196,8 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       RSA_PUBLIC_KEY: ${RSA_PUBLIC_KEY:-}
     depends_on:
+      mysql:
+        condition: service_healthy
       redis:
         condition: service_healthy
       kafka:
@@ -203,6 +229,8 @@ services:
       SMTP_USERNAME: ${SMTP_USERNAME:-}
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
     depends_on:
+      mysql:
+        condition: service_healthy
       redis:
         condition: service_healthy
       kafka:
@@ -246,6 +274,7 @@ services:
     restart: unless-stopped
 
 volumes:
+  mysql_data:
   redis_data:
   kafka_data:
   zookeeper_data:
