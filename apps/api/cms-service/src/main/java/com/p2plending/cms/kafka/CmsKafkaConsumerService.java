@@ -88,6 +88,7 @@ public class CmsKafkaConsumerService {
                 BigDecimal amount = new BigDecimal(node.get("amount").asText());
                 loanRepo.save(CmsLoan.builder()
                         .loanId(loanId)
+                        .loanCode(node.has("loanCode") ? node.get("loanCode").asText(null) : null)
                         .borrowerId(node.get("borrowerId").asText())
                         .amount(amount)
                         .termMonths(node.get("termMonths").asInt())

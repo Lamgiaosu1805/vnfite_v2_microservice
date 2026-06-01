@@ -30,6 +30,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.EnumSet;
 import java.util.List;
@@ -41,6 +42,8 @@ import java.util.Set;
 public class LoanService {
 
     private static final Set<LoanStatus> OFFERABLE_STATUSES = EnumSet.of(LoanStatus.ACTIVE);
+    private static final BigDecimal MIN_OFFER   = new BigDecimal("500000");
+    private static final BigDecimal OFFER_UNIT  = new BigDecimal("500000");
 
     private final LoanRequestRepository loanRequestRepository;
     private final LoanOfferRepository   loanOfferRepository;
@@ -57,10 +60,13 @@ public class LoanService {
         loan.setBorrowerId(borrowerId);
         loan.setStatus(LoanStatus.PENDING_REVIEW);
 
-        LoanRequest saved = loanRequestRepository.save(loan);
+        // saveAndFlush then re-fetch so MySQL assigns loan_seq before we use getLoanCode()
+        loanRequestRepository.saveAndFlush(loan);
+        LoanRequest saved = findLoanOrThrow(loan.getId());
         kafkaProducerService.publishLoanSubmitted(saved);
 
-        log.info("Loan submitted: id={} borrower={} amount={}", saved.getId(), borrowerId, saved.getAmount());
+        log.info("Loan submitted: id={} code={} borrower={} amount={}",
+                saved.getId(), saved.getLoanCode(), borrowerId, saved.getAmount());
         return buildResponse(saved, false);
     }
 
@@ -95,15 +101,41 @@ public class LoanService {
 
         if (!OFFERABLE_STATUSES.contains(loan.getStatus())) {
             throw new InvalidLoanStateException(
-                    "Loan %s is not accepting offers — current status: %s".formatted(loanId, loan.getStatus()));
+                    "Khoản gọi vốn %s không trong trạng thái nhận đầu tư (status: %s)"
+                    .formatted(loan.getLoanCode(), loan.getStatus()));
         }
         if (investorId.equals(loan.getBorrowerId())) {
-            throw new InvalidLoanStateException("Borrower cannot invest in their own loan");
+            throw new InvalidLoanStateException("Người gọi vốn không thể tự đầu tư vào khoản của mình");
         }
-        if (request.getAmount().compareTo(loan.getRemainingAmount()) > 0) {
+
+        BigDecimal remaining = loan.getRemainingAmount();
+
+        // Must be a multiple of 500,000 unless it exactly fills the remaining amount
+        if (request.getAmount().remainder(OFFER_UNIT).compareTo(BigDecimal.ZERO) != 0
+                && request.getAmount().compareTo(remaining) != 0) {
             throw new InvalidLoanStateException(
-                    "Offer amount %s exceeds remaining amount %s"
-                    .formatted(request.getAmount(), loan.getRemainingAmount()));
+                    "Số tiền đầu tư phải là bội số của 500,000 VNĐ (hoặc đầu tư toàn bộ %,.0f VNĐ còn lại)"
+                    .formatted(remaining));
+        }
+
+        // Cannot exceed remaining
+        if (request.getAmount().compareTo(remaining) > 0) {
+            throw new InvalidLoanStateException(
+                    "Số tiền đầu tư vượt quá số tiền còn lại: %,.0f VNĐ".formatted(remaining));
+        }
+
+        // After this offer, remaining must be 0 or ≥ 500,000 to keep the loan investable
+        BigDecimal remainingAfter = remaining.subtract(request.getAmount());
+        if (remainingAfter.compareTo(BigDecimal.ZERO) > 0 && remainingAfter.compareTo(MIN_OFFER) < 0) {
+            BigDecimal maxAllowed = remaining.subtract(MIN_OFFER)
+                    .divideToIntegralValue(OFFER_UNIT).multiply(OFFER_UNIT);
+            throw new InvalidLoanStateException(
+                    "Số tiền còn lại sau đầu tư (%,.0f VNĐ) sẽ dưới mức tối thiểu 500,000 VNĐ. "
+                    .formatted(remainingAfter)
+                    + (maxAllowed.compareTo(BigDecimal.ZERO) > 0
+                        ? "Tối đa có thể đầu tư %,.0f VNĐ, hoặc đầu tư toàn bộ %,.0f VNĐ còn lại."
+                          .formatted(maxAllowed, remaining)
+                        : "Hãy đầu tư toàn bộ %,.0f VNĐ còn lại.".formatted(remaining)));
         }
 
         LoanOffer offer = LoanOffer.builder()

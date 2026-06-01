@@ -22,6 +22,9 @@ public class CmsLoan {
     @Id
     private String loanId;
 
+    @Column(length = 20)
+    private String loanCode;
+
     @Column(nullable = false)
     private String borrowerId;
 

@@ -29,6 +29,7 @@ public class KafkaProducerService {
     public void publishLoanSubmitted(LoanRequest loan) {
         LoanSubmittedEvent event = LoanSubmittedEvent.builder()
                 .loanId(loan.getId())
+                .loanCode(loan.getLoanCode())
                 .borrowerId(loan.getBorrowerId())
                 .amount(loan.getAmount())
                 .termMonths(loan.getTermMonths())

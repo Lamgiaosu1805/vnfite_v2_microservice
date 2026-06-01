@@ -2,6 +2,10 @@
 ALTER TABLE cms_loans
   MODIFY COLUMN interest_rate DECIMAL(5,2) NULL;
 
+-- Add loan code (VNF000001 format) synced from loan.submitted event
+ALTER TABLE cms_loans
+  ADD COLUMN loan_code VARCHAR(20) NULL AFTER loan_id;
+
 -- Add borrower personal-info columns (synced from loan.submitted event)
 ALTER TABLE cms_loans
   ADD COLUMN occupation       VARCHAR(100)   NULL              AFTER purpose,

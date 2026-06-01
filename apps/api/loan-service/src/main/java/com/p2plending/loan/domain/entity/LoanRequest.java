@@ -29,6 +29,10 @@ public class LoanRequest {
     @GeneratedValue(strategy = GenerationType.UUID)
     private String id;
 
+    /** Auto-assigned by MySQL — source for the VNF loan code. Not managed by Hibernate. */
+    @Column(unique = true, insertable = false, updatable = false)
+    private Long loanSeq;
+
     @Column(nullable = false)
     private String borrowerId;
 
@@ -88,6 +92,10 @@ public class LoanRequest {
 
     @UpdateTimestamp
     private LocalDateTime updatedAt;
+
+    public String getLoanCode() {
+        return loanSeq != null ? String.format("VNF%06d", loanSeq) : null;
+    }
 
     public BigDecimal getRemainingAmount() {
         return amount.subtract(fundedAmount);

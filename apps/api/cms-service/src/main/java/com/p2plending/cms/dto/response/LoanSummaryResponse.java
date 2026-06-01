@@ -12,6 +12,7 @@ import java.time.LocalDateTime;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class LoanSummaryResponse {
     private String loanId;
+    private String loanCode;
     private String borrowerId;
     private BigDecimal amount;
     private BigDecimal interestRate;

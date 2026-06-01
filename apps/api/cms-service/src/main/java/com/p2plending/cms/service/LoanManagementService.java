@@ -94,6 +94,7 @@ public class LoanManagementService {
     private LoanSummaryResponse toResponse(CmsLoan l) {
         return LoanSummaryResponse.builder()
                 .loanId(l.getLoanId())
+                .loanCode(l.getLoanCode())
                 .borrowerId(l.getBorrowerId())
                 .amount(l.getAmount())
                 .interestRate(l.getInterestRate())

@@ -33,25 +33,25 @@ VALUES
 -- loan3: đã FUNDED
 -- ============================================================
 INSERT IGNORE INTO cms_loans
-  (loan_id, borrower_id, amount, interest_rate, term_months, purpose,
+  (loan_id, loan_code, borrower_id, amount, interest_rate, term_months, purpose,
    occupation, monthly_income, current_address,
    status, reviewed_by, reviewed_at, is_deleted, created_at, updated_at)
 VALUES
-  ('e1000001-0000-0000-0000-000000000001',
+  ('e1000001-0000-0000-0000-000000000001', 'VNF000001',
    'd1000001-0000-0000-0000-000000000001',
    50000000.00, 12.50, 12, 'Kinh doanh nhỏ lẻ — mở quán cà phê',
    'Tiểu thương', 15000000.00, '123 Nguyễn Trãi, P. Bến Thành, Q.1, TP.HCM',
    'ACTIVE', 'admin', DATE_SUB(NOW(), INTERVAL 4 DAY), 0,
    DATE_SUB(NOW(), INTERVAL 5 DAY), DATE_SUB(NOW(), INTERVAL 4 DAY)),
 
-  ('e2000002-0000-0000-0000-000000000002',
+  ('e2000002-0000-0000-0000-000000000002', 'VNF000002',
    'd2000002-0000-0000-0000-000000000002',
    100000000.00, NULL, 24, 'Đầu tư thiết bị sản xuất — xưởng may gia đình',
    'Chủ xưởng may', 25000000.00, '456 Lê Văn Việt, P. Hiệp Phú, TP. Thủ Đức, TP.HCM',
    'PENDING_REVIEW', NULL, NULL, 0,
    DATE_SUB(NOW(), INTERVAL 2 DAY), DATE_SUB(NOW(), INTERVAL 2 DAY)),
 
-  ('e3000003-0000-0000-0000-000000000003',
+  ('e3000003-0000-0000-0000-000000000003', 'VNF000003',
    'd1000001-0000-0000-0000-000000000001',
    30000000.00, 10.00, 6, 'Vốn lưu động ngắn hạn — bổ sung hàng tồn kho',
    'Tiểu thương', 15000000.00, '123 Nguyễn Trãi, P. Bến Thành, Q.1, TP.HCM',

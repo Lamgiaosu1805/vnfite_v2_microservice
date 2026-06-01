@@ -10,8 +10,8 @@ import java.math.BigDecimal;
 @Data
 public class LoanOfferCreateRequest {
 
-    @NotNull(message = "Offer amount is required")
-    @DecimalMin(value = "100.00", message = "Minimum offer amount is 100")
+    @NotNull(message = "Số tiền đầu tư là bắt buộc")
+    @DecimalMin(value = "500000", message = "Số tiền đầu tư tối thiểu là 500,000 VNĐ")
     @Digits(integer = 13, fraction = 2)
     private BigDecimal amount;
 }

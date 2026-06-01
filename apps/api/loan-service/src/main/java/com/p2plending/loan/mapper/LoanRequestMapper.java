@@ -8,6 +8,7 @@ import org.mapstruct.*;
 @Mapper(componentModel = "spring", unmappedTargetPolicy = ReportingPolicy.IGNORE)
 public interface LoanRequestMapper {
 
+    @Mapping(target = "loanCode", expression = "java(loan.getLoanCode())")
     @Mapping(target = "remainingAmount", expression = "java(loan.getRemainingAmount())")
     @Mapping(target = "offers", ignore = true)
     LoanResponse toResponse(LoanRequest loan);

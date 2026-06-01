@@ -14,6 +14,7 @@ import java.util.List;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class LoanResponse {
     private String id;
+    private String loanCode;
     private String borrowerId;
     private BigDecimal amount;
     private BigDecimal interestRate;

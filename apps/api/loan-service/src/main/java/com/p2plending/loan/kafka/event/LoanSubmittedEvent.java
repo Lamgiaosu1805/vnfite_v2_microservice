@@ -14,6 +14,7 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 public class LoanSubmittedEvent {
     private String loanId;
+    private String loanCode;
     private String borrowerId;
     private BigDecimal amount;
     private Integer termMonths;
