@@ -1,0 +1,104 @@
+name: CI/CD → Test Server
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      force_all:
+        description: 'Deploy tất cả services (dùng khi lần đầu hoặc cần reset)'
+        type: boolean
+        default: false
+
+env:
+  SERVER: root@42.113.122.119
+  APP_DIR: /root/p2p-lending
+
+jobs:
+  deploy:
+    name: Deploy to Test Server
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Detect changed services
+        id: changes
+        run: |
+          FORCE="${{ inputs.force_all }}"
+          if [ "$FORCE" = "true" ]; then
+            echo "Forcing deploy all services"
+            echo "auth=true"         >> $GITHUB_OUTPUT
+            echo "loan=true"         >> $GITHUB_OUTPUT
+            echo "matching=true"     >> $GITHUB_OUTPUT
+            echo "cms=true"          >> $GITHUB_OUTPUT
+            echo "notification=true" >> $GITHUB_OUTPUT
+            echo "nginx=true"        >> $GITHUB_OUTPUT
+          else
+            CHANGED=$(git diff --name-only HEAD~1 HEAD 2>/dev/null || echo "")
+            echo "=== Changed files ==="
+            echo "$CHANGED"
+            echo "auth=$(echo "$CHANGED"         | grep -q 'apps/api/auth-service/'         && echo true || echo false)" >> $GITHUB_OUTPUT
+            echo "loan=$(echo "$CHANGED"         | grep -q 'apps/api/loan-service/'         && echo true || echo false)" >> $GITHUB_OUTPUT
+            echo "matching=$(echo "$CHANGED"     | grep -q 'apps/api/matching-service/'     && echo true || echo false)" >> $GITHUB_OUTPUT
+            echo "cms=$(echo "$CHANGED"          | grep -q 'apps/api/cms-service/'          && echo true || echo false)" >> $GITHUB_OUTPUT
+            echo "notification=$(echo "$CHANGED" | grep -q 'apps/api/notification-service/' && echo true || echo false)" >> $GITHUB_OUTPUT
+            echo "nginx=$(echo "$CHANGED"        | grep -q 'nginx/'                         && echo true || echo false)" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY_TEST }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H 42.113.122.119 >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Sync .env to server
+        run: |
+          printf '%s\n' "${{ secrets.ENV_FILE_TEST }}" > /tmp/.env_test
+          scp -i ~/.ssh/deploy_key /tmp/.env_test ${{ env.SERVER }}:${{ env.APP_DIR }}/.env
+          rm -f /tmp/.env_test
+
+      - name: Deploy auth-service
+        if: steps.changes.outputs.auth == 'true'
+        run: |
+          ssh -i ~/.ssh/deploy_key ${{ env.SERVER }} \
+            'set -e; cd /root/p2p-lending; git pull origin main; docker compose build auth-service; docker compose up -d auth-service; docker image prune -f'
+
+      - name: Deploy loan-service
+        if: steps.changes.outputs.loan == 'true'
+        run: |
+          ssh -i ~/.ssh/deploy_key ${{ env.SERVER }} \
+            'set -e; cd /root/p2p-lending; git pull origin main; docker compose build loan-service; docker compose up -d loan-service; docker image prune -f'
+
+      - name: Deploy matching-service
+        if: steps.changes.outputs.matching == 'true'
+        run: |
+          ssh -i ~/.ssh/deploy_key ${{ env.SERVER }} \
+            'set -e; cd /root/p2p-lending; git pull origin main; docker compose build matching-service; docker compose up -d matching-service; docker image prune -f'
+
+      - name: Deploy cms-service
+        if: steps.changes.outputs.cms == 'true'
+        run: |
+          ssh -i ~/.ssh/deploy_key ${{ env.SERVER }} \
+            'set -e; cd /root/p2p-lending; git pull origin main; docker compose build cms-service; docker compose up -d cms-service; docker image prune -f'
+
+      - name: Deploy notification-service
+        if: steps.changes.outputs.notification == 'true'
+        run: |
+          ssh -i ~/.ssh/deploy_key ${{ env.SERVER }} \
+            'set -e; cd /root/p2p-lending; git pull origin main; docker compose build notification-service; docker compose up -d notification-service; docker image prune -f'
+
+      - name: Reload nginx
+        if: steps.changes.outputs.nginx == 'true'
+        run: |
+          ssh -i ~/.ssh/deploy_key ${{ env.SERVER }} \
+            'set -e; cd /root/p2p-lending; git pull origin main; docker compose restart nginx'
+
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/deploy_key /tmp/.env_test
