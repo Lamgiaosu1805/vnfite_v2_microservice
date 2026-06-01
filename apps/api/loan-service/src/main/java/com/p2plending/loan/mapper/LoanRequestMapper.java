@@ -12,11 +12,15 @@ public interface LoanRequestMapper {
     @Mapping(target = "offers", ignore = true)
     LoanResponse toResponse(LoanRequest loan);
 
-    @Mapping(target = "id", ignore = true)
-    @Mapping(target = "status", ignore = true)
-    @Mapping(target = "fundedAmount", ignore = true)
-    @Mapping(target = "createdAt", ignore = true)
-    @Mapping(target = "updatedAt", ignore = true)
-    @Mapping(target = "borrowerId", ignore = true)
+    @Mapping(target = "id",             ignore = true)
+    @Mapping(target = "status",         ignore = true)
+    @Mapping(target = "interestRate",   ignore = true)
+    @Mapping(target = "fundedAmount",   ignore = true)
+    @Mapping(target = "rejectionReason",ignore = true)
+    @Mapping(target = "reviewedAt",     ignore = true)
+    @Mapping(target = "createdAt",      ignore = true)
+    @Mapping(target = "updatedAt",      ignore = true)
+    @Mapping(target = "borrowerId",     ignore = true)
+    @Mapping(target = "isDeleted",      ignore = true)
     LoanRequest toEntity(LoanCreateRequest request);
 }

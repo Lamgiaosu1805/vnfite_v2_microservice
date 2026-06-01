@@ -28,7 +28,8 @@ public class CmsLoan {
     @Column(nullable = false, precision = 15, scale = 2)
     private BigDecimal amount;
 
-    @Column(nullable = false, precision = 5, scale = 2)
+    /** Nullable — set by CMS admin during approval. */
+    @Column(precision = 5, scale = 2)
     private BigDecimal interestRate;
 
     @Column(nullable = false)
@@ -37,9 +38,29 @@ public class CmsLoan {
     @Column(length = 500)
     private String purpose;
 
+    @Column(length = 100)
+    private String occupation;
+
+    @Column(precision = 15, scale = 2)
+    private BigDecimal monthlyIncome;
+
+    @Column(length = 500)
+    private String currentAddress;
+
+    @Column(length = 100)
+    private String referredBy;
+
     @Column(nullable = false, length = 20)
     @Builder.Default
-    private String status = "PENDING";
+    private String status = "PENDING_REVIEW";
+
+    @Column(length = 500)
+    private String rejectionReason;
+
+    @Column(length = 100)
+    private String reviewedBy;
+
+    private LocalDateTime reviewedAt;
 
     @Column(nullable = false)
     @Builder.Default

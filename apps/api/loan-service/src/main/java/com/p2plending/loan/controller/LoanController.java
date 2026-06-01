@@ -3,7 +3,6 @@ package com.p2plending.loan.controller;
 import com.p2plending.loan.dto.request.LoanCreateRequest;
 import com.p2plending.loan.dto.request.LoanFilterParams;
 import com.p2plending.loan.dto.request.LoanOfferCreateRequest;
-import com.p2plending.loan.dto.request.LoanStatusUpdateRequest;
 import com.p2plending.loan.dto.response.LoanOfferResponse;
 import com.p2plending.loan.dto.response.LoanResponse;
 import com.p2plending.loan.dto.response.PagedResponse;
@@ -26,8 +25,9 @@ public class LoanController {
 
     /**
      * POST /api/loans/request
-     * Borrower submits a new loan request.
-     * Publishes "loan.created" Kafka event.
+     * Borrower submits a new loan application (gọi vốn).
+     * Status starts as PENDING_REVIEW — loan is NOT visible on marketplace until CMS approves.
+     * Publishes "loan.submitted" Kafka event for CMS underwriting queue.
      */
     @PostMapping("/request")
     @PreAuthorize("isAuthenticated()")
@@ -42,9 +42,7 @@ public class LoanController {
 
     /**
      * GET /api/loans
-     * Paginated loan list with optional filters.
-     * Response cached in Redis for 5 minutes.
-     *
+     * Paginated loan list. Investors see ACTIVE loans by default.
      * Query params: status, borrowerId, minAmount, maxAmount, page, size, sortBy, sortDir
      */
     @GetMapping
@@ -56,8 +54,7 @@ public class LoanController {
 
     /**
      * GET /api/loans/{id}
-     * Fetches a single loan with its offers.
-     * Response cached in Redis for 10 minutes.
+     * Fetches a single loan with its offers. Cached 10 minutes.
      */
     @GetMapping("/{id}")
     public ResponseEntity<LoanResponse> getLoanById(@PathVariable String id) {
@@ -67,7 +64,7 @@ public class LoanController {
     /**
      * POST /api/loans/{id}/offer
      * Investor places an offer on an ACTIVE loan.
-     * Publishes "loan.funded" when the loan becomes fully funded.
+     * Publishes "loan.funded" when fully funded.
      */
     @PostMapping("/{id}/offer")
     @PreAuthorize("isAuthenticated()")
@@ -79,19 +76,5 @@ public class LoanController {
         return ResponseEntity
                 .status(HttpStatus.CREATED)
                 .body(loanService.createOffer(id, request, principal.userId()));
-    }
-
-    /**
-     * PUT /api/loans/{id}/status
-     * Updates loan status (admin / system use).
-     * Moves loan through: PENDING → ACTIVE → FUNDED → REPAYING → COMPLETED / DEFAULTED
-     */
-    @PutMapping("/{id}/status")
-    @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<LoanResponse> updateStatus(
-            @PathVariable String id,
-            @Valid @RequestBody LoanStatusUpdateRequest request
-    ) {
-        return ResponseEntity.ok(loanService.updateStatus(id, request));
     }
 }

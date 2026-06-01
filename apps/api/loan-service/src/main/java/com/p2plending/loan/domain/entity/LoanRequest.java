@@ -35,8 +35,8 @@ public class LoanRequest {
     @Column(nullable = false, precision = 15, scale = 2)
     private BigDecimal amount;
 
-    /** Annual interest rate as a percentage, e.g. 12.50 means 12.5% p.a. */
-    @Column(nullable = false, precision = 5, scale = 2)
+    /** Set by CMS during approval — null until approved. */
+    @Column(precision = 5, scale = 2)
     private BigDecimal interestRate;
 
     @Column(nullable = false)
@@ -45,15 +45,38 @@ public class LoanRequest {
     @Column(nullable = false, length = 500)
     private String purpose;
 
+    /** Người tham chiếu (referrer name or phone). */
+    @Column(length = 100)
+    private String referredBy;
+
+    /** Thu nhập hàng tháng (VND). */
+    @Column(precision = 15, scale = 2)
+    private BigDecimal monthlyIncome;
+
+    /** Nghề nghiệp. */
+    @Column(length = 100)
+    private String occupation;
+
+    /** Địa chỉ hiện tại chi tiết. */
+    @Column(length = 500)
+    private String currentAddress;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     @Builder.Default
-    private LoanStatus status = LoanStatus.PENDING;
+    private LoanStatus status = LoanStatus.PENDING_REVIEW;
 
     /** Running total of accepted offers — drives FUNDED transition. */
     @Column(nullable = false, precision = 15, scale = 2)
     @Builder.Default
     private BigDecimal fundedAmount = BigDecimal.ZERO;
+
+    /** Lý do từ chối từ CMS. */
+    @Column(length = 500)
+    private String rejectionReason;
+
+    /** Thời điểm CMS duyệt hoặc từ chối. */
+    private LocalDateTime reviewedAt;
 
     @Column(nullable = false)
     @Builder.Default

@@ -10,13 +10,13 @@ import com.p2plending.loan.domain.repository.LoanRequestRepository;
 import com.p2plending.loan.dto.request.LoanCreateRequest;
 import com.p2plending.loan.dto.request.LoanFilterParams;
 import com.p2plending.loan.dto.request.LoanOfferCreateRequest;
-import com.p2plending.loan.dto.request.LoanStatusUpdateRequest;
 import com.p2plending.loan.dto.response.LoanOfferResponse;
 import com.p2plending.loan.dto.response.LoanResponse;
 import com.p2plending.loan.dto.response.PagedResponse;
 import com.p2plending.loan.exception.InvalidLoanStateException;
 import com.p2plending.loan.exception.LoanNotFoundException;
 import com.p2plending.loan.kafka.KafkaProducerService;
+import com.p2plending.loan.kafka.event.LoanReviewedEvent;
 import com.p2plending.loan.kafka.event.PaymentCompletedEvent;
 import com.p2plending.loan.mapper.LoanOfferMapper;
 import com.p2plending.loan.mapper.LoanRequestMapper;
@@ -30,6 +30,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
@@ -39,13 +40,7 @@ import java.util.Set;
 @Slf4j
 public class LoanService {
 
-    // Statuses in which a loan can receive new offers
     private static final Set<LoanStatus> OFFERABLE_STATUSES = EnumSet.of(LoanStatus.ACTIVE);
-
-    // Statuses from which a manual status update is allowed
-    private static final Set<LoanStatus> UPDATABLE_STATUSES =
-            EnumSet.of(LoanStatus.PENDING, LoanStatus.ACTIVE, LoanStatus.FUNDED,
-                       LoanStatus.REPAYING, LoanStatus.DEFAULTED);
 
     private final LoanRequestRepository loanRequestRepository;
     private final LoanOfferRepository   loanOfferRepository;
@@ -60,12 +55,12 @@ public class LoanService {
     public LoanResponse createLoan(LoanCreateRequest request, String borrowerId) {
         LoanRequest loan = loanRequestMapper.toEntity(request);
         loan.setBorrowerId(borrowerId);
-        loan.setStatus(LoanStatus.PENDING);
+        loan.setStatus(LoanStatus.PENDING_REVIEW);
 
         LoanRequest saved = loanRequestRepository.save(loan);
-        kafkaProducerService.publishLoanCreated(saved);
+        kafkaProducerService.publishLoanSubmitted(saved);
 
-        log.info("Loan created: id={} borrower={} amount={}", saved.getId(), borrowerId, saved.getAmount());
+        log.info("Loan submitted: id={} borrower={} amount={}", saved.getId(), borrowerId, saved.getAmount());
         return buildResponse(saved, false);
     }
 
@@ -120,7 +115,6 @@ public class LoanService {
 
         LoanOffer saved = loanOfferRepository.save(offer);
 
-        // Update funded amount and check for FUNDED transition
         loan.setFundedAmount(loan.getFundedAmount().add(request.getAmount()));
         if (loan.isFullyFunded()) {
             loan.setStatus(LoanStatus.FUNDED);
@@ -136,31 +130,36 @@ public class LoanService {
         return loanOfferMapper.toResponse(saved);
     }
 
-    // ── Update status ─────────────────────────────────────────────
+    // ── Kafka consumer callbacks ──────────────────────────────────
 
     @Transactional
     @Caching(evict = {
         @CacheEvict(value = CacheConfig.CACHE_LOANS,      allEntries = true),
-        @CacheEvict(value = CacheConfig.CACHE_LOAN_BY_ID, key = "#loanId")
+        @CacheEvict(value = CacheConfig.CACHE_LOAN_BY_ID, key = "#event.loanId")
     })
-    public LoanResponse updateStatus(String loanId, LoanStatusUpdateRequest request) {
-        LoanRequest loan = findLoanOrThrow(loanId);
+    public void handleLoanReviewed(LoanReviewedEvent event) {
+        loanRequestRepository.findById(event.getLoanId()).ifPresentOrElse(loan -> {
+            if (loan.getStatus() != LoanStatus.PENDING_REVIEW) {
+                log.warn("loan.reviewed received but loan {} is not PENDING_REVIEW (status={})",
+                        event.getLoanId(), loan.getStatus());
+                return;
+            }
+            loan.setReviewedAt(event.getReviewedAt() != null ? event.getReviewedAt() : LocalDateTime.now());
 
-        if (!UPDATABLE_STATUSES.contains(loan.getStatus())) {
-            throw new InvalidLoanStateException(
-                    "Cannot update loan %s — terminal status: %s".formatted(loanId, loan.getStatus()));
-        }
-
-        LoanStatus prev = loan.getStatus();
-        loan.setStatus(request.getStatus());
-        LoanRequest saved = loanRequestRepository.save(loan);
-
-        log.info("Loan {} status updated: {} → {} reason={}",
-                loanId, prev, request.getStatus(), request.getReason());
-        return buildResponse(saved, false);
+            if ("APPROVE".equalsIgnoreCase(event.getAction())) {
+                loan.setInterestRate(event.getInterestRate());
+                loan.setStatus(LoanStatus.ACTIVE);
+                loanRequestRepository.save(loan);
+                kafkaProducerService.publishLoanCreated(loan);
+                log.info("Loan {} approved by {} — now ACTIVE, triggering matching", event.getLoanId(), event.getReviewedBy());
+            } else {
+                loan.setRejectionReason(event.getRejectionReason());
+                loan.setStatus(LoanStatus.REJECTED);
+                loanRequestRepository.save(loan);
+                log.info("Loan {} rejected by {}: {}", event.getLoanId(), event.getReviewedBy(), event.getRejectionReason());
+            }
+        }, () -> log.warn("loan.reviewed received for unknown loan={}", event.getLoanId()));
     }
-
-    // ── Kafka consumer callback ───────────────────────────────────
 
     @Transactional
     @Caching(evict = {

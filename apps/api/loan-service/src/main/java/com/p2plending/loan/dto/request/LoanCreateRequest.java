@@ -14,12 +14,6 @@ public class LoanCreateRequest {
     @Digits(integer = 13, fraction = 2)
     private BigDecimal amount;
 
-    @NotNull(message = "Interest rate is required")
-    @DecimalMin(value = "0.01", message = "Interest rate must be at least 0.01%")
-    @DecimalMax(value = "100.00", message = "Interest rate cannot exceed 100%")
-    @Digits(integer = 3, fraction = 2)
-    private BigDecimal interestRate;
-
     @NotNull(message = "Term is required")
     @Min(value = 1,   message = "Minimum term is 1 month")
     @Max(value = 360, message = "Maximum term is 360 months (30 years)")
@@ -28,4 +22,17 @@ public class LoanCreateRequest {
     @NotBlank(message = "Purpose is required")
     @Size(min = 10, max = 500, message = "Purpose must be between 10 and 500 characters")
     private String purpose;
+
+    @Size(max = 100)
+    private String referredBy;
+
+    @DecimalMin(value = "0", inclusive = false, message = "Monthly income must be positive")
+    @Digits(integer = 13, fraction = 2)
+    private BigDecimal monthlyIncome;
+
+    @Size(max = 100)
+    private String occupation;
+
+    @Size(max = 500)
+    private String currentAddress;
 }

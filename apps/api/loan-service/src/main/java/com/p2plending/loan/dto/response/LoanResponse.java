@@ -19,9 +19,15 @@ public class LoanResponse {
     private BigDecimal interestRate;
     private Integer termMonths;
     private String purpose;
+    private String referredBy;
+    private BigDecimal monthlyIncome;
+    private String occupation;
+    private String currentAddress;
     private LoanStatus status;
     private BigDecimal fundedAmount;
     private BigDecimal remainingAmount;
+    private String rejectionReason;
+    private LocalDateTime reviewedAt;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private List<LoanOfferResponse> offers;

@@ -74,14 +74,15 @@ public class CmsKafkaConsumerService {
         });
     }
 
-    // ── loan.created ─────────────────────────────────────────────
+    // ── loan.submitted ───────────────────────────────────────────
+    // Borrower submits a loan application — CMS receives it for underwriting
 
-    @KafkaListener(topics = "loan.created", groupId = "${spring.kafka.consumer.group-id}",
+    @KafkaListener(topics = "loan.submitted", groupId = "${spring.kafka.consumer.group-id}",
                    containerFactory = "kafkaListenerContainerFactory")
     @Transactional
     @CacheEvict(value = {CACHE_DASHBOARD_STATS, CACHE_DASHBOARD_CHART}, allEntries = true)
-    public void onLoanCreated(ConsumerRecord<String, String> rec, Acknowledgment ack) {
-        process(rec, ack, "loan.created", node -> {
+    public void onLoanSubmitted(ConsumerRecord<String, String> rec, Acknowledgment ack) {
+        process(rec, ack, "loan.submitted", node -> {
             String loanId = node.get("loanId").asText();
             if (!loanRepo.existsById(loanId)) {
                 BigDecimal amount = new BigDecimal(node.get("amount").asText());
@@ -89,14 +90,18 @@ public class CmsKafkaConsumerService {
                         .loanId(loanId)
                         .borrowerId(node.get("borrowerId").asText())
                         .amount(amount)
-                        .interestRate(new BigDecimal(node.get("interestRate").asText()))
                         .termMonths(node.get("termMonths").asInt())
-                        .purpose(node.has("purpose") ? node.get("purpose").asText() : "")
-                        .status("PENDING")
+                        .purpose(node.has("purpose") ? node.get("purpose").asText(null) : null)
+                        .occupation(node.has("occupation") ? node.get("occupation").asText(null) : null)
+                        .monthlyIncome(node.has("monthlyIncome") && !node.get("monthlyIncome").isNull()
+                                ? new BigDecimal(node.get("monthlyIncome").asText()) : null)
+                        .currentAddress(node.has("currentAddress") ? node.get("currentAddress").asText(null) : null)
+                        .referredBy(node.has("referredBy") ? node.get("referredBy").asText(null) : null)
+                        .status("PENDING_REVIEW")
                         .createdAt(LocalDateTime.now())
                         .build());
                 incrementDailyStat(LocalDate.now(), 0, 1, 0, amount);
-                log.debug("CMS: loan created loanId={}", loanId);
+                log.debug("CMS: loan submitted loanId={}", loanId);
             }
         });
     }

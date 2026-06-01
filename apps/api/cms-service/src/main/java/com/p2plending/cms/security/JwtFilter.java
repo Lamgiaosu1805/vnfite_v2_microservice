@@ -44,7 +44,7 @@ public class JwtFilter extends OncePerRequestFilter {
                         (roles == null ? List.<String>of() : roles)
                                 .stream().map(SimpleGrantedAuthority::new).toList();
                 var auth = new UsernamePasswordAuthenticationToken(
-                        new CmsPrincipal(adminUserId, claims.get("email", String.class)), null, authorities);
+                        new CmsPrincipal(adminUserId, claims.getSubject(), claims.get("email", String.class)), null, authorities);
                 auth.setDetails(new WebAuthenticationDetailsSource().buildDetails(req));
                 SecurityContextHolder.getContext().setAuthentication(auth);
             } catch (ExpiredJwtException e) {
