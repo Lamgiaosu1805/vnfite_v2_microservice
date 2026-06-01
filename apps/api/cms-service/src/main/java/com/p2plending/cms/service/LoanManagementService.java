@@ -45,7 +45,7 @@ public class LoanManagementService {
         LocalDateTime now = LocalDateTime.now();
         loan.setInterestRate(req.getInterestRate());
         loan.setStatus("ACTIVE");
-        loan.setReviewedBy(reviewer.getUsername());
+        loan.setReviewedBy(reviewer.username());
         loan.setReviewedAt(now);
         loanRepo.save(loan);
 
@@ -53,7 +53,7 @@ public class LoanManagementService {
                 .loanId(loanId)
                 .action("APPROVE")
                 .interestRate(req.getInterestRate())
-                .reviewedBy(reviewer.getUsername())
+                .reviewedBy(reviewer.username())
                 .reviewedAt(now)
                 .build());
 
@@ -71,7 +71,7 @@ public class LoanManagementService {
         LocalDateTime now = LocalDateTime.now();
         loan.setRejectionReason(req.getReason());
         loan.setStatus("REJECTED");
-        loan.setReviewedBy(reviewer.getUsername());
+        loan.setReviewedBy(reviewer.username());
         loan.setReviewedAt(now);
         loanRepo.save(loan);
 
@@ -79,7 +79,7 @@ public class LoanManagementService {
                 .loanId(loanId)
                 .action("REJECT")
                 .rejectionReason(req.getReason())
-                .reviewedBy(reviewer.getUsername())
+                .reviewedBy(reviewer.username())
                 .reviewedAt(now)
                 .build());
 
