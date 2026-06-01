@@ -85,7 +85,5 @@ app:
     mock: false
 
 logging:
-  file:
-    path: logs
   pattern:
     dateformat: yyyy-MM-dd HH:mm:ss.SSS
