@@ -140,6 +140,7 @@ services:
       CMS_ADMIN_PASSWORD: ${CMS_ADMIN_PASSWORD:-Admin@123456}
       CMS_ADMIN_EMAIL: ${CMS_ADMIN_EMAIL:-admin@p2plending.local}
       CMS_ADMIN_FULL_NAME: ${CMS_ADMIN_FULL_NAME:-CMS Administrator}
+      RSA_PUBLIC_KEY: ${RSA_PUBLIC_KEY:-}
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
     extra_hosts:
       - "host.docker.internal:host-gateway"
