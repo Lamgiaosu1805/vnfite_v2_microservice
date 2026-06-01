@@ -97,7 +97,7 @@ jobs:
         if: steps.changes.outputs.nginx == 'true'
         run: |
           ssh -i ~/.ssh/deploy_key ${{ env.SERVER }} \
-            'set -e; cd /root/p2p-lending; git pull origin main; docker exec p2p-nginx nginx -t && docker exec p2p-nginx nginx -s reload'
+            'set -e; cd /root/p2p-lending; git pull origin main; docker compose restart nginx'
 
       - name: Cleanup
         if: always()
