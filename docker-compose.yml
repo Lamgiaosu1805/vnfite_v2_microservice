@@ -104,6 +104,8 @@ services:
       RSA_PRIVATE_KEY: ${RSA_PRIVATE_KEY:-}
       RSA_PUBLIC_KEY: ${RSA_PUBLIC_KEY:-}
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       mysql:
         condition: service_healthy
@@ -139,6 +141,8 @@ services:
       CMS_ADMIN_EMAIL: ${CMS_ADMIN_EMAIL:-admin@p2plending.local}
       CMS_ADMIN_FULL_NAME: ${CMS_ADMIN_FULL_NAME:-CMS Administrator}
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       mysql:
         condition: service_healthy
@@ -169,6 +173,8 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       RSA_PUBLIC_KEY: ${RSA_PUBLIC_KEY:-}
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       mysql:
         condition: service_healthy
@@ -199,6 +205,8 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       RSA_PUBLIC_KEY: ${RSA_PUBLIC_KEY:-}
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       mysql:
         condition: service_healthy
@@ -233,6 +241,8 @@ services:
       SMTP_USERNAME: ${SMTP_USERNAME:-}
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       mysql:
         condition: service_healthy
