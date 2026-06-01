@@ -74,13 +74,13 @@ curl -s -X POST http://localhost:7080/api/auth/login \
 
 Tất cả tài khoản có mật khẩu: **`Test@1234`**
 
-| SĐT | Role | KYC | Ghi chú |
-|-----|------|-----|---------|
-| `0901111111` | USER | APPROVED | Borrower 1 |
-| `0902222222` | USER | APPROVED | Borrower 2 |
-| `0903333333` | USER | PENDING | Investor 1 |
-| `0904444444` | USER | NONE | Investor 2 |
-| `0905555555` | ADMIN | APPROVED | Admin |
+| SĐT | KYC | Ghi chú |
+|-----|-----|---------|
+| `0901111111` | APPROVED | Borrower 1 |
+| `0902222222` | APPROVED | Borrower 2 |
+| `0903333333` | PENDING | Investor 1 |
+| `0904444444` | NONE | Investor 2 |
+| `0905555555` | APPROVED | Admin (role ADMIN) |
 
 Seed data còn bao gồm: 3 loan requests, 3 loan offers, 2 investor preferences, các notification templates.
 
