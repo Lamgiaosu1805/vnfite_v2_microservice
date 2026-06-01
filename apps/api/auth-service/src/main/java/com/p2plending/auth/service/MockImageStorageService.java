@@ -12,7 +12,7 @@ import java.util.UUID;
  * Thay bằng implementation thật khi deploy production.
  */
 @Service
-@Profile("!prod")
+@Profile("!real-storage")
 @Slf4j
 public class MockImageStorageService implements ImageStorageService {
 
