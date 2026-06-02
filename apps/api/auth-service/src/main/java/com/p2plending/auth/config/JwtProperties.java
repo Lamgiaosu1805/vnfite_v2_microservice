@@ -15,9 +15,9 @@ public class JwtProperties {
     /** Base64-encoded X509 RSA public key. PEM headers are optional. */
     private String publicKey = "";
 
-    /** Access token lifetime in seconds (default 15 minutes). */
-    private long accessTokenExpiry = 900;
+    /** Access token lifetime in seconds (default 5 minutes). */
+    private long accessTokenExpiry = 300;
 
-    /** Refresh token lifetime in seconds (default 24 hours). */
-    private long refreshTokenExpiry = 86400;
+    /** Refresh token lifetime in seconds (default 10 minutes). */
+    private long refreshTokenExpiry = 600;
 }
