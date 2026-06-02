@@ -1,7 +1,6 @@
 package com.p2plending.auth.dto.response;
 
 import com.p2plending.auth.domain.enums.KycStatus;
-import com.p2plending.auth.domain.enums.Role;
 import lombok.Builder;
 import lombok.Data;
 
@@ -14,7 +13,6 @@ public class UserResponse {
     private String phone;
     private String email;
     private String fullName;
-    private Role role;
     private KycStatus kycStatus;
     private LocalDateTime createdAt;
 }

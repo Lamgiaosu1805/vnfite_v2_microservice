@@ -1,7 +1,6 @@
 package com.p2plending.auth.domain.entity;
 
 import com.p2plending.auth.domain.enums.KycStatus;
-import com.p2plending.auth.domain.enums.Role;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
@@ -39,11 +38,6 @@ public class User {
 
     @Column(length = 150)
     private String email;
-
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 20)
-    @Builder.Default
-    private Role role = Role.USER;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)

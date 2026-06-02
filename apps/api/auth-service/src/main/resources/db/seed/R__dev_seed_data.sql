@@ -6,12 +6,12 @@
 -- USERS
 -- Seed 4 users: 2 borrower, 2 investor, 1 admin
 -- ============================================================
-INSERT IGNORE INTO users (id, phone, password, full_name, email, role, kyc_status, referred_by, is_deleted, created_at, updated_at) VALUES
-  ('d1000001-0000-0000-0000-000000000001', '0901111111', '$2y$10$9IFqvA.Y8ITJUfvPqai3S.yeYblrWiAVE2mOjhJmLMARDF1WWGXJu', 'Nguyễn Văn Vay 1',      'vayone@dev.local',   'USER',  'APPROVED', NULL,          0, NOW(), NOW()),
-  ('d2000002-0000-0000-0000-000000000002', '0902222222', '$2y$10$9IFqvA.Y8ITJUfvPqai3S.yeYblrWiAVE2mOjhJmLMARDF1WWGXJu', 'Trần Thị Vay 2',        'vaytwo@dev.local',   'USER',  'NONE',     NULL,          0, NOW(), NOW()),
-  ('d3000003-0000-0000-0000-000000000003', '0903333333', '$2y$10$9IFqvA.Y8ITJUfvPqai3S.yeYblrWiAVE2mOjhJmLMARDF1WWGXJu', 'Lê Văn Đầu Tư 1',       'invone@dev.local',   'USER',  'APPROVED', NULL,          0, NOW(), NOW()),
-  ('d4000004-0000-0000-0000-000000000004', '0904444444', '$2y$10$9IFqvA.Y8ITJUfvPqai3S.yeYblrWiAVE2mOjhJmLMARDF1WWGXJu', 'Phạm Thị Đầu Tư 2',     'invtwo@dev.local',   'USER',  'APPROVED', '0903333333',  0, NOW(), NOW()),
-  ('d5000005-0000-0000-0000-000000000005', '0905555555', '$2y$10$9IFqvA.Y8ITJUfvPqai3S.yeYblrWiAVE2mOjhJmLMARDF1WWGXJu', 'Admin Test',            'admin@dev.local',    'ADMIN', 'APPROVED', NULL,          0, NOW(), NOW());
+INSERT IGNORE INTO users (id, phone, password, full_name, email, kyc_status, referred_by, is_deleted, created_at, updated_at) VALUES
+  ('d1000001-0000-0000-0000-000000000001', '0901111111', '$2y$10$9IFqvA.Y8ITJUfvPqai3S.yeYblrWiAVE2mOjhJmLMARDF1WWGXJu', 'Nguyễn Văn Vay 1',      'vayone@dev.local',  'APPROVED', NULL,          0, NOW(), NOW()),
+  ('d2000002-0000-0000-0000-000000000002', '0902222222', '$2y$10$9IFqvA.Y8ITJUfvPqai3S.yeYblrWiAVE2mOjhJmLMARDF1WWGXJu', 'Trần Thị Vay 2',        'vaytwo@dev.local',  'NONE',     NULL,          0, NOW(), NOW()),
+  ('d3000003-0000-0000-0000-000000000003', '0903333333', '$2y$10$9IFqvA.Y8ITJUfvPqai3S.yeYblrWiAVE2mOjhJmLMARDF1WWGXJu', 'Lê Văn Đầu Tư 1',       'invone@dev.local',  'APPROVED', NULL,          0, NOW(), NOW()),
+  ('d4000004-0000-0000-0000-000000000004', '0904444444', '$2y$10$9IFqvA.Y8ITJUfvPqai3S.yeYblrWiAVE2mOjhJmLMARDF1WWGXJu', 'Phạm Thị Đầu Tư 2',     'invtwo@dev.local',  'APPROVED', '0903333333',  0, NOW(), NOW()),
+  ('d5000005-0000-0000-0000-000000000005', '0905555555', '$2y$10$9IFqvA.Y8ITJUfvPqai3S.yeYblrWiAVE2mOjhJmLMARDF1WWGXJu', 'Admin Test',            'admin@dev.local',   'APPROVED', NULL,          0, NOW(), NOW());
 
 -- ============================================================
 -- KYC SUBMISSIONS — cho borrower1, investor1, investor2, admin

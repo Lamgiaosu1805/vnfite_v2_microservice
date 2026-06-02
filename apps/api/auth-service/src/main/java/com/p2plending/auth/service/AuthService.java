@@ -4,7 +4,6 @@ import com.p2plending.auth.config.JwtProperties;
 import com.p2plending.auth.domain.entity.KycDocument;
 import com.p2plending.auth.domain.entity.User;
 import com.p2plending.auth.domain.enums.KycStatus;
-import com.p2plending.auth.domain.enums.Role;
 import com.p2plending.auth.domain.model.PendingRegistration;
 import com.p2plending.auth.domain.repository.KycDocumentRepository;
 import com.p2plending.auth.domain.repository.UserRepository;
@@ -28,7 +27,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -111,7 +109,6 @@ public class AuthService {
         User user = User.builder()
                 .phone(pending.getPhone())
                 .password(pending.getHashedPassword())
-                .role(Role.USER)
                 .kycStatus(KycStatus.NONE)
                 .referredBy(pending.getReferrerPhone())
                 .build();
@@ -119,7 +116,7 @@ public class AuthService {
         User saved = userRepository.save(user);
 
         log.info("User registered: id={} phone={}", saved.getId(), saved.getPhone());
-        kafkaProducerService.publishUserRegistered(saved.getId(), saved.getPhone(), saved.getFullName(), saved.getRole().name());
+        kafkaProducerService.publishUserRegistered(saved.getId(), saved.getPhone(), saved.getFullName());
         return issueTokenPair(saved);
     }
 
@@ -221,7 +218,7 @@ public class AuthService {
         return new org.springframework.security.core.userdetails.User(
                 user.getPhone(),
                 user.getPassword(),
-                List.of(new SimpleGrantedAuthority("ROLE_" + user.getRole().name()))
+                List.of()
         );
     }
 

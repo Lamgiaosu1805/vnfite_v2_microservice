@@ -13,7 +13,6 @@ import java.time.LocalDateTime;
     indexes = {
         @Index(name = "idx_cu_email",      columnList = "email"),
         @Index(name = "idx_cu_kycstatus",  columnList = "kycStatus"),
-        @Index(name = "idx_cu_role",       columnList = "role"),
         @Index(name = "idx_cu_status",     columnList = "accountStatus")
     }
 )
@@ -32,7 +31,7 @@ public class CmsUser {
     @Column(length = 20)
     private String phone;
 
-    @Column(nullable = false, length = 20)
+    @Column(length = 20)
     private String role;
 
     @Column(nullable = false, length = 20)
