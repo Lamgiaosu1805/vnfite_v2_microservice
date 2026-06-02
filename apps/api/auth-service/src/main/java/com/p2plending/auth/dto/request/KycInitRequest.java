@@ -1,9 +1,9 @@
 package com.p2plending.auth.dto.request;
 
 import com.p2plending.auth.domain.enums.Gender;
+import com.p2plending.auth.validation.VietnameseCitizenId;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Pattern;
 import lombok.Data;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -13,7 +13,7 @@ import java.time.LocalDate;
 public class KycInitRequest {
 
     @NotBlank(message = "Số CCCD không được để trống")
-    @Pattern(regexp = "^[0-9]{12}$", message = "Số CCCD phải gồm 12 chữ số")
+    @VietnameseCitizenId(message = "Số CCCD phải gồm 12 chữ số")
     private String cccdNumber;
 
     @NotBlank(message = "Họ và tên không được để trống")

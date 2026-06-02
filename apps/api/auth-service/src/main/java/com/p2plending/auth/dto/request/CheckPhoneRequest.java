@@ -1,16 +1,13 @@
 package com.p2plending.auth.dto.request;
 
+import com.p2plending.auth.validation.VietnamesePhone;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Pattern;
 import lombok.Data;
 
 @Data
 public class CheckPhoneRequest {
 
     @NotBlank(message = "Phone number is required")
-    @Pattern(
-        regexp = "^(\\+84|84|0)[3|5|7|8|9][0-9]{8}$",
-        message = "Invalid Vietnamese phone number"
-    )
+    @VietnamesePhone
     private String phone;
 }
