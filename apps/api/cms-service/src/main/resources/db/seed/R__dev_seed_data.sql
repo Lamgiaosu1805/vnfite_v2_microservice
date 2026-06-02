@@ -58,6 +58,11 @@ VALUES
    'FUNDED', 'admin', DATE_SUB(NOW(), INTERVAL 9 DAY), 0,
    DATE_SUB(NOW(), INTERVAL 10 DAY), DATE_SUB(NOW(), INTERVAL 3 DAY));
 
+-- Backfill loan_code for rows inserted before the column existed
+UPDATE cms_loans SET loan_code = 'VNF000001' WHERE loan_id = 'e1000001-0000-0000-0000-000000000001' AND loan_code IS NULL;
+UPDATE cms_loans SET loan_code = 'VNF000002' WHERE loan_id = 'e2000002-0000-0000-0000-000000000002' AND loan_code IS NULL;
+UPDATE cms_loans SET loan_code = 'VNF000003' WHERE loan_id = 'e3000003-0000-0000-0000-000000000003' AND loan_code IS NULL;
+
 -- ============================================================
 -- DAILY STATS — 3 ngày gần nhất
 -- ============================================================
