@@ -68,37 +68,37 @@ jobs:
         if: steps.changes.outputs.auth == 'true'
         run: |
           ssh -i ~/.ssh/deploy_key ${{ env.SERVER }} \
-            'set -e; cd /root/p2p-lending; git pull origin main; docker compose build auth-service; docker compose up -d auth-service; docker image prune -f'
+            'set -e; cd /root/p2p-lending; git fetch origin main; git reset --hard origin/main; docker compose build auth-service; docker compose up -d auth-service; docker image prune -f'
 
       - name: Deploy loan-service
         if: steps.changes.outputs.loan == 'true'
         run: |
           ssh -i ~/.ssh/deploy_key ${{ env.SERVER }} \
-            'set -e; cd /root/p2p-lending; git pull origin main; docker compose build loan-service; docker compose up -d loan-service; docker image prune -f'
+            'set -e; cd /root/p2p-lending; git fetch origin main; git reset --hard origin/main; docker compose build loan-service; docker compose up -d loan-service; docker image prune -f'
 
       - name: Deploy matching-service
         if: steps.changes.outputs.matching == 'true'
         run: |
           ssh -i ~/.ssh/deploy_key ${{ env.SERVER }} \
-            'set -e; cd /root/p2p-lending; git pull origin main; docker compose build matching-service; docker compose up -d matching-service; docker image prune -f'
+            'set -e; cd /root/p2p-lending; git fetch origin main; git reset --hard origin/main; docker compose build matching-service; docker compose up -d matching-service; docker image prune -f'
 
       - name: Deploy cms-service
         if: steps.changes.outputs.cms == 'true'
         run: |
           ssh -i ~/.ssh/deploy_key ${{ env.SERVER }} \
-            'set -e; cd /root/p2p-lending; git pull origin main; docker compose build cms-service; docker compose up -d cms-service; docker image prune -f'
+            'set -e; cd /root/p2p-lending; git fetch origin main; git reset --hard origin/main; docker compose build cms-service; docker compose up -d cms-service; docker image prune -f'
 
       - name: Deploy notification-service
         if: steps.changes.outputs.notification == 'true'
         run: |
           ssh -i ~/.ssh/deploy_key ${{ env.SERVER }} \
-            'set -e; cd /root/p2p-lending; git pull origin main; docker compose build notification-service; docker compose up -d notification-service; docker image prune -f'
+            'set -e; cd /root/p2p-lending; git fetch origin main; git reset --hard origin/main; docker compose build notification-service; docker compose up -d notification-service; docker image prune -f'
 
       - name: Reload nginx
         if: steps.changes.outputs.nginx == 'true'
         run: |
           ssh -i ~/.ssh/deploy_key ${{ env.SERVER }} \
-            'set -e; cd /root/p2p-lending; git pull origin main; docker compose restart nginx'
+            'set -e; cd /root/p2p-lending; git fetch origin main; git reset --hard origin/main; docker compose restart nginx'
 
       - name: Cleanup
         if: always()
