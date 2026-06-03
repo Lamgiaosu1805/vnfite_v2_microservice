@@ -57,28 +57,30 @@ public class LoanRequest {
     @Column(length = 100)
     private String referredBy;
 
-    @Column(length = 100)
+    // Explicit column names required — Hibernate naming strategy doesn't insert _ between
+    // digit and uppercase letter (ref1Address → ref1address, not ref1_address)
+    @Column(name = "ref1_full_name", length = 100)
     private String ref1FullName;
 
-    @Column(length = 50)
+    @Column(name = "ref1_relationship", length = 50)
     private String ref1Relationship;
 
-    @Column(length = 20)
+    @Column(name = "ref1_phone", length = 20)
     private String ref1Phone;
 
-    @Column(length = 500)
+    @Column(name = "ref1_address", length = 500)
     private String ref1Address;
 
-    @Column(length = 100)
+    @Column(name = "ref2_full_name", length = 100)
     private String ref2FullName;
 
-    @Column(length = 50)
+    @Column(name = "ref2_relationship", length = 50)
     private String ref2Relationship;
 
-    @Column(length = 20)
+    @Column(name = "ref2_phone", length = 20)
     private String ref2Phone;
 
-    @Column(length = 500)
+    @Column(name = "ref2_address", length = 500)
     private String ref2Address;
 
     /** Thu nhập hàng tháng (VND). */
