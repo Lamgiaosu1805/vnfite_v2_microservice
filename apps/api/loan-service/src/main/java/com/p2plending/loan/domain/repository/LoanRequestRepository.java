@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.Collection;
 import java.util.List;
 
 public interface LoanRequestRepository
@@ -16,6 +17,10 @@ public interface LoanRequestRepository
     List<LoanRequest> findByBorrowerId(String borrowerId);
 
     List<LoanRequest> findByStatus(LoanStatus status);
+
+    /** Kiểm tra borrower có đang có khoản vay ở một trong các trạng thái chặn không. */
+    boolean existsByBorrowerIdAndStatusInAndIsDeletedFalse(
+            String borrowerId, Collection<LoanStatus> statuses);
 
     @Modifying
     @Query("UPDATE LoanRequest l SET l.status = :status WHERE l.id = :id")

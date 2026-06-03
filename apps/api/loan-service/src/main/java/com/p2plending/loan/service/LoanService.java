@@ -46,6 +46,15 @@ public class LoanService {
     private static final BigDecimal MIN_OFFER   = new BigDecimal("500000");
     private static final BigDecimal OFFER_UNIT  = new BigDecimal("500000");
 
+    /** Trạng thái "đang hoạt động" — borrower chưa thể tạo khoản vay mới khi còn khoản ở các trạng thái này. */
+    private static final Set<LoanStatus> BLOCKING_STATUSES = EnumSet.of(
+            LoanStatus.PENDING_REVIEW,
+            LoanStatus.AWAITING_BORROWER_APPROVAL,
+            LoanStatus.ACTIVE,
+            LoanStatus.FUNDED,
+            LoanStatus.REPAYING
+    );
+
     private final LoanRequestRepository loanRequestRepository;
     private final LoanOfferRepository   loanOfferRepository;
     private final LoanRequestMapper     loanRequestMapper;
@@ -80,6 +89,13 @@ public class LoanService {
             throw new InvalidLoanStateException(
                     "Kỳ hạn %d tháng không hợp lệ cho sản phẩm '%s'. Kỳ hạn cho phép: %s"
                     .formatted(request.getTermMonths(), product.getName(), product.getAvailableTerms()));
+        }
+
+        // 4. Kiểm tra borrower không có khoản vay đang hoạt động
+        if (loanRequestRepository.existsByBorrowerIdAndStatusInAndIsDeletedFalse(borrowerId, BLOCKING_STATUSES)) {
+            throw new InvalidLoanStateException(
+                    "Bạn đang có một khoản gọi vốn chưa hoàn tất. " +
+                    "Vui lòng chờ khoản hiện tại được hủy hoặc hoàn tất trước khi tạo khoản mới.");
         }
 
         LoanRequest loan = loanRequestMapper.toEntity(request);
