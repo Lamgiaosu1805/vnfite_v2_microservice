@@ -21,12 +21,11 @@ public class KafkaProducerService {
     private final KafkaTemplate<String, String> kafkaTemplate;
     private final ObjectMapper objectMapper;
 
-    public void publishUserRegistered(String userId, String phone, String fullName) {
+    public void publishUserRegistered(String userId, String phone) {
         try {
             java.util.Map<String, Object> data = new java.util.HashMap<>();
             data.put("userId", userId);
             data.put("phone", phone);
-            data.put("fullName", fullName);
             data.put("registeredAt", LocalDateTime.now().toString());
             kafkaTemplate.send(TOPIC_USER_REGISTERED, userId.toString(), objectMapper.writeValueAsString(data))
                     .whenComplete((r, ex) -> {

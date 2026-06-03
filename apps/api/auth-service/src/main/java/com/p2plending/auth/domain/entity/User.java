@@ -33,9 +33,6 @@ public class User {
     @Column(nullable = false)
     private String password;
 
-    @Column(length = 100)
-    private String fullName;
-
     @Column(length = 150)
     private String email;
 

@@ -138,7 +138,6 @@ public class KycService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found: " + userId));
         user.setKycStatus(KycStatus.APPROVED);
-        user.setFullName(pending.getFullName());
         userRepository.save(user);
 
         kafkaProducerService.publishKycSubmitted(userId, saved.getId());

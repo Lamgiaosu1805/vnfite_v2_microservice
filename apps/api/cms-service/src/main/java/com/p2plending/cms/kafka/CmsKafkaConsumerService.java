@@ -47,7 +47,6 @@ public class CmsKafkaConsumerService {
                 userRepo.save(CmsUser.builder()
                         .userId(userId)
                         .phone(node.has("phone") ? node.get("phone").asText(null) : null)
-                        .fullName(node.has("fullName") && !node.get("fullName").isNull() ? node.get("fullName").asText() : null)
                         .role(node.has("role") && !node.get("role").isNull() ? node.get("role").asText() : "USER")
                         .createdAt(LocalDateTime.now())
                         .build());

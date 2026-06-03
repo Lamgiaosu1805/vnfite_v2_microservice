@@ -6,6 +6,7 @@ import com.p2plending.auth.domain.entity.User;
 import com.p2plending.auth.domain.enums.KycStatus;
 import com.p2plending.auth.domain.model.PendingRegistration;
 import com.p2plending.auth.domain.repository.KycDocumentRepository;
+import com.p2plending.auth.domain.repository.KycSubmissionRepository;
 import com.p2plending.auth.domain.repository.UserRepository;
 import com.p2plending.auth.dto.request.KycSubmitRequest;
 import com.p2plending.auth.dto.request.LoginRequest;
@@ -46,8 +47,9 @@ public class AuthService {
     @Value("${app.otp.mock:false}")
     private boolean mockMode;
 
-    private final UserRepository        userRepository;
-    private final KycDocumentRepository kycDocumentRepository;
+    private final UserRepository           userRepository;
+    private final KycDocumentRepository    kycDocumentRepository;
+    private final KycSubmissionRepository  kycSubmissionRepository;
     private final JwtService            jwtService;
     private final PasswordEncoder       passwordEncoder;
     private final UserMapper            userMapper;
@@ -116,7 +118,7 @@ public class AuthService {
         User saved = userRepository.save(user);
 
         log.info("User registered: id={} phone={}", saved.getId(), saved.getPhone());
-        kafkaProducerService.publishUserRegistered(saved.getId(), saved.getPhone(), saved.getFullName());
+        kafkaProducerService.publishUserRegistered(saved.getId(), saved.getPhone());
         return issueTokenPair(saved);
     }
 
@@ -206,11 +208,17 @@ public class AuthService {
                 Duration.ofSeconds(jwtProperties.getRefreshTokenExpiry())
         );
 
+        // fullName lấy từ KYC submission APPROVED mới nhất (source of truth)
+        var userResponse = userMapper.toResponse(user);
+        kycSubmissionRepository
+                .findTopByUserIdAndStatusOrderByCreatedAtDesc(user.getId(), KycStatus.APPROVED)
+                .ifPresent(kyc -> userResponse.setFullName(kyc.getFullName()));
+
         return AuthResponse.builder()
                 .accessToken(accessToken)
                 .refreshToken(refreshToken)
                 .expiresIn(jwtProperties.getAccessTokenExpiry())
-                .user(userMapper.toResponse(user))
+                .user(userResponse)
                 .build();
     }
 
