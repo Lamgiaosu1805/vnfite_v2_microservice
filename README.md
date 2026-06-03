@@ -13,8 +13,6 @@ p2p-lending/
       matching-service/     # Thuật toán ghép vay
       cms-service/          # Customer Manager Service — admin portal
       notification-service/ # Gửi email/SMS qua Kafka
-    cms/                  # Web CMS/admin app
-    mobile/               # Reserved
 
   infra/                  # SQL init scripts
   nginx/                  # Reverse proxy config
