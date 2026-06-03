@@ -6,7 +6,6 @@ import com.p2plending.loan.dto.response.LoanProductResponse;
 import com.p2plending.loan.exception.LoanNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,7 +20,6 @@ public class LoanProductService {
     private final LoanProductRepository productRepository;
 
     @Transactional(readOnly = true)
-    @Cacheable("loanProducts")
     public List<LoanProductResponse> getActiveProducts() {
         return productRepository.findByIsActiveTrueAndIsDeletedFalseOrderBySortOrderAsc()
                 .stream()
