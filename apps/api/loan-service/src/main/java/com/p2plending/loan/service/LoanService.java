@@ -207,10 +207,10 @@ public class LoanService {
 
             if ("APPROVE".equalsIgnoreCase(event.getAction())) {
                 loan.setInterestRate(event.getInterestRate());
-                loan.setStatus(LoanStatus.ACTIVE);
+                loan.setStatus(LoanStatus.AWAITING_BORROWER_APPROVAL);
                 loanRequestRepository.save(loan);
-                kafkaProducerService.publishLoanCreated(loan);
-                log.info("Loan {} approved by {} — now ACTIVE, triggering matching", event.getLoanId(), event.getReviewedBy());
+                log.info("Loan {} approved by {} — awaiting borrower confirmation (proposed rate={}%)",
+                        event.getLoanId(), event.getReviewedBy(), event.getInterestRate());
             } else {
                 loan.setRejectionReason(event.getRejectionReason());
                 loan.setStatus(LoanStatus.REJECTED);
@@ -218,6 +218,86 @@ public class LoanService {
                 log.info("Loan {} rejected by {}: {}", event.getLoanId(), event.getReviewedBy(), event.getRejectionReason());
             }
         }, () -> log.warn("loan.reviewed received for unknown loan={}", event.getLoanId()));
+    }
+
+    // ── Borrower confirmation ─────────────────────────────────────
+
+    /**
+     * Borrower accepts the proposed terms from CMS.
+     * Transitions AWAITING_BORROWER_APPROVAL → ACTIVE and publishes loan.created
+     * to trigger matching-service.
+     */
+    @Transactional
+    @Caching(evict = {
+        @CacheEvict(value = CacheConfig.CACHE_LOANS,      allEntries = true),
+        @CacheEvict(value = CacheConfig.CACHE_LOAN_BY_ID, key = "#loanId")
+    })
+    public LoanResponse confirmLoan(String loanId, String borrowerId) {
+        LoanRequest loan = findLoanOrThrow(loanId);
+
+        if (!loan.getBorrowerId().equals(borrowerId)) {
+            throw new InvalidLoanStateException("Bạn không có quyền xác nhận khoản gọi vốn này");
+        }
+        if (loan.getStatus() != LoanStatus.AWAITING_BORROWER_APPROVAL) {
+            throw new InvalidLoanStateException(
+                    "Khoản gọi vốn %s không ở trạng thái chờ xác nhận (status: %s)"
+                    .formatted(loan.getLoanCode(), loan.getStatus()));
+        }
+
+        loan.setStatus(LoanStatus.ACTIVE);
+        loanRequestRepository.save(loan);
+        kafkaProducerService.publishLoanCreated(loan);
+
+        log.info("Loan {} confirmed by borrower {} — now ACTIVE, triggering matching",
+                loanId, borrowerId);
+        return buildResponse(loan, false);
+    }
+
+    /**
+     * Borrower cancels/declines the application.
+     * Valid from PENDING_REVIEW or AWAITING_BORROWER_APPROVAL.
+     */
+    @Transactional
+    @Caching(evict = {
+        @CacheEvict(value = CacheConfig.CACHE_LOANS,      allEntries = true),
+        @CacheEvict(value = CacheConfig.CACHE_LOAN_BY_ID, key = "#loanId")
+    })
+    public LoanResponse cancelLoan(String loanId, String borrowerId, String reason) {
+        LoanRequest loan = findLoanOrThrow(loanId);
+
+        if (!loan.getBorrowerId().equals(borrowerId)) {
+            throw new InvalidLoanStateException("Bạn không có quyền hủy khoản gọi vốn này");
+        }
+
+        Set<LoanStatus> cancellableStatuses = EnumSet.of(
+                LoanStatus.PENDING_REVIEW, LoanStatus.AWAITING_BORROWER_APPROVAL);
+        if (!cancellableStatuses.contains(loan.getStatus())) {
+            throw new InvalidLoanStateException(
+                    "Không thể hủy khoản gọi vốn %s ở trạng thái hiện tại (%s)"
+                    .formatted(loan.getLoanCode(), loan.getStatus()));
+        }
+
+        loan.setStatus(LoanStatus.CANCELLED);
+        loan.setBorrowerCancelledReason(reason);
+        loanRequestRepository.save(loan);
+
+        log.info("Loan {} cancelled by borrower {}: {}", loanId, borrowerId, reason);
+        return buildResponse(loan, false);
+    }
+
+    /**
+     * Returns paginated list of loans belonging to the authenticated borrower.
+     * All statuses are included so the borrower can track the full lifecycle.
+     */
+    @Transactional(readOnly = true)
+    public PagedResponse<LoanResponse> getMyLoans(String borrowerId, int page, int size) {
+        LoanFilterParams params = new LoanFilterParams();
+        params.setBorrowerId(borrowerId);
+        params.setPage(page);
+        params.setSize(size);
+        params.setSortBy("createdAt");
+        params.setSortDir("desc");
+        return getLoans(params);
     }
 
     @Transactional

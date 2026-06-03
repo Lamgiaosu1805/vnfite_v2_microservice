@@ -39,6 +39,7 @@ public class LoanResponse {
     private BigDecimal fundedAmount;
     private BigDecimal remainingAmount;
     private String rejectionReason;
+    private String borrowerCancelledReason;
     private LocalDateTime reviewedAt;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

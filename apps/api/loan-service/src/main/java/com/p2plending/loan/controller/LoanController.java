@@ -1,5 +1,6 @@
 package com.p2plending.loan.controller;
 
+import com.p2plending.loan.dto.request.LoanCancelRequest;
 import com.p2plending.loan.dto.request.LoanCreateRequest;
 import com.p2plending.loan.dto.request.LoanFilterParams;
 import com.p2plending.loan.dto.request.LoanOfferCreateRequest;
@@ -41,6 +42,21 @@ public class LoanController {
     }
 
     /**
+     * GET /api/loans/my
+     * Returns paginated list of ALL the current borrower's own loans (all statuses).
+     * Used in "Hồ sơ của tôi" screen to track the full lifecycle.
+     */
+    @GetMapping("/my")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<PagedResponse<LoanResponse>> getMyLoans(
+            @RequestParam(defaultValue = "0")  int page,
+            @RequestParam(defaultValue = "20") int size,
+            @AuthenticationPrincipal AuthenticatedUser principal
+    ) {
+        return ResponseEntity.ok(loanService.getMyLoans(principal.userId(), page, size));
+    }
+
+    /**
      * GET /api/loans
      * Paginated loan list. Investors see ACTIVE loans by default.
      * Query params: status, borrowerId, minAmount, maxAmount, page, size, sortBy, sortDir
@@ -59,6 +75,35 @@ public class LoanController {
     @GetMapping("/{id}")
     public ResponseEntity<LoanResponse> getLoanById(@PathVariable String id) {
         return ResponseEntity.ok(loanService.getLoanById(id));
+    }
+
+    /**
+     * POST /api/loans/{id}/confirm
+     * Borrower accepts the proposed terms from CMS (AWAITING_BORROWER_APPROVAL → ACTIVE).
+     * Publishes "loan.created" event to trigger matching-service.
+     */
+    @PostMapping("/{id}/confirm")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<LoanResponse> confirmLoan(
+            @PathVariable String id,
+            @AuthenticationPrincipal AuthenticatedUser principal
+    ) {
+        return ResponseEntity.ok(loanService.confirmLoan(id, principal.userId()));
+    }
+
+    /**
+     * POST /api/loans/{id}/cancel
+     * Borrower cancels the application (PENDING_REVIEW or AWAITING_BORROWER_APPROVAL → CANCELLED).
+     */
+    @PostMapping("/{id}/cancel")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<LoanResponse> cancelLoan(
+            @PathVariable String id,
+            @Valid @RequestBody(required = false) LoanCancelRequest request,
+            @AuthenticationPrincipal AuthenticatedUser principal
+    ) {
+        String reason = request != null ? request.getReason() : null;
+        return ResponseEntity.ok(loanService.cancelLoan(id, principal.userId(), reason));
     }
 
     /**

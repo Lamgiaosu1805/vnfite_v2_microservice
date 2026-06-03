@@ -107,6 +107,10 @@ public class LoanRequest {
     @Column(length = 500)
     private String rejectionReason;
 
+    /** Lý do khách hàng hủy hồ sơ (từ chối điều khoản hoặc tự rút). */
+    @Column(length = 500)
+    private String borrowerCancelledReason;
+
     /** Thời điểm CMS duyệt hoặc từ chối. */
     private LocalDateTime reviewedAt;
 
