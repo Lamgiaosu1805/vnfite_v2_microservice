@@ -1,3 +1,4 @@
+// v2 — borrower approval flow
 package com.p2plending.loan.controller;
 
 import com.p2plending.loan.dto.request.LoanCancelRequest;
