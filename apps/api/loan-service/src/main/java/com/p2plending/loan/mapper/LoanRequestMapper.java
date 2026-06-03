@@ -14,6 +14,7 @@ public interface LoanRequestMapper {
     LoanResponse toResponse(LoanRequest loan);
 
     @Mapping(target = "id",             ignore = true)
+    @Mapping(target = "productId",      ignore = true)  // set manually in service
     @Mapping(target = "status",         ignore = true)
     @Mapping(target = "interestRate",   ignore = true)
     @Mapping(target = "fundedAmount",   ignore = true)
@@ -23,5 +24,6 @@ public interface LoanRequestMapper {
     @Mapping(target = "updatedAt",      ignore = true)
     @Mapping(target = "borrowerId",     ignore = true)
     @Mapping(target = "isDeleted",      ignore = true)
+    @Mapping(target = "loanSeq",        ignore = true)
     LoanRequest toEntity(LoanCreateRequest request);
 }

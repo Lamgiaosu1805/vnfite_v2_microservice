@@ -33,6 +33,10 @@ public class LoanRequest {
     @Column(unique = true, insertable = false, updatable = false)
     private Long loanSeq;
 
+    /** FK → loan_products.id — nullable để không break dữ liệu cũ trước V4. */
+    @Column(length = 36)
+    private String productId;
+
     @Column(nullable = false)
     private String borrowerId;
 

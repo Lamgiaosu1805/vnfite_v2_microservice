@@ -15,6 +15,9 @@ import java.util.List;
 public class LoanResponse {
     private String id;
     private String loanCode;
+    private String productId;
+    private String productCode;
+    private String productName;
     private String borrowerId;
     private BigDecimal amount;
     private BigDecimal interestRate;

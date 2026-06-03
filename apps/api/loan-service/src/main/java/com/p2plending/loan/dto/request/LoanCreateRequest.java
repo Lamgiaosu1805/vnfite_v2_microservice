@@ -8,6 +8,14 @@ import java.math.BigDecimal;
 @Data
 public class LoanCreateRequest {
 
+    /**
+     * Mã sản phẩm gọi vốn: FAST | STUDENT | CONSUMER | COSMETIC
+     * Bắt buộc — xác định loại sản phẩm và ràng buộc về số tiền, kỳ hạn.
+     */
+    @NotBlank(message = "Mã sản phẩm gọi vốn là bắt buộc (productCode)")
+    @Size(max = 50)
+    private String productCode;
+
     @NotNull(message = "Amount is required")
     @DecimalMin(value = "1000.00", message = "Minimum loan amount is 1,000")
     @DecimalMax(value = "500000000.00", message = "Maximum loan amount is 500,000,000")

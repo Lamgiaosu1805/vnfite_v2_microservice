@@ -2,6 +2,7 @@ package com.p2plending.loan.service;
 
 import com.p2plending.loan.config.CacheConfig;
 import com.p2plending.loan.domain.entity.LoanOffer;
+import com.p2plending.loan.domain.entity.LoanProduct;
 import com.p2plending.loan.domain.entity.LoanRequest;
 import com.p2plending.loan.domain.enums.LoanStatus;
 import com.p2plending.loan.domain.enums.OfferStatus;
@@ -50,13 +51,39 @@ public class LoanService {
     private final LoanRequestMapper     loanRequestMapper;
     private final LoanOfferMapper       loanOfferMapper;
     private final KafkaProducerService  kafkaProducerService;
+    private final LoanProductService    loanProductService;
 
     // ── Create ────────────────────────────────────────────────────
 
     @Transactional
     @CacheEvict(value = CacheConfig.CACHE_LOANS, allEntries = true)
     public LoanResponse createLoan(LoanCreateRequest request, String borrowerId) {
+        // 1. Validate sản phẩm gọi vốn
+        LoanProduct product = loanProductService.findByCodeOrThrow(request.getProductCode().toUpperCase());
+
+        if (!product.isActive()) {
+            throw new InvalidLoanStateException(
+                    "Sản phẩm gọi vốn '%s' hiện không còn hoạt động".formatted(product.getName()));
+        }
+
+        // 2. Validate số tiền theo giới hạn sản phẩm
+        if (!product.isAmountInRange(request.getAmount())) {
+            throw new InvalidLoanStateException(
+                    "Số tiền gọi vốn cho sản phẩm '%s' phải từ %,.0f đến %,.0f VNĐ"
+                    .formatted(product.getName(),
+                               product.getMinAmount().doubleValue(),
+                               product.getMaxAmount().doubleValue()));
+        }
+
+        // 3. Validate kỳ hạn theo danh sách cho phép
+        if (!product.isTermAllowed(request.getTermMonths())) {
+            throw new InvalidLoanStateException(
+                    "Kỳ hạn %d tháng không hợp lệ cho sản phẩm '%s'. Kỳ hạn cho phép: %s"
+                    .formatted(request.getTermMonths(), product.getName(), product.getAvailableTerms()));
+        }
+
         LoanRequest loan = loanRequestMapper.toEntity(request);
+        loan.setProductId(product.getId());
         loan.setBorrowerId(borrowerId);
         loan.setStatus(LoanStatus.PENDING_REVIEW);
 
@@ -219,6 +246,15 @@ public class LoanService {
 
     private LoanResponse buildResponse(LoanRequest loan, boolean includeOffers) {
         LoanResponse response = loanRequestMapper.toResponse(loan);
+
+        // Enrich với thông tin sản phẩm nếu có
+        if (loan.getProductId() != null) {
+            loanProductService.findProductById(loan.getProductId()).ifPresent(product -> {
+                response.setProductCode(product.getCode());
+                response.setProductName(product.getName());
+            });
+        }
+
         if (includeOffers) {
             List<LoanOfferResponse> offers = loanOfferRepository
                     .findByLoanRequestId(loan.getId()).stream()
