@@ -276,13 +276,9 @@ services:
     image: nginx:1.25-alpine
     container_name: p2p-nginx
     ports:
-      - "80:80"    # subdomain: cms-test.vnfite.com.vn, cms.vnfite.com.vn
-      - "7080:80"  # backward compat: IP:7080 cho mobile app
+      - "7080:80"  # API gateway — mobile app & host nginx forward vào đây
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      # CMS Web UI static files — populate bằng deploy script trong VnFiteCMS repo
-      - /opt/cms-web-test:/opt/cms-web-test:ro   # test: cms-test.vnfite.com.vn
-      - /opt/cms-web-prod:/opt/cms-web-prod:ro   # live: cms.vnfite.com.vn
     depends_on:
       - auth-service
       - loan-service
