@@ -146,6 +146,6 @@ docker compose down -v
 
 ## CI/CD
 
-Push lên branch `main` → GitHub Actions tự động phát hiện service nào thay đổi và deploy lên **test server** (`42.113.122.119`, port 7080).
+Push lên branch `main` → GitHub Actions tự động phát hiện service nào thay đổi và deploy lên **test server**.
 
 Deploy thủ công toàn bộ: **Actions → CI/CD → Test Server → Run workflow → force_all ✅**
