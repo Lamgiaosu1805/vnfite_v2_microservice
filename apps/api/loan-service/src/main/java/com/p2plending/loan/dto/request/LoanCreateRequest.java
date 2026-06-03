@@ -34,6 +34,32 @@ public class LoanCreateRequest {
     @Size(max = 100)
     private String referredBy;
 
+    @Size(max = 100)
+    private String ref1FullName;
+
+    @Size(max = 50)
+    private String ref1Relationship;
+
+    @Pattern(regexp = "^(0|\\+84)[0-9]{8,10}$", message = "Số điện thoại người tham chiếu 1 không hợp lệ")
+    @Size(max = 20)
+    private String ref1Phone;
+
+    @Size(max = 500)
+    private String ref1Address;
+
+    @Size(max = 100)
+    private String ref2FullName;
+
+    @Size(max = 50)
+    private String ref2Relationship;
+
+    @Pattern(regexp = "^(0|\\+84)[0-9]{8,10}$", message = "Số điện thoại người tham chiếu 2 không hợp lệ")
+    @Size(max = 20)
+    private String ref2Phone;
+
+    @Size(max = 500)
+    private String ref2Address;
+
     @DecimalMin(value = "0", inclusive = false, message = "Monthly income must be positive")
     @Digits(integer = 13, fraction = 2)
     private BigDecimal monthlyIncome;

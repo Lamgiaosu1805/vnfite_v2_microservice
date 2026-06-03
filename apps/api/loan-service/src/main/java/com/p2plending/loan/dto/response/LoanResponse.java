@@ -24,6 +24,14 @@ public class LoanResponse {
     private Integer termMonths;
     private String purpose;
     private String referredBy;
+    private String ref1FullName;
+    private String ref1Relationship;
+    private String ref1Phone;
+    private String ref1Address;
+    private String ref2FullName;
+    private String ref2Relationship;
+    private String ref2Phone;
+    private String ref2Address;
     private BigDecimal monthlyIncome;
     private String occupation;
     private String currentAddress;

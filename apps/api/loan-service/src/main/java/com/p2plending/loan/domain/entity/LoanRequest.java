@@ -57,6 +57,30 @@ public class LoanRequest {
     @Column(length = 100)
     private String referredBy;
 
+    @Column(length = 100)
+    private String ref1FullName;
+
+    @Column(length = 50)
+    private String ref1Relationship;
+
+    @Column(length = 20)
+    private String ref1Phone;
+
+    @Column(length = 500)
+    private String ref1Address;
+
+    @Column(length = 100)
+    private String ref2FullName;
+
+    @Column(length = 50)
+    private String ref2Relationship;
+
+    @Column(length = 20)
+    private String ref2Phone;
+
+    @Column(length = 500)
+    private String ref2Address;
+
     /** Thu nhập hàng tháng (VND). */
     @Column(precision = 15, scale = 2)
     private BigDecimal monthlyIncome;
