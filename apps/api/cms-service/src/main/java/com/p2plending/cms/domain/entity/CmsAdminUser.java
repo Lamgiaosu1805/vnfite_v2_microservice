@@ -39,6 +39,16 @@ public class CmsAdminUser {
     @Column(nullable = false, length = 255)
     private String password;
 
+    /** true = phải đổi MK ngay sau lần đăng nhập đầu tiên */
+    @Column(nullable = false)
+    @Builder.Default
+    private boolean mustChangePassword = false;
+
+    /** ID của admin tạo ra tài khoản này (null nếu là super admin đầu tiên) */
+    @Column(length = 36)
+    private String createdBy;
+
+    /** SUPER_ADMIN | ADMIN | OPS */
     @Column(nullable = false, length = 20)
     private String role;
 

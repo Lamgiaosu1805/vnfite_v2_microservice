@@ -35,7 +35,10 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/actuator/health", "/actuator/info").permitAll()
                         .requestMatchers("/cms/auth/login").permitAll()
-                        .requestMatchers("/cms/**").hasAnyRole("ADMIN", "OPS")
+                        .requestMatchers("/cms/auth/setup", "/cms/auth/setup/status").permitAll()
+                        .requestMatchers("/cms/auth/change-password").authenticated()
+                        .requestMatchers("/cms/admins/**").hasRole("SUPER_ADMIN")
+                        .requestMatchers("/cms/**").hasAnyRole("SUPER_ADMIN", "ADMIN", "OPS")
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)

@@ -8,4 +8,6 @@ public class CmsAuthResponse {
     private String accessToken;
     private long expiresIn;
     private CmsAdminResponse admin;
+    /** true = frontend phải redirect sang trang đổi mật khẩu ngay */
+    private boolean mustChangePassword;
 }

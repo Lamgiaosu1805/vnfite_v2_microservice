@@ -33,6 +33,7 @@ public class CmsAuthService {
                 .accessToken(jwtService.generateAccessToken(admin))
                 .expiresIn(jwtService.getAccessTokenExpiry())
                 .admin(toResponse(admin))
+                .mustChangePassword(admin.isMustChangePassword())
                 .build();
     }
 
