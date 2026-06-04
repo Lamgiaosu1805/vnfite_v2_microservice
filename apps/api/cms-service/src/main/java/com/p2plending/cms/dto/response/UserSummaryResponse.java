@@ -13,6 +13,7 @@ public class UserSummaryResponse {
     private String userId;
     private String email;
     private String fullName;
+    private String cccdNumber;
     private String phone;
     private String role;
     private String kycStatus;

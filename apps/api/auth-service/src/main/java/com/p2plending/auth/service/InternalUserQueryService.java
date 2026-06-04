@@ -88,15 +88,14 @@ public class InternalUserQueryService {
     }
 
     private InternalUserSummaryResponse toSummary(User user) {
-        String fullName = kycSubmissionRepository
-                .findTopByUserIdAndStatusOrderByCreatedAtDesc(user.getId(), KycStatus.APPROVED)
-                .map(KycSubmission::getFullName)
-                .orElse(null);
+        var kyc = kycSubmissionRepository
+                .findTopByUserIdAndStatusOrderByCreatedAtDesc(user.getId(), KycStatus.APPROVED);
 
         return InternalUserSummaryResponse.builder()
                 .userId(user.getId())
                 .email(user.getEmail())
-                .fullName(fullName)
+                .fullName(kyc.map(KycSubmission::getFullName).orElse(null))
+                .cccdNumber(kyc.map(KycSubmission::getCccdNumber).orElse(null))
                 .phone(user.getPhone())
                 .role("USER")
                 .kycStatus(user.getKycStatus())

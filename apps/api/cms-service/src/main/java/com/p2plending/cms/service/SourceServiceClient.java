@@ -157,6 +157,7 @@ public class SourceServiceClient {
                 .userId(text(node, "userId"))
                 .email(text(node, "email"))
                 .fullName(text(node, "fullName"))
+                .cccdNumber(text(node, "cccdNumber"))
                 .phone(text(node, "phone"))
                 .role(text(node, "role"))
                 .kycStatus(text(node, "kycStatus"))
