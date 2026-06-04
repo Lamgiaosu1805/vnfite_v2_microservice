@@ -6,6 +6,7 @@ import com.p2plending.auth.domain.enums.KycStatus;
 import com.p2plending.auth.domain.repository.KycSubmissionRepository;
 import com.p2plending.auth.domain.repository.UserRepository;
 import com.p2plending.auth.dto.response.InternalUserSummaryResponse;
+import com.p2plending.auth.dto.response.InternalUserStatsResponse;
 import com.p2plending.auth.dto.response.PagedResponse;
 import com.p2plending.auth.exception.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
@@ -14,6 +15,13 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
+
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.ZoneId;
+import java.util.ArrayList;
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -51,6 +59,32 @@ public class InternalUserQueryService {
                 .filter(user -> !user.isDeleted())
                 .map(this::toSummary)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found: " + userId));
+    }
+
+    @Transactional(readOnly = true)
+    public InternalUserStatsResponse getStats(LocalDate from) {
+        LocalDateTime fromDt = from.atStartOfDay();
+        LocalDateTime todayStart = LocalDate.now(ZoneId.of("Asia/Ho_Chi_Minh")).atStartOfDay();
+        LocalDateTime tomorrowStart = todayStart.plusDays(1);
+
+        long totalUsers    = userRepository.countAllActive();
+        long pendingKyc    = userRepository.countByKycStatus(KycStatus.PENDING);
+        long newUsersToday = userRepository.countCreatedBetween(todayStart, tomorrowStart);
+
+        List<Object[]> rows = userRepository.countDailyNewUsers(fromDt);
+        List<InternalUserStatsResponse.DailyCount> daily = new ArrayList<>();
+        for (Object[] row : rows) {
+            LocalDate date = LocalDate.parse(row[0].toString());
+            long count = ((Number) row[1]).longValue();
+            daily.add(new InternalUserStatsResponse.DailyCount(date, count));
+        }
+
+        return InternalUserStatsResponse.builder()
+                .totalUsers(totalUsers)
+                .pendingKyc(pendingKyc)
+                .newUsersToday(newUsersToday)
+                .dailyCounts(daily)
+                .build();
     }
 
     private InternalUserSummaryResponse toSummary(User user) {

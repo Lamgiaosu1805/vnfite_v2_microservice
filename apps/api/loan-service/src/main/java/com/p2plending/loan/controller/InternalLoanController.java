@@ -2,16 +2,20 @@ package com.p2plending.loan.controller;
 
 import com.p2plending.loan.dto.request.InternalLoanReviewRequest;
 import com.p2plending.loan.dto.request.LoanFilterParams;
+import com.p2plending.loan.dto.response.InternalLoanStatsResponse;
 import com.p2plending.loan.dto.response.LoanResponse;
 import com.p2plending.loan.dto.response.PagedResponse;
 import com.p2plending.loan.service.LoanService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
+
+import java.time.LocalDate;
 
 @RestController
 @RequestMapping("/internal/loans")
@@ -39,6 +43,15 @@ public class InternalLoanController {
             @PathVariable String loanId) {
         requireInternalSecret(secret);
         return ResponseEntity.ok(loanService.getLoanById(loanId));
+    }
+
+    /** Thống kê tổng hợp — dùng cho CMS dashboard */
+    @GetMapping("/stats")
+    public ResponseEntity<InternalLoanStatsResponse> getStats(
+            @RequestHeader(INTERNAL_SECRET_HEADER) String secret,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from) {
+        requireInternalSecret(secret);
+        return ResponseEntity.ok(loanService.getLoanStats(from));
     }
 
     @PutMapping("/{loanId}/approve")

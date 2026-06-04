@@ -73,6 +73,24 @@ public class SourceServiceClient {
         return parseUser(exchangeForJson(url, HttpMethod.GET, null));
     }
 
+    // ─── Stats ────────────────────────────────────────────────────────────────
+
+    public com.fasterxml.jackson.databind.JsonNode getUserStats(java.time.LocalDate from) {
+        String url = UriComponentsBuilder.fromHttpUrl(authServiceUrl)
+                .path("/internal/users/stats")
+                .queryParam("from", from.toString())
+                .toUriString();
+        return exchangeForJson(url, HttpMethod.GET, null);
+    }
+
+    public com.fasterxml.jackson.databind.JsonNode getLoanStats(java.time.LocalDate from) {
+        String url = UriComponentsBuilder.fromHttpUrl(loanServiceUrl)
+                .path("/internal/loans/stats")
+                .queryParam("from", from.toString())
+                .toUriString();
+        return exchangeForJson(url, HttpMethod.GET, null);
+    }
+
     public PagedResponse<LoanSummaryResponse> getLoans(String status, String borrowerId, int page, int size) {
         String url = UriComponentsBuilder.fromHttpUrl(loanServiceUrl)
                 .path("/internal/loans")

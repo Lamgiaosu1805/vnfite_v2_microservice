@@ -382,4 +382,46 @@ public class LoanService {
         }
         return response;
     }
+
+    // ─── Internal stats ───────────────────────────────────────────────────────
+
+    @Transactional(readOnly = true)
+    public com.p2plending.loan.dto.response.InternalLoanStatsResponse getLoanStats(java.time.LocalDate from) {
+        java.time.LocalDateTime fromDt = from.atStartOfDay();
+        java.time.ZoneId tz = java.time.ZoneId.of("Asia/Ho_Chi_Minh");
+        java.time.LocalDateTime todayStart = java.time.LocalDate.now(tz).atStartOfDay();
+        java.time.LocalDateTime tomorrowStart = todayStart.plusDays(1);
+
+        long total   = loanRequestRepository.countAllActive();
+        long pending = loanRequestRepository.countByStatusIn(
+                java.util.List.of(LoanStatus.PENDING_REVIEW, LoanStatus.AWAITING_BORROWER_APPROVAL));
+        long active  = loanRequestRepository.countByStatusIn(
+                java.util.List.of(LoanStatus.ACTIVE, LoanStatus.FUNDED, LoanStatus.REPAYING));
+        long funded  = loanRequestRepository.countByStatusIn(
+                java.util.List.of(LoanStatus.FUNDED, LoanStatus.REPAYING, LoanStatus.COMPLETED));
+        java.math.BigDecimal totalVol = loanRequestRepository.sumAmountByStatusIn(
+                java.util.List.of(LoanStatus.FUNDED, LoanStatus.REPAYING, LoanStatus.COMPLETED));
+        long todayCount = loanRequestRepository.countCreatedBetween(todayStart, tomorrowStart);
+        java.math.BigDecimal todayVol = loanRequestRepository.sumAmountCreatedBetween(todayStart, tomorrowStart);
+
+        java.util.List<Object[]> rows = loanRequestRepository.countDailyNewLoans(fromDt);
+        java.util.List<com.p2plending.loan.dto.response.InternalLoanStatsResponse.DailyCount> daily = new java.util.ArrayList<>();
+        for (Object[] row : rows) {
+            java.time.LocalDate date = java.time.LocalDate.parse(row[0].toString());
+            long count = ((Number) row[1]).longValue();
+            java.math.BigDecimal vol = new java.math.BigDecimal(row[2].toString());
+            daily.add(new com.p2plending.loan.dto.response.InternalLoanStatsResponse.DailyCount(date, count, vol));
+        }
+
+        return com.p2plending.loan.dto.response.InternalLoanStatsResponse.builder()
+                .totalLoans(total)
+                .pendingLoans(pending)
+                .activeLoans(active)
+                .fundedLoans(funded)
+                .totalFundedVolume(totalVol != null ? totalVol : java.math.BigDecimal.ZERO)
+                .newLoansToday(todayCount)
+                .todayLoanVolume(todayVol != null ? todayVol : java.math.BigDecimal.ZERO)
+                .dailyCounts(daily)
+                .build();
+    }
 }

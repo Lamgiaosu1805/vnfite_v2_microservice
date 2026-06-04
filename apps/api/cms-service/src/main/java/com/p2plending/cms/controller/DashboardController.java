@@ -8,6 +8,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -23,8 +24,15 @@ public class DashboardController {
         return ResponseEntity.ok(dashboardService.getStats());
     }
 
+    /**
+     * @param period "day" (30 ngày gần nhất), "week" (12 tuần), "month" (12 tháng)
+     */
     @GetMapping("/chart")
-    public ResponseEntity<ChartDataResponse> getChartData() {
-        return ResponseEntity.ok(dashboardService.getChartData());
+    public ResponseEntity<ChartDataResponse> getChartData(
+            @RequestParam(defaultValue = "day") String period) {
+        if (!period.equals("day") && !period.equals("week") && !period.equals("month")) {
+            period = "day";
+        }
+        return ResponseEntity.ok(dashboardService.getChartData(period));
     }
 }
