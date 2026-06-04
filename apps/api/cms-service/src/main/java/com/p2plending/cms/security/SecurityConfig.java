@@ -36,6 +36,7 @@ public class SecurityConfig {
                         .requestMatchers("/actuator/health", "/actuator/info").permitAll()
                         .requestMatchers("/cms/auth/login").permitAll()
                         .requestMatchers("/cms/auth/setup", "/cms/auth/setup/status").permitAll()
+                        .requestMatchers("/cms/auth/totp/**").permitAll()
                         .requestMatchers("/cms/auth/change-password").authenticated()
                         .requestMatchers("/cms/admins/**").hasRole("SUPER_ADMIN")
                         .requestMatchers("/cms/**").hasAnyRole("SUPER_ADMIN", "ADMIN", "OPS")

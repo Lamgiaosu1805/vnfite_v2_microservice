@@ -48,6 +48,15 @@ public class CmsAdminUser {
     @Column(length = 36)
     private String createdBy;
 
+    /** Base32-encoded TOTP secret — null cho đến khi user thiết lập 2FA */
+    @Column(length = 64)
+    private String totpSecret;
+
+    /** true = đã thiết lập và bật 2FA */
+    @Column(nullable = false)
+    @Builder.Default
+    private boolean totpEnabled = false;
+
     /** SUPER_ADMIN | ADMIN | OPS */
     @Column(nullable = false, length = 20)
     private String role;

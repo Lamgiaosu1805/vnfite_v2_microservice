@@ -37,6 +37,11 @@ public class JwtFilter extends OncePerRequestFilter {
         if (header != null && header.startsWith("Bearer ")) {
             try {
                 Claims claims = jwtService.parse(header.substring(7));
+                // pendingToken chỉ dùng cho TOTP endpoints, không cấp quyền truy cập
+                if (jwtService.isPendingToken(claims)) {
+                    chain.doFilter(req, res);
+                    return;
+                }
                 String adminUserId = claims.get("adminUserId", String.class);
                 @SuppressWarnings("unchecked")
                 List<String> roles = claims.get("roles", List.class);

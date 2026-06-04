@@ -31,6 +31,23 @@ public class CmsJwtService {
         this.accessTokenExpiry = accessTokenExpiry;
     }
 
+    /** Token ngắn hạn (5 phút) dùng để xác thực TOTP sau bước nhập mật khẩu */
+    public String generatePendingToken(String username, String adminUserId) {
+        Instant now = Instant.now();
+        return Jwts.builder()
+                .subject(username)
+                .claim("adminUserId", adminUserId)
+                .claim("pending", true)
+                .issuedAt(Date.from(now))
+                .expiration(Date.from(now.plusSeconds(300)))
+                .signWith(key)
+                .compact();
+    }
+
+    public boolean isPendingToken(Claims claims) {
+        return Boolean.TRUE.equals(claims.get("pending", Boolean.class));
+    }
+
     public String generateAccessToken(CmsAdminUser admin) {
         Instant now = Instant.now();
         return Jwts.builder()

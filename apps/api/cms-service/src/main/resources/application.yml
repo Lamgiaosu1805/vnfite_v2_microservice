@@ -49,7 +49,7 @@ server:
 cms:
   jwt:
     secret: ${CMS_JWT_SECRET:dev-only-cms-jwt-secret-change-me-at-least-32-bytes}
-    access-token-expiry: ${CMS_ACCESS_TOKEN_EXPIRY:28800}
+    access-token-expiry: ${CMS_ACCESS_TOKEN_EXPIRY:86400}  # 24 giờ
   admin:
     username: ${CMS_ADMIN_USERNAME:admin}
     password: ${CMS_ADMIN_PASSWORD:Admin@123456}
