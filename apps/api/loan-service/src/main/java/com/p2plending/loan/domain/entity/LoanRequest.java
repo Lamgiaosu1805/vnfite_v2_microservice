@@ -91,6 +91,10 @@ public class LoanRequest {
     @Column(length = 100)
     private String occupation;
 
+    /** Nơi làm việc / Công tác. */
+    @Column(length = 255)
+    private String workplace;
+
     /** Địa chỉ hiện tại chi tiết. */
     @Column(length = 500)
     private String currentAddress;

@@ -24,6 +24,7 @@ public class LoanSummaryResponse {
     private Integer termMonths;
     private String purpose;
     private String occupation;
+    private String workplace;
     private BigDecimal monthlyIncome;
     private String currentAddress;
     private String referredBy;

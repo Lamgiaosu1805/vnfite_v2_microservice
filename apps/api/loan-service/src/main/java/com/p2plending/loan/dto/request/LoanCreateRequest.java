@@ -67,6 +67,9 @@ public class LoanCreateRequest {
     @Size(max = 100)
     private String occupation;
 
+    @Size(max = 255)
+    private String workplace;
+
     @Size(max = 500)
     private String currentAddress;
 }

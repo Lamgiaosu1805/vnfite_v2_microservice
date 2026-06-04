@@ -34,6 +34,7 @@ public class LoanResponse {
     private String ref2Address;
     private BigDecimal monthlyIncome;
     private String occupation;
+    private String workplace;
     private String currentAddress;
     private LoanStatus status;
     private BigDecimal fundedAmount;

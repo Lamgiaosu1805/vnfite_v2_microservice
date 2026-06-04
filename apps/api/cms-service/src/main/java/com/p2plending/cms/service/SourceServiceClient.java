@@ -192,6 +192,7 @@ public class SourceServiceClient {
                 .termMonths(node.hasNonNull("termMonths") ? node.get("termMonths").asInt() : null)
                 .purpose(text(node, "purpose"))
                 .occupation(text(node, "occupation"))
+                .workplace(text(node, "workplace"))
                 .monthlyIncome(decimal(node, "monthlyIncome"))
                 .currentAddress(text(node, "currentAddress"))
                 .referredBy(text(node, "referredBy"))
