@@ -34,7 +34,7 @@ public class AdminManagementController {
     @PostMapping("/auth/setup")
     public ResponseEntity<Void> setup(@Valid @RequestBody SetupRequest request) {
         service.setup(request);
-        return ResponseEntity.ok().build();
+        return ResponseEntity.noContent().build();
     }
 
     // ─── Change password (chính mình đổi) ────────────────────────────────────
@@ -46,7 +46,7 @@ public class AdminManagementController {
             @Valid @RequestBody ChangePasswordRequest request) {
         // Lấy adminId từ JWT subject (username) → load từ DB để lấy id
         service.changePassword(userDetails.getUsername(), request);
-        return ResponseEntity.ok().build();
+        return ResponseEntity.noContent().build();
     }
 
     // ─── Admin management (SUPER_ADMIN only) ─────────────────────────────────
@@ -72,6 +72,6 @@ public class AdminManagementController {
             @PathVariable String id,
             @AuthenticationPrincipal UserDetails userDetails) {
         service.toggleActive(id, userDetails.getUsername());
-        return ResponseEntity.ok().build();
+        return ResponseEntity.noContent().build();
     }
 }
