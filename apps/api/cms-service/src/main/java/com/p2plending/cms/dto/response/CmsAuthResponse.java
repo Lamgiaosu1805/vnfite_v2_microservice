@@ -2,8 +2,9 @@ package com.p2plending.cms.dto.response;
 
 import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
-@Data @Builder
+@Data @Builder @NoArgsConstructor
 public class CmsAuthResponse {
     private String accessToken;
     private long expiresIn;

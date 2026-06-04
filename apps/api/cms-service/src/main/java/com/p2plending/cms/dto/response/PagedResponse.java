@@ -2,11 +2,12 @@ package com.p2plending.cms.dto.response;
 
 import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 import org.springframework.data.domain.Page;
 
 import java.util.List;
 
-@Data @Builder
+@Data @Builder @NoArgsConstructor
 public class PagedResponse<T> {
     private List<T> content;
     private int page;

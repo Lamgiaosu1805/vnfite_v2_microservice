@@ -2,10 +2,11 @@ package com.p2plending.cms.dto.response;
 
 import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 
-@Data @Builder
+@Data @Builder @NoArgsConstructor
 public class DashboardStatsResponse {
     private long totalUsers;
     private long activeUsers;

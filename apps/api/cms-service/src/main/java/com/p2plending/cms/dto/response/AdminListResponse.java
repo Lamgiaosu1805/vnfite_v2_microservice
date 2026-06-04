@@ -2,10 +2,11 @@ package com.p2plending.cms.dto.response;
 
 import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
 
-@Data @Builder
+@Data @Builder @NoArgsConstructor
 public class AdminListResponse {
     private String id;
     private String username;
