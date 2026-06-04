@@ -51,6 +51,11 @@ public class GlobalExceptionHandler {
         return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
     }
 
+    @ExceptionHandler(UnsupportedOperationException.class)
+    public ProblemDetail unsupported(UnsupportedOperationException ex) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_IMPLEMENTED, ex.getMessage());
+    }
+
     @ExceptionHandler(NoResourceFoundException.class)
     public ProblemDetail noResource(NoResourceFoundException ex) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, "Resource not found");

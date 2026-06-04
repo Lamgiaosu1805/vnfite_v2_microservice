@@ -11,7 +11,7 @@ p2p-lending/
       auth-service/         # Đăng ký/đăng nhập, OTP, JWT RS256, eKYC
       loan-service/         # Tạo khoản vay, offer, vòng đời khoản vay
       matching-service/     # Thuật toán ghép vay
-      cms-service/          # Customer Manager Service — admin portal
+      cms-service/          # CMS admin/auth service
       notification-service/ # Gửi email/SMS qua Kafka
 
   infra/                  # SQL init scripts

@@ -6,6 +6,7 @@ import lombok.AllArgsConstructor;
 import lombok.NoArgsConstructor;
 import org.springframework.data.domain.Page;
 
+import java.util.Collections;
 import java.util.List;
 
 @Data @Builder @NoArgsConstructor @AllArgsConstructor
@@ -21,6 +22,17 @@ public class PagedResponse<T> {
         return PagedResponse.<T>builder()
                 .content(p.getContent()).page(p.getNumber()).size(p.getSize())
                 .totalElements(p.getTotalElements()).totalPages(p.getTotalPages()).last(p.isLast())
+                .build();
+    }
+
+    public static <T> PagedResponse<T> empty(int page, int size) {
+        return PagedResponse.<T>builder()
+                .content(Collections.emptyList())
+                .page(page)
+                .size(size)
+                .totalElements(0)
+                .totalPages(0)
+                .last(true)
                 .build();
     }
 }

@@ -13,7 +13,7 @@ Services:
 - `auth-service`: phone login/register, OTP, JWT RS256, eKYC
 - `loan-service`: loan request lifecycle and investment offers
 - `matching-service`: investor preference matching
-- `cms-service`: admin/customer manager portal
+- `cms-service`: CMS admin/auth service
 - `notification-service`: Kafka-driven notification worker
 
 Infrastructure:
@@ -26,8 +26,9 @@ Infrastructure:
 Important project vocabulary:
 
 - `CMS` means `Customer Manager Service`, not Content Management System.
-- CMS admin users are stored in `customer_db.cms_admin_users`.
-- Customer app users are stored separately in `auth_db.users` and mirrored into `customer_db.cms_users`.
+- CMS admin users are stored in `cms_db.cms_admin_users`.
+- Customer app users stay in `auth_db.users`; loan data stays in `loan_db.loan_requests`.
+- CMS must not mirror customer/user or loan tables into `cms_db`.
 
 ## Codex Working Rules
 
@@ -141,7 +142,7 @@ Seed users in dev/test use password `Test@1234`; see `CLAUDE.md` for the full li
 - Auth: `/api/auth`
 - Loans: `/api/loans`
 - Matches: `/api/matches`
-- CMS: `/cms`
+- CMS admin/auth: `/cms`
 
 ## Timezone
 

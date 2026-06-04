@@ -172,7 +172,6 @@ services:
       DB_PASSWORD: ${DB_PASSWORD:-p2p_pass}
       REDIS_HOST: redis
       REDIS_PORT: 6379
-      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       RSA_PUBLIC_KEY: ${RSA_PUBLIC_KEY:-}
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
     extra_hosts:
@@ -181,8 +180,6 @@ services:
       mysql:
         condition: service_healthy
       redis:
-        condition: service_healthy
-      kafka:
         condition: service_healthy
     networks:
       - p2p-network
@@ -199,12 +196,11 @@ services:
     environment:
       MYSQL_HOST: ${MYSQL_HOST:-mysql}
       MYSQL_PORT: ${MYSQL_PORT:-3306}
-      CUSTOMER_DB: ${CUSTOMER_DB:-customer_db}
+      CMS_DB: ${CMS_DB:-cms_db}
       DB_USERNAME: ${DB_USERNAME:-p2p_user}
       DB_PASSWORD: ${DB_PASSWORD:-p2p_pass}
       REDIS_HOST: redis
       REDIS_PORT: 6379
-      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       RSA_PUBLIC_KEY: ${RSA_PUBLIC_KEY:-}
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
     extra_hosts:
@@ -213,8 +209,6 @@ services:
       mysql:
         condition: service_healthy
       redis:
-        condition: service_healthy
-      kafka:
         condition: service_healthy
     networks:
       - p2p-network
