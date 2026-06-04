@@ -15,7 +15,7 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/cms/users")
 @RequiredArgsConstructor
-@PreAuthorize("hasAnyRole('ADMIN', 'OPS')")
+@PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'OPS')")
 public class UserManagementController {
 
     private final UserManagementService userService;
@@ -37,7 +37,7 @@ public class UserManagementController {
     }
 
     @PutMapping("/{userId}/kyc")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN')")
     public ResponseEntity<UserSummaryResponse> decideKyc(
             @PathVariable String userId,
             @Valid @RequestBody KycDecisionRequest req) {
@@ -45,7 +45,7 @@ public class UserManagementController {
     }
 
     @PutMapping("/{userId}/status")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN')")
     public ResponseEntity<UserSummaryResponse> updateStatus(
             @PathVariable String userId,
             @Valid @RequestBody UserStatusRequest req) {

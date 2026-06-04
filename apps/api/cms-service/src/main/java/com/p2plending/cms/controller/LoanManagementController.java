@@ -15,7 +15,7 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/cms/loans")
 @RequiredArgsConstructor
-@PreAuthorize("hasAnyRole('ADMIN', 'OPS')")
+@PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'OPS')")
 public class LoanManagementController {
 
     private final LoanManagementService loanService;
@@ -35,7 +35,7 @@ public class LoanManagementController {
      * Publishes loan.reviewed (APPROVE) → loan-service sets ACTIVE and triggers matching.
      */
     @PutMapping("/{loanId}/approve")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN')")
     public ResponseEntity<LoanSummaryResponse> approve(
             @PathVariable String loanId,
             @Valid @RequestBody LoanActionRequest req,
@@ -49,7 +49,7 @@ public class LoanManagementController {
      * Publishes loan.reviewed (REJECT) → loan-service sets REJECTED.
      */
     @PutMapping("/{loanId}/reject")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN')")
     public ResponseEntity<LoanSummaryResponse> reject(
             @PathVariable String loanId,
             @Valid @RequestBody LoanActionRequest req,
