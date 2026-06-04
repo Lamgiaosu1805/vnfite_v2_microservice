@@ -29,6 +29,8 @@ public class ApiResponseAdvice implements ResponseBodyAdvice<Object> {
                                   Class<? extends HttpMessageConverter<?>> selectedConverterType,
                                   ServerHttpRequest request,
                                   ServerHttpResponse response) {
+        // Internal service-to-service endpoints trả raw JSON — không bọc ApiResponse
+        if (request.getURI().getPath().startsWith("/internal")) return body;
         if (body instanceof ApiResponse) return body;
         if (body == null) return null;
 

@@ -52,8 +52,7 @@ public class SourceServiceClient {
                 .toUriString();
 
         JsonNode root = exchangeForJson(url, HttpMethod.GET, null);
-        JsonNode data = unwrapAuthData(root);
-        PagedResponse<UserSummaryResponse> response = parseUserPage(data);
+        PagedResponse<UserSummaryResponse> response = parseUserPage(root);
         if (status != null) {
             List<UserSummaryResponse> filtered = response.getContent().stream()
                     .filter(user -> status.equals(user.getAccountStatus()))
@@ -71,7 +70,7 @@ public class SourceServiceClient {
                 .path("/internal/users/{userId}")
                 .buildAndExpand(userId)
                 .toUriString();
-        return parseUser(unwrapAuthData(exchangeForJson(url, HttpMethod.GET, null)));
+        return parseUser(exchangeForJson(url, HttpMethod.GET, null));
     }
 
     public PagedResponse<LoanSummaryResponse> getLoans(String status, String borrowerId, int page, int size) {
@@ -120,10 +119,6 @@ public class SourceServiceClient {
             log.error("Failed to parse source service response from {}", url, ex);
             throw new IllegalStateException("Không đọc được phản hồi từ service nguồn");
         }
-    }
-
-    private JsonNode unwrapAuthData(JsonNode root) {
-        return root.has("data") ? root.get("data") : root;
     }
 
     private PagedResponse<UserSummaryResponse> parseUserPage(JsonNode pageNode) {
