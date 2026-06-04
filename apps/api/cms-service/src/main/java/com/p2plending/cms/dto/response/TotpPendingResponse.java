@@ -2,12 +2,13 @@ package com.p2plending.cms.dto.response;
 
 import lombok.Builder;
 import lombok.Data;
+import lombok.AllArgsConstructor;
 import lombok.NoArgsConstructor;
 
 /** Trả về sau bước xác thực mật khẩu — frontend tiếp tục với TOTP */
 @Data
 @Builder
-@NoArgsConstructor
+@NoArgsConstructor @AllArgsConstructor
 public class TotpPendingResponse {
     /** Token ngắn hạn (5 phút) dùng cho bước TOTP tiếp theo */
     private String pendingToken;
