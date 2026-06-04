@@ -30,8 +30,8 @@ public class DashboardController {
     @GetMapping("/chart")
     public ResponseEntity<ChartDataResponse> getChartData(
             @RequestParam(defaultValue = "day") String period) {
-        if (!period.equals("day") && !period.equals("week") && !period.equals("month")) {
-            period = "day";
+        if (!period.equals("week") && !period.equals("month") && !period.equals("year")) {
+            period = "week";
         }
         return ResponseEntity.ok(dashboardService.getChartData(period));
     }

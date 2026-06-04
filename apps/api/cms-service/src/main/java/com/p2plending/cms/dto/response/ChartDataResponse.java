@@ -16,11 +16,13 @@ public class ChartDataResponse {
     @Data @Builder @NoArgsConstructor @AllArgsConstructor
     public static class DataPoint {
         private LocalDate date;
-        /** Nhãn hiển thị trên trục X: "04/06" / "04/06-10/06" / "06/2026" */
+        /** Nhãn hiển thị trên trục X: "T2"…"CN" / "1"…"31" / "T1"…"T12" */
         private String label;
         private long newUsers;
         private long newLoans;
         private long fundedLoans;
         private BigDecimal loanVolume;
+        /** true = ngày trong tương lai, chưa có data — frontend hiển thị mờ */
+        private boolean future;
     }
 }

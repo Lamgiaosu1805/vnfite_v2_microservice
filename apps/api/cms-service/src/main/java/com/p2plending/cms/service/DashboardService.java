@@ -10,10 +10,10 @@ import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.ZoneId;
-import java.time.format.DateTimeFormatter;
-import java.time.temporal.WeekFields;
+import java.time.temporal.TemporalAdjusters;
 import java.util.*;
 
 @Service
@@ -22,13 +22,15 @@ import java.util.*;
 public class DashboardService {
 
     private static final ZoneId TZ = ZoneId.of("Asia/Ho_Chi_Minh");
+    /** T2, T3, T4, T5, T6, T7, CN */
+    private static final String[] DOW_VN = { "T2", "T3", "T4", "T5", "T6", "T7", "CN" };
 
     private final SourceServiceClient sourceServiceClient;
 
     @Cacheable(value = CacheConfig.CACHE_DASHBOARD_STATS)
     public DashboardStatsResponse getStats() {
         try {
-            LocalDate from = LocalDate.now(TZ).minusDays(30);
+            LocalDate from = LocalDate.now(TZ).minusDays(1);
             JsonNode u = sourceServiceClient.getUserStats(from);
             JsonNode l = sourceServiceClient.getLoanStats(from);
 
@@ -51,39 +53,34 @@ public class DashboardService {
         }
     }
 
+    /**
+     * period:
+     *   "week"  → T2–CN của tuần hiện tại (7 cột)
+     *   "month" → từng ngày trong tháng hiện tại (28–31 cột)
+     *   "year"  → 12 tháng của năm hiện tại (12 cột)
+     */
     @Cacheable(value = CacheConfig.CACHE_DASHBOARD_CHART, key = "#period")
     public ChartDataResponse getChartData(String period) {
         try {
             LocalDate today = LocalDate.now(TZ);
+
             LocalDate from = switch (period) {
-                case "week"  -> today.minusWeeks(11).with(WeekFields.ISO.dayOfWeek(), 1);
-                case "month" -> today.minusMonths(11).withDayOfMonth(1);
-                default      -> today.minusDays(29); // day
+                case "month" -> today.with(TemporalAdjusters.firstDayOfMonth());
+                case "year"  -> today.with(TemporalAdjusters.firstDayOfYear());
+                default      -> today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY)); // week
             };
 
             JsonNode u = sourceServiceClient.getUserStats(from);
             JsonNode l = sourceServiceClient.getLoanStats(from);
 
-            // Build map from date → [userCount, loanCount, loanVolume]
-            Map<String, long[]> userMap = new LinkedHashMap<>();
-            u.path("dailyCounts").forEach(node -> {
-                String date = node.path("date").asText();
-                userMap.put(date, new long[]{ node.path("count").asLong() });
-            });
-
-            Map<String, Object[]> loanMap = new LinkedHashMap<>();
-            l.path("dailyCounts").forEach(node -> {
-                String date = node.path("date").asText();
-                loanMap.put(date, new Object[]{
-                    node.path("count").asLong(),
-                    decimal(node, "volume")
-                });
-            });
+            // daily map date-string → data
+            Map<String, long[]>    userMap = buildUserMap(u);
+            Map<String, Object[]>  loanMap = buildLoanMap(l);
 
             return switch (period) {
-                case "week"  -> buildWeeklyChart(from, today, userMap, loanMap);
-                case "month" -> buildMonthlyChart(from, today, userMap, loanMap);
-                default      -> buildDailyChart(from, today, userMap, loanMap);
+                case "month" -> buildMonthlyByDay(today, userMap, loanMap);
+                case "year"  -> buildYearlyByMonth(today, userMap, loanMap);
+                default      -> buildWeekByDay(from, today, userMap, loanMap); // week
             };
         } catch (Exception ex) {
             log.error("Failed to fetch chart data for period={}", period, ex);
@@ -93,70 +90,96 @@ public class DashboardService {
 
     // ─── Chart builders ───────────────────────────────────────────────────────
 
-    private ChartDataResponse buildDailyChart(LocalDate from, LocalDate today,
+    /** Tuần: T2 → CN của tuần hiện tại (7 cột cố định) */
+    private ChartDataResponse buildWeekByDay(LocalDate monday, LocalDate today,
             Map<String, long[]> userMap, Map<String, Object[]> loanMap) {
         List<ChartDataResponse.DataPoint> points = new ArrayList<>();
-        for (LocalDate d = from; !d.isAfter(today); d = d.plusDays(1)) {
+        for (int i = 0; i < 7; i++) {
+            LocalDate d = monday.plusDays(i);
             String key = d.toString();
             long newUsers = userMap.containsKey(key) ? userMap.get(key)[0] : 0;
             long newLoans = loanMap.containsKey(key) ? (long) loanMap.get(key)[0] : 0;
             BigDecimal vol = loanMap.containsKey(key) ? (BigDecimal) loanMap.get(key)[1] : BigDecimal.ZERO;
+            // Ngày tương lai → null (chưa có data)
+            boolean future = d.isAfter(today);
             points.add(ChartDataResponse.DataPoint.builder()
-                    .date(d).label(d.format(DateTimeFormatter.ofPattern("dd/MM")))
-                    .newUsers(newUsers).newLoans(newLoans).loanVolume(vol).build());
+                    .date(d)
+                    .label(DOW_VN[i])
+                    .newUsers(future ? 0 : newUsers)
+                    .newLoans(future ? 0 : newLoans)
+                    .loanVolume(future ? BigDecimal.ZERO : vol)
+                    .future(future)
+                    .build());
         }
         return ChartDataResponse.builder().points(points).build();
     }
 
-    private ChartDataResponse buildWeeklyChart(LocalDate from, LocalDate today,
+    /** Tháng: từng ngày 1 → cuối tháng hiện tại */
+    private ChartDataResponse buildMonthlyByDay(LocalDate today,
             Map<String, long[]> userMap, Map<String, Object[]> loanMap) {
+        LocalDate first = today.with(TemporalAdjusters.firstDayOfMonth());
+        LocalDate last  = today.with(TemporalAdjusters.lastDayOfMonth());
         List<ChartDataResponse.DataPoint> points = new ArrayList<>();
-        LocalDate weekStart = from;
-        while (!weekStart.isAfter(today)) {
-            LocalDate weekEnd = weekStart.plusDays(6);
-            long newUsers = 0, newLoans = 0;
-            BigDecimal vol = BigDecimal.ZERO;
-            for (LocalDate d = weekStart; !d.isAfter(weekEnd) && !d.isAfter(today); d = d.plusDays(1)) {
-                String key = d.toString();
-                if (userMap.containsKey(key)) newUsers += userMap.get(key)[0];
-                if (loanMap.containsKey(key)) {
-                    newLoans += (long) loanMap.get(key)[0];
-                    vol = vol.add((BigDecimal) loanMap.get(key)[1]);
-                }
-            }
-            String label = weekStart.format(DateTimeFormatter.ofPattern("dd/MM"))
-                    + "-" + weekEnd.format(DateTimeFormatter.ofPattern("dd/MM"));
+        for (LocalDate d = first; !d.isAfter(last); d = d.plusDays(1)) {
+            String key = d.toString();
+            boolean future = d.isAfter(today);
+            long newUsers = (!future && userMap.containsKey(key)) ? userMap.get(key)[0] : 0;
+            long newLoans = (!future && loanMap.containsKey(key)) ? (long) loanMap.get(key)[0] : 0;
+            BigDecimal vol = (!future && loanMap.containsKey(key)) ? (BigDecimal) loanMap.get(key)[1] : BigDecimal.ZERO;
             points.add(ChartDataResponse.DataPoint.builder()
-                    .date(weekStart).label(label)
-                    .newUsers(newUsers).newLoans(newLoans).loanVolume(vol).build());
-            weekStart = weekStart.plusWeeks(1);
+                    .date(d)
+                    .label(String.valueOf(d.getDayOfMonth()))
+                    .newUsers(newUsers).newLoans(newLoans).loanVolume(vol)
+                    .future(future)
+                    .build());
         }
         return ChartDataResponse.builder().points(points).build();
     }
 
-    private ChartDataResponse buildMonthlyChart(LocalDate from, LocalDate today,
+    /** Năm: T1–T12 — gộp daily counts theo tháng */
+    private ChartDataResponse buildYearlyByMonth(LocalDate today,
             Map<String, long[]> userMap, Map<String, Object[]> loanMap) {
+        int year = today.getYear();
         List<ChartDataResponse.DataPoint> points = new ArrayList<>();
-        LocalDate monthStart = from;
-        while (!monthStart.isAfter(today)) {
-            LocalDate monthEnd = monthStart.plusMonths(1).minusDays(1);
+        for (int m = 1; m <= 12; m++) {
+            LocalDate monthStart = LocalDate.of(year, m, 1);
+            LocalDate monthEnd   = monthStart.with(TemporalAdjusters.lastDayOfMonth());
+            boolean future = monthStart.isAfter(today);
             long newUsers = 0, newLoans = 0;
             BigDecimal vol = BigDecimal.ZERO;
-            for (LocalDate d = monthStart; !d.isAfter(monthEnd) && !d.isAfter(today); d = d.plusDays(1)) {
-                String key = d.toString();
-                if (userMap.containsKey(key)) newUsers += userMap.get(key)[0];
-                if (loanMap.containsKey(key)) {
-                    newLoans += (long) loanMap.get(key)[0];
-                    vol = vol.add((BigDecimal) loanMap.get(key)[1]);
+            if (!future) {
+                for (LocalDate d = monthStart; !d.isAfter(monthEnd) && !d.isAfter(today); d = d.plusDays(1)) {
+                    String key = d.toString();
+                    if (userMap.containsKey(key)) newUsers += userMap.get(key)[0];
+                    if (loanMap.containsKey(key)) {
+                        newLoans += (long) loanMap.get(key)[0];
+                        vol = vol.add((BigDecimal) loanMap.get(key)[1]);
+                    }
                 }
             }
-            String label = monthStart.format(DateTimeFormatter.ofPattern("MM/yyyy"));
             points.add(ChartDataResponse.DataPoint.builder()
-                    .date(monthStart).label(label)
-                    .newUsers(newUsers).newLoans(newLoans).loanVolume(vol).build());
-            monthStart = monthStart.plusMonths(1);
+                    .date(monthStart)
+                    .label("T" + m)
+                    .newUsers(newUsers).newLoans(newLoans).loanVolume(vol)
+                    .future(future)
+                    .build());
         }
         return ChartDataResponse.builder().points(points).build();
+    }
+
+    // ─── Map builders ─────────────────────────────────────────────────────────
+
+    private Map<String, long[]> buildUserMap(JsonNode u) {
+        Map<String, long[]> map = new LinkedHashMap<>();
+        u.path("dailyCounts").forEach(n -> map.put(n.path("date").asText(), new long[]{ n.path("count").asLong() }));
+        return map;
+    }
+
+    private Map<String, Object[]> buildLoanMap(JsonNode l) {
+        Map<String, Object[]> map = new LinkedHashMap<>();
+        l.path("dailyCounts").forEach(n -> map.put(n.path("date").asText(),
+                new Object[]{ n.path("count").asLong(), decimal(n, "volume") }));
+        return map;
     }
 
     // ─── Helpers ──────────────────────────────────────────────────────────────
