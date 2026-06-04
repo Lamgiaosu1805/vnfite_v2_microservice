@@ -5,20 +5,23 @@ import com.p2plending.cms.dto.request.KycDecisionRequest;
 import com.p2plending.cms.dto.request.UserStatusRequest;
 import com.p2plending.cms.dto.response.PagedResponse;
 import com.p2plending.cms.dto.response.UserSummaryResponse;
-import com.p2plending.cms.exception.ResourceNotFoundException;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 @Service
+@RequiredArgsConstructor
 public class UserManagementService {
+
+    private final SourceServiceClient sourceServiceClient;
 
     public PagedResponse<UserSummaryResponse> getUsers(
             String kycStatus, String role, UserAccountStatus status,
             String search, int page, int size) {
-        return PagedResponse.empty(page, size);
+        return sourceServiceClient.getUsers(kycStatus, role, status, search, page, size);
     }
 
     public UserSummaryResponse getUser(String userId) {
-        throw new ResourceNotFoundException("User read-model is disabled. Query auth-service for user details: " + userId);
+        return sourceServiceClient.getUser(userId);
     }
 
     public UserSummaryResponse decideKyc(String userId, KycDecisionRequest req) {

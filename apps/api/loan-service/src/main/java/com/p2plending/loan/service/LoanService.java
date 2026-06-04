@@ -213,6 +213,28 @@ public class LoanService {
         @CacheEvict(value = CacheConfig.CACHE_LOAN_BY_ID, key = "#event.loanId")
     })
     public void handleLoanReviewed(LoanReviewedEvent event) {
+        applyLoanReview(event);
+    }
+
+    @Transactional
+    @Caching(evict = {
+        @CacheEvict(value = CacheConfig.CACHE_LOANS,      allEntries = true),
+        @CacheEvict(value = CacheConfig.CACHE_LOAN_BY_ID, key = "#loanId")
+    })
+    public LoanResponse reviewLoan(String loanId, String action, BigDecimal interestRate, String rejectionReason, String reviewedBy) {
+        LoanReviewedEvent event = LoanReviewedEvent.builder()
+                .loanId(loanId)
+                .action(action)
+                .interestRate(interestRate)
+                .rejectionReason(rejectionReason)
+                .reviewedBy(reviewedBy)
+                .reviewedAt(LocalDateTime.now())
+                .build();
+        applyLoanReview(event);
+        return getLoanById(loanId);
+    }
+
+    private void applyLoanReview(LoanReviewedEvent event) {
         loanRequestRepository.findById(event.getLoanId()).ifPresentOrElse(loan -> {
             if (loan.getStatus() != LoanStatus.PENDING_REVIEW) {
                 log.warn("loan.reviewed received but loan {} is not PENDING_REVIEW (status={})",

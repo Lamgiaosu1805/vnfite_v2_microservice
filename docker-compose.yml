@@ -103,6 +103,7 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       RSA_PRIVATE_KEY: ${RSA_PRIVATE_KEY:-}
       RSA_PUBLIC_KEY: ${RSA_PUBLIC_KEY:-}
+      INTERNAL_API_SECRET: ${INTERNAL_API_SECRET:-dev-internal-secret}
       APP_OTP_MOCK: ${APP_OTP_MOCK:-false}
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
     extra_hosts:
@@ -142,6 +143,7 @@ services:
       CMS_ADMIN_EMAIL: ${CMS_ADMIN_EMAIL:-admin@p2plending.local}
       CMS_ADMIN_FULL_NAME: ${CMS_ADMIN_FULL_NAME:-CMS Administrator}
       RSA_PUBLIC_KEY: ${RSA_PUBLIC_KEY:-}
+      INTERNAL_API_SECRET: ${INTERNAL_API_SECRET:-dev-internal-secret}
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -202,6 +204,9 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
       RSA_PUBLIC_KEY: ${RSA_PUBLIC_KEY:-}
+      AUTH_SERVICE_URL: ${AUTH_SERVICE_URL:-http://auth-service:8081}
+      LOAN_SERVICE_URL: ${LOAN_SERVICE_URL:-http://loan-service:8082}
+      INTERNAL_API_SECRET: ${INTERNAL_API_SECRET:-dev-internal-secret}
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
     extra_hosts:
       - "host.docker.internal:host-gateway"

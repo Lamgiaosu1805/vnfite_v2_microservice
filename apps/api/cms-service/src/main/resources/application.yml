@@ -46,6 +46,10 @@ cms:
     password: ${CMS_ADMIN_PASSWORD:Admin@123456}
     email: ${CMS_ADMIN_EMAIL:admin@p2plending.local}
     full-name: ${CMS_ADMIN_FULL_NAME:CMS Administrator}
+  sources:
+    auth-url: ${AUTH_SERVICE_URL:http://auth-service:8081}
+    loan-url: ${LOAN_SERVICE_URL:http://loan-service:8082}
+    internal-secret: ${INTERNAL_API_SECRET:dev-internal-secret}
 
 management:
   endpoints:

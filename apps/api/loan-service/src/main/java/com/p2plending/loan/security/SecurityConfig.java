@@ -30,6 +30,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/loans", "/api/loans/**").permitAll()
                         // Actuator
                         .requestMatchers("/actuator/health", "/actuator/info").permitAll()
+                        .requestMatchers("/internal/**").permitAll()
                         // Everything else requires authentication
                         .anyRequest().authenticated()
                 )

@@ -70,6 +70,10 @@ server:
 jwt:
   public-key: ${RSA_PUBLIC_KEY:}
 
+app:
+  internal:
+    secret: ${INTERNAL_API_SECRET:dev-internal-secret}
+
 management:
   endpoints:
     web:

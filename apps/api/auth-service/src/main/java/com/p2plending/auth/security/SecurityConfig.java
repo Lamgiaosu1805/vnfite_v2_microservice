@@ -47,6 +47,7 @@ public class SecurityConfig {
                         ).permitAll()
                         // Ops
                         .requestMatchers("/actuator/health", "/actuator/info").permitAll()
+                        .requestMatchers("/internal/**").permitAll()
                         // Everything else requires a valid JWT
                         .anyRequest().authenticated()
                 )
