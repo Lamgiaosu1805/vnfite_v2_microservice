@@ -183,6 +183,7 @@ public class SourceServiceClient {
                 .loanId(text(node, "id"))
                 .loanCode(text(node, "loanCode"))
                 .borrowerId(text(node, "borrowerId"))
+                .productName(text(node, "productName"))
                 .amount(decimal(node, "amount"))
                 .interestRate(decimal(node, "interestRate"))
                 .termMonths(node.hasNonNull("termMonths") ? node.get("termMonths").asInt() : null)
