@@ -22,6 +22,7 @@ Infrastructure:
 - Redis 7
 - Kafka + Zookeeper
 - Nginx reverse proxy on host port `7080`
+- Internal Nginx/reverse proxy and Docker network routing are used for service-to-service/API routing where configured.
 
 Important project vocabulary:
 
@@ -29,6 +30,19 @@ Important project vocabulary:
 - CMS admin users are stored in `cms_db.cms_admin_users`.
 - Customer app users stay in `auth_db.users`; loan data stays in `loan_db.loan_requests`.
 - CMS must not mirror customer/user or loan tables into `cms_db`.
+- Services already call each other through internal APIs where needed; do not reintroduce DB mirroring to share data.
+
+## Service-To-Service Calls
+
+The backend is no longer purely event/mirror based. Services can call each other through internal HTTP APIs and internal Nginx/Docker network routing.
+
+Current important internal flows:
+
+- `cms-service` gets customer data from `auth-service` internal user APIs.
+- `cms-service` gets loan data and sends loan review actions to `loan-service` internal loan APIs.
+- Internal APIs must be protected with `INTERNAL_API_SECRET` / `X-Internal-Secret`.
+- Prefer source-of-truth service APIs over copying tables between databases.
+- Use service DNS names inside Docker, e.g. `http://auth-service:8081` and `http://loan-service:8082`, unless nginx/internal proxy config says otherwise.
 
 ## Codex Working Rules
 
@@ -154,3 +168,4 @@ Use `Asia/Ho_Chi_Minh` consistently.
 - If tests are not available or not run, say that clearly.
 - Check `git status --short`.
 - Do not commit or push unless the user asks for it.
+- When changes are ready, provide the exact `git add`, `git commit`, and `git push` commands for the user to run.

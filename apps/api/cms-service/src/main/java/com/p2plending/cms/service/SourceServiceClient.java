@@ -180,10 +180,12 @@ public class SourceServiceClient {
     }
 
     private LoanSummaryResponse parseLoan(JsonNode node) {
+        String borrowerId = text(node, "borrowerId");
         return LoanSummaryResponse.builder()
                 .loanId(text(node, "id"))
                 .loanCode(text(node, "loanCode"))
-                .borrowerId(text(node, "borrowerId"))
+                .borrowerId(borrowerId)
+                .borrowerName(resolveBorrowerName(borrowerId))
                 .productName(text(node, "productName"))
                 .amount(decimal(node, "amount"))
                 .interestRate(decimal(node, "interestRate"))
@@ -198,6 +200,17 @@ public class SourceServiceClient {
                 .reviewedAt(dateTime(node, "reviewedAt"))
                 .createdAt(dateTime(node, "createdAt"))
                 .build();
+    }
+
+    private String resolveBorrowerName(String borrowerId) {
+        if (borrowerId == null) return null;
+        try {
+            UserSummaryResponse user = getUser(borrowerId);
+            return user.getFullName() != null ? user.getFullName() : user.getPhone();
+        } catch (Exception ex) {
+            log.warn("Could not resolve borrower name for {}", borrowerId);
+            return null;
+        }
     }
 
     private UserAccountStatus parseAccountStatus(String value) {
