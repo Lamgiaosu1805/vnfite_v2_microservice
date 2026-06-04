@@ -5,13 +5,13 @@ import com.p2plending.cms.dto.request.CreateAdminRequest;
 import com.p2plending.cms.dto.request.SetupRequest;
 import com.p2plending.cms.dto.response.AdminListResponse;
 import com.p2plending.cms.dto.response.CreateAdminResponse;
+import com.p2plending.cms.security.CmsPrincipal;
 import com.p2plending.cms.service.AdminManagementService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -42,10 +42,9 @@ public class AdminManagementController {
     @PostMapping("/auth/change-password")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<Void> changePassword(
-            @AuthenticationPrincipal UserDetails userDetails,
+            @AuthenticationPrincipal CmsPrincipal principal,
             @Valid @RequestBody ChangePasswordRequest request) {
-        // Lấy adminId từ JWT subject (username) → load từ DB để lấy id
-        service.changePassword(userDetails.getUsername(), request);
+        service.changePassword(principal.username(), request);
         return ResponseEntity.noContent().build();
     }
 
@@ -60,9 +59,9 @@ public class AdminManagementController {
     @PostMapping("/admins")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<CreateAdminResponse> createAdmin(
-            @AuthenticationPrincipal UserDetails userDetails,
+            @AuthenticationPrincipal CmsPrincipal principal,
             @Valid @RequestBody CreateAdminRequest request) {
-        CreateAdminResponse response = service.createAdmin(request, userDetails.getUsername());
+        CreateAdminResponse response = service.createAdmin(request, principal.userId());
         return ResponseEntity.ok(response);
     }
 
@@ -70,8 +69,8 @@ public class AdminManagementController {
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<Void> toggleActive(
             @PathVariable String id,
-            @AuthenticationPrincipal UserDetails userDetails) {
-        service.toggleActive(id, userDetails.getUsername());
+            @AuthenticationPrincipal CmsPrincipal principal) {
+        service.toggleActive(id, principal.userId());
         return ResponseEntity.noContent().build();
     }
 }
