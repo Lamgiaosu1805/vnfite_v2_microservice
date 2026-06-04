@@ -2,6 +2,7 @@ package com.p2plending.cms.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.databind.jsontype.BasicPolymorphicTypeValidator;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.springframework.cache.annotation.EnableCaching;
 import org.springframework.context.annotation.Bean;
@@ -25,11 +26,17 @@ public class CacheConfig {
 
     @Bean
     public RedisCacheManager cacheManager(RedisConnectionFactory factory) {
-        // GenericJackson2JsonRedisSerializer() tự tạo ObjectMapper riêng không có JavaTimeModule
-        // → LocalDate/LocalDateTime không serialize được → 500. Fix: inject ObjectMapper có JavaTimeModule.
+        // Fix 1: JavaTimeModule để serialize LocalDate/LocalDateTime
+        // Fix 2: activateDefaultTyping để lưu class name → tránh ClassCastException khi đọc ra
         ObjectMapper cacheMapper = new ObjectMapper()
                 .registerModule(new JavaTimeModule())
-                .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+                .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
+                .activateDefaultTyping(
+                        BasicPolymorphicTypeValidator.builder()
+                                .allowIfBaseType(Object.class)
+                                .build(),
+                        ObjectMapper.DefaultTyping.NON_FINAL
+                );
 
         var json = new GenericJackson2JsonRedisSerializer(cacheMapper);
 
