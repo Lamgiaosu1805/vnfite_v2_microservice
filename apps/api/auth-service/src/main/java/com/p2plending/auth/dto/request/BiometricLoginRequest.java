@@ -14,4 +14,7 @@ public class BiometricLoginRequest {
 
     /** UUID thiết bị — cùng logic single-device như password login */
     private String deviceKey;
+
+    private String deviceName;
+    private String platform;
 }

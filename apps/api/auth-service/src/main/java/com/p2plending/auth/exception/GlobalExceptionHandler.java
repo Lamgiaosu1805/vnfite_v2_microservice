@@ -61,6 +61,13 @@ public class GlobalExceptionHandler {
         return build(HttpStatus.CONFLICT, ex.getMessage());
     }
 
+    @ExceptionHandler(DeviceConflictException.class)
+    public ResponseEntity<ApiResponse<Void>> handleDeviceConflict(DeviceConflictException ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiResponse.error(RequestIdHolder.get(), HttpStatus.CONFLICT.value(),
+                        ex.getMessage(), "DEVICE_CONFLICT"));
+    }
+
     @ExceptionHandler(InvalidIdentityException.class)
     public ResponseEntity<ApiResponse<Void>> handleInvalidIdentity(InvalidIdentityException ex) {
         return build(HttpStatus.UNPROCESSABLE_ENTITY, ex.getMessage());

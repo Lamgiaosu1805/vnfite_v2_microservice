@@ -17,6 +17,7 @@ import com.p2plending.auth.dto.request.DeviceResetVerifyRequest;
 import com.p2plending.auth.dto.request.RefreshTokenRequest;
 import com.p2plending.auth.dto.request.RegisterRequest;
 import com.p2plending.auth.dto.response.AuthResponse;
+import com.p2plending.auth.dto.response.DeviceSessionResponse;
 import com.p2plending.auth.dto.response.KycSubmissionResponse;
 import com.p2plending.auth.dto.response.RegisterInitResponse;
 import com.p2plending.auth.service.AuthService;
@@ -33,6 +34,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -91,6 +93,28 @@ public class AuthController {
     }
 
     /**
+     * GET /api/auth/devices
+     * Trả về thông tin thiết bị đang đăng nhập của user (tối đa 1 do single-device).
+     */
+    @GetMapping("/devices")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<List<DeviceSessionResponse>> getDevices(
+            @AuthenticationPrincipal UserDetails userDetails) {
+        String phone = userDetails.getUsername();
+        return authService.getActiveDevice(phone)
+                .map(data -> {
+                    DeviceSessionResponse resp = DeviceSessionResponse.builder()
+                            .deviceName(data.getDeviceName())
+                            .platform(data.getPlatform())
+                            .loginAt(data.getLoginAt())
+                            .current(true)
+                            .build();
+                    return ResponseEntity.ok(List.of(resp));
+                })
+                .orElse(ResponseEntity.ok(List.of()));
+    }
+
+    /**
      * POST /api/auth/logout
      * Đăng xuất server-side: xóa device_session và refresh_token khỏi Redis.
      * Yêu cầu JWT hợp lệ.
@@ -109,7 +133,8 @@ public class AuthController {
     @PostMapping("/biometric/login")
     public ResponseEntity<AuthResponse> biometricLogin(@Valid @RequestBody BiometricLoginRequest request) {
         return ResponseEntity.ok(authService.biometricLogin(
-                request.getPhone(), request.getBiometricToken(), request.getDeviceKey()));
+                request.getPhone(), request.getBiometricToken(),
+                request.getDeviceKey(), request.getDeviceName(), request.getPlatform()));
     }
 
     /**

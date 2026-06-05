@@ -16,4 +16,10 @@ public class LoginRequest {
 
     /** UUID thiết bị — dùng để nhận diện "thiết bị này đã đăng nhập trước đó" */
     private String deviceKey;
+
+    /** Tên thiết bị hiển thị cho user (vd: "iPhone (iOS 17.2)") */
+    private String deviceName;
+
+    /** Platform: "ios" | "android" */
+    private String platform;
 }

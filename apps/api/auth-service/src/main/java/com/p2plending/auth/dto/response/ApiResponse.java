@@ -16,6 +16,8 @@ public class ApiResponse<T> {
     private LocalDateTime timestamp;
     private int status;
     private String message;
+    /** Mã lỗi máy đọc được (ví dụ: DEVICE_CONFLICT) */
+    private String errorCode;
     private T data;
     private List<String> errors;
 
@@ -45,6 +47,16 @@ public class ApiResponse<T> {
                 .status(status)
                 .message(message)
                 .errors(errors)
+                .build();
+    }
+
+    public static ApiResponse<Void> error(String requestId, int status, String message, String errorCode) {
+        return ApiResponse.<Void>builder()
+                .requestId(requestId)
+                .timestamp(LocalDateTime.now())
+                .status(status)
+                .message(message)
+                .errorCode(errorCode)
                 .build();
     }
 }

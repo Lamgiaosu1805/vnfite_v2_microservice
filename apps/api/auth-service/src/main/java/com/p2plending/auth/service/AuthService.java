@@ -1,9 +1,11 @@
 package com.p2plending.auth.service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.p2plending.auth.config.JwtProperties;
 import com.p2plending.auth.domain.entity.KycDocument;
 import com.p2plending.auth.domain.entity.User;
 import com.p2plending.auth.domain.enums.KycStatus;
+import com.p2plending.auth.domain.model.DeviceSessionData;
 import com.p2plending.auth.domain.model.PendingRegistration;
 import com.p2plending.auth.domain.repository.KycDocumentRepository;
 import com.p2plending.auth.domain.repository.KycSubmissionRepository;
@@ -39,10 +41,12 @@ import org.springframework.util.StringUtils;
 
 import java.time.Duration;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.security.SecureRandom;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -75,6 +79,7 @@ public class AuthService {
     private final JwtProperties         jwtProperties;
     private final OtpService            otpService;
     private final OtpRateLimitService   otpRateLimitService;
+    private final ObjectMapper          objectMapper;
 
     // ── Check phone ───────────────────────────────────────────────
 
@@ -150,7 +155,7 @@ public class AuthService {
             throw new InvalidCredentialsException("Số điện thoại hoặc mật khẩu không đúng");
         }
 
-        checkAndBindDevice(user.getPhone(), request.getDeviceKey());
+        checkAndBindDevice(user.getPhone(), request.getDeviceKey(), request.getDeviceName(), request.getPlatform());
 
         log.info("User authenticated: id={} phone={}", user.getId(), user.getPhone());
         return issueTokenPair(user);
@@ -239,14 +244,15 @@ public class AuthService {
     // ── Biometric login (không cần JWT — dùng biometric token từ thiết bị) ──────
 
     @Transactional
-    public AuthResponse biometricLogin(String phone, String biometricToken, String deviceKey) {
+    public AuthResponse biometricLogin(String phone, String biometricToken, String deviceKey,
+                                       String deviceName, String platform) {
         String stored = redisTemplate.opsForValue().get(biometricTokenKey(phone));
         if (stored == null || !stored.equals(biometricToken)) {
             throw new InvalidTokenException(
                     "Sinh trắc học chưa được kích hoạt hoặc đã bị thu hồi. Vui lòng đăng nhập bằng mật khẩu.");
         }
 
-        checkAndBindDevice(phone, deviceKey);
+        checkAndBindDevice(phone, deviceKey, deviceName, platform);
 
         User user = userRepository.findByPhone(phone)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
@@ -403,23 +409,69 @@ public class AuthService {
     }
 
     /**
-     * Kiểm tra single-device và gắn deviceKey vào session Redis.
-     * - Nếu chưa có session → ghi deviceKey (không TTL) và cho qua
-     * - Nếu session tồn tại và deviceKey khớp → thiết bị này đang login lại, cho qua
+     * Kiểm tra single-device và gắn device session vào Redis.
+     * - Nếu chưa có session → lưu DeviceSessionData (không TTL) và cho qua
+     * - Nếu session tồn tại và deviceKey khớp → thiết bị này đang login lại, cập nhật loginAt
      * - Nếu session tồn tại và deviceKey KHÔNG khớp → DEVICE_CONFLICT
      */
-    private void checkAndBindDevice(String phone, String deviceKey) {
-        String existingKey = redisTemplate.opsForValue().get(deviceSessionKey(phone));
-        if (existingKey != null) {
-            boolean sameDevice = StringUtils.hasText(deviceKey) && existingKey.equals(deviceKey);
+    private void checkAndBindDevice(String phone, String deviceKey, String deviceName, String platform) {
+        String stored = redisTemplate.opsForValue().get(deviceSessionKey(phone));
+        String resolvedDeviceKey = StringUtils.hasText(deviceKey) ? deviceKey : UUID.randomUUID().toString();
+
+        if (stored != null) {
+            String existingDeviceKey = parseDeviceKey(stored);
+            boolean sameDevice = existingDeviceKey != null && existingDeviceKey.equals(resolvedDeviceKey);
             if (!sameDevice) {
                 throw new DeviceConflictException(
                         "Tài khoản đang đăng nhập trên một thiết bị khác. Vui lòng đăng xuất thiết bị đó, hoặc thực hiện đặt lại thiết bị bằng CCCD.");
             }
-        } else {
-            // Session mới: lưu deviceKey vĩnh viễn (không TTL)
-            String keyToStore = StringUtils.hasText(deviceKey) ? deviceKey : UUID.randomUUID().toString();
-            redisTemplate.opsForValue().set(deviceSessionKey(phone), keyToStore);
+        }
+
+        // Ghi/cập nhật session data (deviceKey khớp hoặc session mới)
+        DeviceSessionData data = DeviceSessionData.builder()
+                .deviceKey(resolvedDeviceKey)
+                .deviceName(StringUtils.hasText(deviceName) ? deviceName : "Thiết bị không xác định")
+                .platform(StringUtils.hasText(platform) ? platform : "unknown")
+                .loginAt(LocalDateTime.now().toString())
+                .build();
+
+        try {
+            redisTemplate.opsForValue().set(deviceSessionKey(phone), objectMapper.writeValueAsString(data));
+        } catch (Exception e) {
+            // Fallback: lưu deviceKey thuần nếu JSON serialize lỗi
+            redisTemplate.opsForValue().set(deviceSessionKey(phone), resolvedDeviceKey);
+            log.warn("Failed to serialize device session data for phone={}", phone, e);
+        }
+    }
+
+    /** Trả về thông tin thiết bị đang đăng nhập của user, hoặc empty nếu chưa có session. */
+    @Transactional(readOnly = true)
+    public Optional<DeviceSessionData> getActiveDevice(String phone) {
+        String stored = redisTemplate.opsForValue().get(deviceSessionKey(phone));
+        if (stored == null) return Optional.empty();
+
+        try {
+            return Optional.of(objectMapper.readValue(stored, DeviceSessionData.class));
+        } catch (Exception e) {
+            // Backward compat: stored value là plain deviceKey (format cũ)
+            DeviceSessionData legacy = DeviceSessionData.builder()
+                    .deviceKey(stored)
+                    .deviceName("Thiết bị đã đăng nhập")
+                    .platform("unknown")
+                    .loginAt(null)
+                    .build();
+            return Optional.of(legacy);
+        }
+    }
+
+    /** Trích xuất deviceKey từ stored value (có thể là JSON hoặc plain string). */
+    private String parseDeviceKey(String stored) {
+        try {
+            DeviceSessionData data = objectMapper.readValue(stored, DeviceSessionData.class);
+            return data.getDeviceKey();
+        } catch (Exception e) {
+            // Plain string format (cũ)
+            return stored;
         }
     }
 
