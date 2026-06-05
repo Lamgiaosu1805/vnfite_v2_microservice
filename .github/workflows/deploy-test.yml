@@ -100,6 +100,12 @@ jobs:
           ssh -i ~/.ssh/deploy_key ${{ env.SERVER }} \
             'set -e; cd /root/p2p-lending; git fetch origin main; git reset --hard origin/main; docker compose up -d nginx'
 
+      - name: Reset Redis cache
+        if: steps.changes.outputs.auth == 'true' || steps.changes.outputs.loan == 'true' || steps.changes.outputs.matching == 'true' || steps.changes.outputs.cms == 'true' || steps.changes.outputs.notification == 'true' || steps.changes.outputs.nginx == 'true'
+        run: |
+          ssh -i ~/.ssh/deploy_key ${{ env.SERVER }} \
+            'set -e; cd /root/p2p-lending; sh infra/scripts/reset-redis-cache.sh'
+
       - name: Cleanup
         if: always()
         run: rm -f ~/.ssh/deploy_key /tmp/.env_test
