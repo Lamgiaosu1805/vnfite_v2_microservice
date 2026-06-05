@@ -16,6 +16,7 @@ import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
 
 import java.math.BigDecimal;
+import java.net.URI;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -120,7 +121,7 @@ public class SourceServiceClient {
 
     public PagedResponse<LoanSummaryResponse> getLoans(String status, String borrowerId,
                                                        String province, int page, int size) {
-        String url = UriComponentsBuilder.fromHttpUrl(loanServiceUrl)
+        URI uri = UriComponentsBuilder.fromHttpUrl(loanServiceUrl)
                 .path("/internal/loans")
                 .queryParamIfPresent("status",     Optional.ofNullable(status))
                 .queryParamIfPresent("borrowerId", Optional.ofNullable(borrowerId))
@@ -129,8 +130,10 @@ public class SourceServiceClient {
                 .queryParam("size", size)
                 .queryParam("sortBy", "createdAt")
                 .queryParam("sortDir", "desc")
-                .toUriString();
-        return parseLoanPage(exchangeForJson(url, HttpMethod.GET, null));
+                .build()
+                .encode()
+                .toUri();
+        return parseLoanPage(exchangeForJson(uri, HttpMethod.GET, null));
     }
 
     public LoanSummaryResponse proposeLoan(String loanId, BigDecimal proposedAmount,
@@ -178,6 +181,21 @@ public class SourceServiceClient {
             return objectMapper.readTree(response.getBody());
         } catch (Exception ex) {
             log.error("Failed to parse source service response from {}", url, ex);
+            throw new IllegalStateException("Không đọc được phản hồi từ service nguồn");
+        }
+    }
+
+    private JsonNode exchangeForJson(URI uri, HttpMethod method, Object body) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.set(INTERNAL_SECRET_HEADER, internalSecret);
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        HttpEntity<Object> entity = new HttpEntity<>(body, headers);
+
+        ResponseEntity<String> response = restTemplate.exchange(uri, method, entity, String.class);
+        try {
+            return objectMapper.readTree(response.getBody());
+        } catch (Exception ex) {
+            log.error("Failed to parse source service response from {}", uri, ex);
             throw new IllegalStateException("Không đọc được phản hồi từ service nguồn");
         }
     }

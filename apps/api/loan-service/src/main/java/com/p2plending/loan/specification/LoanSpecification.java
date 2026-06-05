@@ -5,9 +5,13 @@ import com.p2plending.loan.dto.request.LoanFilterParams;
 import jakarta.persistence.criteria.Predicate;
 import org.springframework.data.jpa.domain.Specification;
 
+import java.text.Normalizer;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
+import java.util.Set;
 
 public final class LoanSpecification {
 
@@ -48,9 +52,14 @@ public final class LoanSpecification {
     }
 
     private static List<String> provinceSearchTerms(String province) {
-        String p = province.trim();
-        List<String> terms = new ArrayList<>();
+        String p = normalizeProvinceInput(province);
+        Set<String> terms = new LinkedHashSet<>();
         terms.add(p);
+        terms.add(stripVietnameseAccents(p));
+        terms.add("TP. " + p);
+        terms.add("TP " + p);
+        terms.add("Thành phố " + p);
+        terms.add("Tinh " + stripVietnameseAccents(p));
 
         switch (p) {
             case "An Giang" -> terms.add("Kiên Giang");
@@ -80,6 +89,27 @@ public final class LoanSpecification {
             }
         }
 
-        return terms.stream().distinct().toList();
+        return terms.stream()
+                .filter(term -> term != null && !term.isBlank())
+                .map(String::trim)
+                .distinct()
+                .toList();
+    }
+
+    private static String normalizeProvinceInput(String province) {
+        String p = province.trim();
+        return p.replaceFirst("(?iu)^tp\\.?\\s+", "")
+                .replaceFirst("(?iu)^thành\\s+phố\\s+", "")
+                .replaceFirst("(?iu)^tỉnh\\s+", "")
+                .trim();
+    }
+
+    private static String stripVietnameseAccents(String value) {
+        String normalized = Normalizer.normalize(value, Normalizer.Form.NFD)
+                .replaceAll("\\p{M}+", "");
+        return normalized
+                .replace('Đ', 'D')
+                .replace('đ', 'd')
+                .toLowerCase(Locale.ROOT);
     }
 }
