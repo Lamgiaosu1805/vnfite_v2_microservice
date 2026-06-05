@@ -94,24 +94,18 @@ public class AuthController {
 
     /**
      * GET /api/auth/devices
-     * Trả về thông tin thiết bị đang đăng nhập của user (tối đa 1 do single-device).
+     * Danh sách các thiết bị đã từng đăng nhập tài khoản này.
+     * Mỗi thiết bị (deviceKey) chỉ xuất hiện 1 lần với lần login gần nhất.
+     * Thiết bị đang giữ phiên active được đánh dấu current=true.
      */
     @GetMapping("/devices")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<List<DeviceSessionResponse>> getDevices(
             @AuthenticationPrincipal UserDetails userDetails) {
         String phone = userDetails.getUsername();
-        return authService.getActiveDevice(phone)
-                .map(data -> {
-                    DeviceSessionResponse resp = DeviceSessionResponse.builder()
-                            .deviceName(data.getDeviceName())
-                            .platform(data.getPlatform())
-                            .loginAt(data.getLoginAt())
-                            .current(true)
-                            .build();
-                    return ResponseEntity.ok(List.of(resp));
-                })
-                .orElse(ResponseEntity.ok(List.of()));
+        String userId = authService.getUserIdByPhone(phone);
+        List<DeviceSessionResponse> result = authService.getDeviceHistory(userId, phone);
+        return ResponseEntity.ok(result);
     }
 
     /**

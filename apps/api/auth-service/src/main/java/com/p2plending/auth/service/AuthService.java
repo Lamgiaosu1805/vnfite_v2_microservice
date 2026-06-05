@@ -7,6 +7,8 @@ import com.p2plending.auth.domain.entity.User;
 import com.p2plending.auth.domain.enums.KycStatus;
 import com.p2plending.auth.domain.model.DeviceSessionData;
 import com.p2plending.auth.domain.model.PendingRegistration;
+import com.p2plending.auth.domain.entity.DeviceLoginHistory;
+import com.p2plending.auth.domain.repository.DeviceLoginHistoryRepository;
 import com.p2plending.auth.domain.repository.KycDocumentRepository;
 import com.p2plending.auth.domain.repository.KycSubmissionRepository;
 import com.p2plending.auth.domain.repository.UserRepository;
@@ -17,6 +19,7 @@ import com.p2plending.auth.dto.request.OtpVerifyRequest;
 import com.p2plending.auth.dto.request.RefreshTokenRequest;
 import com.p2plending.auth.dto.request.RegisterRequest;
 import com.p2plending.auth.dto.response.AuthResponse;
+import com.p2plending.auth.dto.response.DeviceSessionResponse;
 import com.p2plending.auth.dto.response.KycDocumentResponse;
 import com.p2plending.auth.dto.response.RegisterInitResponse;
 import com.p2plending.auth.exception.DeviceConflictException;
@@ -42,6 +45,8 @@ import org.springframework.util.StringUtils;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.security.SecureRandom;
 import java.util.HashMap;
 import java.util.List;
@@ -77,9 +82,10 @@ public class AuthService {
     private final KafkaProducerService  kafkaProducerService;
     private final StringRedisTemplate   redisTemplate;
     private final JwtProperties         jwtProperties;
-    private final OtpService            otpService;
-    private final OtpRateLimitService   otpRateLimitService;
-    private final ObjectMapper          objectMapper;
+    private final OtpService                    otpService;
+    private final OtpRateLimitService           otpRateLimitService;
+    private final ObjectMapper                  objectMapper;
+    private final DeviceLoginHistoryRepository  deviceLoginHistoryRepository;
 
     // ── Check phone ───────────────────────────────────────────────
 
@@ -155,7 +161,7 @@ public class AuthService {
             throw new InvalidCredentialsException("Số điện thoại hoặc mật khẩu không đúng");
         }
 
-        checkAndBindDevice(user.getPhone(), request.getDeviceKey(), request.getDeviceName(), request.getPlatform());
+        checkAndBindDevice(user.getId(), user.getPhone(), request.getDeviceKey(), request.getDeviceName(), request.getPlatform());
 
         log.info("User authenticated: id={} phone={}", user.getId(), user.getPhone());
         return issueTokenPair(user);
@@ -252,10 +258,11 @@ public class AuthService {
                     "Sinh trắc học chưa được kích hoạt hoặc đã bị thu hồi. Vui lòng đăng nhập bằng mật khẩu.");
         }
 
-        checkAndBindDevice(phone, deviceKey, deviceName, platform);
-
+        // Find user trước để có userId cho history
         User user = userRepository.findByPhone(phone)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
+        checkAndBindDevice(user.getId(), phone, deviceKey, deviceName, platform);
 
         log.info("Biometric login success for userId={}", user.getId());
         return issueTokenPair(user);
@@ -409,12 +416,12 @@ public class AuthService {
     }
 
     /**
-     * Kiểm tra single-device và gắn device session vào Redis.
+     * Kiểm tra single-device, gắn device session vào Redis và ghi lịch sử vào DB.
      * - Nếu chưa có session → lưu DeviceSessionData (không TTL) và cho qua
      * - Nếu session tồn tại và deviceKey khớp → thiết bị này đang login lại, cập nhật loginAt
      * - Nếu session tồn tại và deviceKey KHÔNG khớp → DEVICE_CONFLICT
      */
-    private void checkAndBindDevice(String phone, String deviceKey, String deviceName, String platform) {
+    private void checkAndBindDevice(String userId, String phone, String deviceKey, String deviceName, String platform) {
         String stored = redisTemplate.opsForValue().get(deviceSessionKey(phone));
         String resolvedDeviceKey = StringUtils.hasText(deviceKey) ? deviceKey : UUID.randomUUID().toString();
 
@@ -427,21 +434,67 @@ public class AuthService {
             }
         }
 
-        // Ghi/cập nhật session data (deviceKey khớp hoặc session mới)
+        LocalDateTime now = LocalDateTime.now();
+
+        // Ghi/cập nhật session data vào Redis (deviceKey khớp hoặc session mới)
         DeviceSessionData data = DeviceSessionData.builder()
                 .deviceKey(resolvedDeviceKey)
                 .deviceName(StringUtils.hasText(deviceName) ? deviceName : "Thiết bị không xác định")
                 .platform(StringUtils.hasText(platform) ? platform : "unknown")
-                .loginAt(LocalDateTime.now().toString())
+                .loginAt(now.toString())
                 .build();
 
         try {
             redisTemplate.opsForValue().set(deviceSessionKey(phone), objectMapper.writeValueAsString(data));
         } catch (Exception e) {
-            // Fallback: lưu deviceKey thuần nếu JSON serialize lỗi
             redisTemplate.opsForValue().set(deviceSessionKey(phone), resolvedDeviceKey);
             log.warn("Failed to serialize device session data for phone={}", phone, e);
         }
+
+        // Ghi lịch sử vào DB (mỗi lần login tạo 1 record)
+        DeviceLoginHistory history = DeviceLoginHistory.builder()
+                .userId(userId)
+                .deviceKey(resolvedDeviceKey)
+                .deviceName(StringUtils.hasText(deviceName) ? deviceName : "Thiết bị không xác định")
+                .platform(StringUtils.hasText(platform) ? platform : "unknown")
+                .loginAt(now)
+                .build();
+        deviceLoginHistoryRepository.save(history);
+    }
+
+    /**
+     * Trả về danh sách thiết bị đã từng đăng nhập, mỗi deviceKey chỉ xuất hiện 1 lần
+     * (lấy lần login gần nhất), sắp xếp theo thời gian login mới nhất.
+     * Thiết bị đang giữ phiên hiện tại được đánh dấu current=true.
+     */
+    @Transactional(readOnly = true)
+    public List<DeviceSessionResponse> getDeviceHistory(String userId, String phone) {
+        // 1. Lấy deviceKey đang active từ Redis
+        String activeDeviceKey = null;
+        String stored = redisTemplate.opsForValue().get(deviceSessionKey(phone));
+        if (stored != null) {
+            activeDeviceKey = parseDeviceKey(stored);
+        }
+
+        // 2. Lấy 100 bản ghi gần nhất rồi deduplicate theo deviceKey
+        List<DeviceLoginHistory> records =
+                deviceLoginHistoryRepository.findTop100ByUserIdAndIsDeletedFalseOrderByLoginAtDesc(userId);
+
+        LinkedHashMap<String, DeviceLoginHistory> latestPerDevice = new LinkedHashMap<>();
+        for (DeviceLoginHistory r : records) {
+            latestPerDevice.putIfAbsent(r.getDeviceKey(), r); // giữ bản ghi đầu tiên (mới nhất)
+        }
+
+        String finalActiveDeviceKey = activeDeviceKey;
+        return new ArrayList<>(latestPerDevice.values()).stream()
+                .limit(15) // tối đa 15 thiết bị khác nhau
+                .map(r -> DeviceSessionResponse.builder()
+                        .deviceName(r.getDeviceName())
+                        .platform(r.getPlatform())
+                        .loginAt(r.getLoginAt())
+                        .current(r.getDeviceKey().equals(finalActiveDeviceKey))
+                        .build())
+                .collect(java.util.stream.Collectors.toList());
     }
 
     /** Trả về thông tin thiết bị đang đăng nhập của user, hoặc empty nếu chưa có session. */
