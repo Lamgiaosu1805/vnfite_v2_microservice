@@ -17,6 +17,7 @@ import com.p2plending.auth.dto.request.RegisterRequest;
 import com.p2plending.auth.dto.response.AuthResponse;
 import com.p2plending.auth.dto.response.KycDocumentResponse;
 import com.p2plending.auth.dto.response.RegisterInitResponse;
+import com.p2plending.auth.exception.DeviceConflictException;
 import com.p2plending.auth.exception.InvalidCredentialsException;
 import com.p2plending.auth.exception.InvalidOtpException;
 import com.p2plending.auth.exception.InvalidReferrerException;
@@ -37,10 +38,12 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.time.Duration;
+import java.time.LocalDate;
 import java.security.SecureRandom;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -50,7 +53,11 @@ public class AuthService {
     private static final String REFRESH_TOKEN_PREFIX = "refresh_token:";
     private static final String BIOMETRIC_ENABLE_OTP_PREFIX = "biometric_enable:";
     private static final String BIOMETRIC_DISABLE_OTP_PREFIX = "biometric_disable:";
+    private static final String BIOMETRIC_TOKEN_PREFIX = "biometric_token:";
+    private static final String DEVICE_SESSION_PREFIX  = "device_session:";
+    private static final String DEVICE_RESET_OTP_PREFIX = "device_reset:";
     private static final Duration BIOMETRIC_OTP_TTL = Duration.ofMinutes(5);
+    private static final Duration DEVICE_RESET_OTP_TTL = Duration.ofMinutes(10);
     private static final String MOCK_OTP = "000000";
 
     @Value("${app.otp.mock:false}")
@@ -134,7 +141,7 @@ public class AuthService {
 
     // ── Login ─────────────────────────────────────────────────────
 
-    @Transactional(readOnly = true)
+    @Transactional
     public AuthResponse login(LoginRequest request) {
         User user = userRepository.findByPhone(request.getPhone())
                 .orElseThrow(() -> new InvalidCredentialsException("Số điện thoại hoặc mật khẩu không đúng"));
@@ -142,6 +149,8 @@ public class AuthService {
         if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
             throw new InvalidCredentialsException("Số điện thoại hoặc mật khẩu không đúng");
         }
+
+        checkAndBindDevice(user.getPhone(), request.getDeviceKey());
 
         log.info("User authenticated: id={} phone={}", user.getId(), user.getPhone());
         return issueTokenPair(user);
@@ -212,8 +221,47 @@ public class AuthService {
         }
 
         redisTemplate.delete(biometricEnableOtpKey(userId));
-        log.info("Biometric enable OTP verified for userId={}", userId);
-        return Map.of("message", "Xác thực OTP thành công");
+
+        // Issue a persistent biometric token (no expiry) — dùng để login không giới hạn thời gian
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+        String biometricToken = UUID.randomUUID().toString();
+        // Không set TTL — token tồn tại vĩnh viễn cho đến khi user tắt sinh trắc học
+        redisTemplate.opsForValue().set(biometricTokenKey(user.getPhone()), biometricToken);
+
+        log.info("Biometric enabled for userId={}", userId);
+        Map<String, String> response = new HashMap<>();
+        response.put("message", "Đăng nhập sinh trắc học đã được bật");
+        response.put("biometricToken", biometricToken);
+        return response;
+    }
+
+    // ── Biometric login (không cần JWT — dùng biometric token từ thiết bị) ──────
+
+    @Transactional
+    public AuthResponse biometricLogin(String phone, String biometricToken, String deviceKey) {
+        String stored = redisTemplate.opsForValue().get(biometricTokenKey(phone));
+        if (stored == null || !stored.equals(biometricToken)) {
+            throw new InvalidTokenException(
+                    "Sinh trắc học chưa được kích hoạt hoặc đã bị thu hồi. Vui lòng đăng nhập bằng mật khẩu.");
+        }
+
+        checkAndBindDevice(phone, deviceKey);
+
+        User user = userRepository.findByPhone(phone)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
+        log.info("Biometric login success for userId={}", user.getId());
+        return issueTokenPair(user);
+    }
+
+    // ── Server-side logout ────────────────────────────────────────────────────
+
+    @Transactional
+    public void serverLogout(String phone) {
+        redisTemplate.delete(deviceSessionKey(phone));
+        redisTemplate.delete(refreshTokenKey(phone));
+        log.info("Server logout completed for phone={}", phone);
     }
 
     @Transactional(readOnly = true)
@@ -253,8 +301,14 @@ public class AuthService {
         }
 
         redisTemplate.delete(biometricDisableOtpKey(userId));
-        log.info("Biometric disable OTP verified for userId={}", userId);
-        return Map.of("message", "Xác thực OTP thành công");
+
+        // Xóa biometric token khỏi Redis → vô hiệu hóa biometric login
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+        redisTemplate.delete(biometricTokenKey(user.getPhone()));
+
+        log.info("Biometric disabled for userId={}", userId);
+        return Map.of("message", "Đăng nhập sinh trắc học đã được tắt");
     }
 
     // ── KYC submit ────────────────────────────────────────────────
@@ -334,6 +388,100 @@ public class AuthService {
 
     private String biometricDisableOtpKey(String userId) {
         return BIOMETRIC_DISABLE_OTP_PREFIX + userId;
+    }
+
+    private String biometricTokenKey(String phone) {
+        return BIOMETRIC_TOKEN_PREFIX + phone;
+    }
+
+    private String deviceSessionKey(String phone) {
+        return DEVICE_SESSION_PREFIX + phone;
+    }
+
+    private String deviceResetOtpKey(String phone) {
+        return DEVICE_RESET_OTP_PREFIX + phone;
+    }
+
+    /**
+     * Kiểm tra single-device và gắn deviceKey vào session Redis.
+     * - Nếu chưa có session → ghi deviceKey (không TTL) và cho qua
+     * - Nếu session tồn tại và deviceKey khớp → thiết bị này đang login lại, cho qua
+     * - Nếu session tồn tại và deviceKey KHÔNG khớp → DEVICE_CONFLICT
+     */
+    private void checkAndBindDevice(String phone, String deviceKey) {
+        String existingKey = redisTemplate.opsForValue().get(deviceSessionKey(phone));
+        if (existingKey != null) {
+            boolean sameDevice = StringUtils.hasText(deviceKey) && existingKey.equals(deviceKey);
+            if (!sameDevice) {
+                throw new DeviceConflictException(
+                        "Tài khoản đang đăng nhập trên một thiết bị khác. Vui lòng đăng xuất thiết bị đó, hoặc thực hiện đặt lại thiết bị bằng CCCD.");
+            }
+        } else {
+            // Session mới: lưu deviceKey vĩnh viễn (không TTL)
+            String keyToStore = StringUtils.hasText(deviceKey) ? deviceKey : UUID.randomUUID().toString();
+            redisTemplate.opsForValue().set(deviceSessionKey(phone), keyToStore);
+        }
+    }
+
+    // ── Device Reset (xác minh qua CCCD để đặt lại session) ──────────────────
+
+    @Transactional(readOnly = true)
+    public Map<String, String> initDeviceReset(String phone, String cccdNumber, String issueDateStr) {
+        otpRateLimitService.assertCanRequest(phone);
+
+        User user = userRepository.findByPhone(phone)
+                .orElseThrow(() -> new InvalidCredentialsException("Số điện thoại không tồn tại trong hệ thống"));
+
+        LocalDate issueDate;
+        try {
+            issueDate = LocalDate.parse(issueDateStr);
+        } catch (Exception e) {
+            throw new InvalidCredentialsException("Ngày cấp không hợp lệ (định dạng yyyy-MM-dd)");
+        }
+
+        // Xác minh thông tin CCCD từ KYC submission đã duyệt
+        var kycOpt = kycSubmissionRepository
+                .findTopByUserIdAndStatusOrderByCreatedAtDesc(user.getId(), KycStatus.APPROVED);
+        if (kycOpt.isEmpty()
+                || !kycOpt.get().getCccdNumber().equals(cccdNumber)
+                || !kycOpt.get().getIssueDate().equals(issueDate)) {
+            throw new InvalidCredentialsException("Thông tin CCCD không khớp hoặc tài khoản chưa xác minh danh tính");
+        }
+
+        String otp = mockMode ? MOCK_OTP
+                : String.format("%06d", new SecureRandom().nextInt(1_000_000));
+        redisTemplate.opsForValue().set(deviceResetOtpKey(phone), otp, DEVICE_RESET_OTP_TTL);
+
+        if (mockMode) {
+            log.info("[MOCK] Device reset OTP for phone={}: {}", phone, otp);
+        } else {
+            log.info("Device reset OTP sent for phone={}", phone);
+        }
+
+        Map<String, String> response = new HashMap<>();
+        response.put("message", "OTP đã được gửi đến số điện thoại đăng ký");
+        if (mockMode) response.put("otp", otp);
+        return response;
+    }
+
+    @Transactional
+    public Map<String, String> verifyDeviceReset(String phone, String otp) {
+        String stored = redisTemplate.opsForValue().get(deviceResetOtpKey(phone));
+        if (stored == null) {
+            throw new InvalidOtpException("OTP đã hết hạn hoặc chưa thực hiện yêu cầu đặt lại thiết bị");
+        }
+        if (!stored.equals(otp)) {
+            throw new InvalidOtpException("OTP không chính xác");
+        }
+
+        redisTemplate.delete(deviceResetOtpKey(phone));
+        // Xóa toàn bộ session, device binding và biometric token → buộc đăng nhập lại từ đầu
+        redisTemplate.delete(refreshTokenKey(phone));
+        redisTemplate.delete(biometricTokenKey(phone));
+        redisTemplate.delete(deviceSessionKey(phone));
+
+        log.info("Device reset verified for phone={} — all sessions revoked", phone);
+        return Map.of("message", "Đặt lại thiết bị thành công. Vui lòng đăng nhập lại bằng mật khẩu.");
     }
 
 }

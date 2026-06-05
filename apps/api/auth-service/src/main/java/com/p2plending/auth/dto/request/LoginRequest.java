@@ -13,4 +13,7 @@ public class LoginRequest {
 
     @NotBlank(message = "Password is required")
     private String password;
+
+    /** UUID thiết bị — dùng để nhận diện "thiết bị này đã đăng nhập trước đó" */
+    private String deviceKey;
 }

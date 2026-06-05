@@ -11,6 +11,9 @@ import com.p2plending.auth.dto.request.KycInitRequest;
 import com.p2plending.auth.dto.request.KycVerifyRequest;
 import com.p2plending.auth.dto.request.LoginRequest;
 import com.p2plending.auth.dto.request.OtpVerifyRequest;
+import com.p2plending.auth.dto.request.BiometricLoginRequest;
+import com.p2plending.auth.dto.request.DeviceResetInitRequest;
+import com.p2plending.auth.dto.request.DeviceResetVerifyRequest;
 import com.p2plending.auth.dto.request.RefreshTokenRequest;
 import com.p2plending.auth.dto.request.RegisterRequest;
 import com.p2plending.auth.dto.response.AuthResponse;
@@ -85,6 +88,47 @@ public class AuthController {
     @PostMapping("/refresh")
     public ResponseEntity<AuthResponse> refresh(@Valid @RequestBody RefreshTokenRequest request) {
         return ResponseEntity.ok(authService.refreshToken(request));
+    }
+
+    /**
+     * POST /api/auth/logout
+     * Đăng xuất server-side: xóa device_session và refresh_token khỏi Redis.
+     * Yêu cầu JWT hợp lệ.
+     */
+    @PostMapping("/logout")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<Void> logout(@AuthenticationPrincipal UserDetails userDetails) {
+        authService.serverLogout(userDetails.getUsername()); // username = phone
+        return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * POST /api/auth/biometric/login
+     * Đăng nhập bằng biometric token lưu trên thiết bị — không cần JWT, không giới hạn thời gian.
+     */
+    @PostMapping("/biometric/login")
+    public ResponseEntity<AuthResponse> biometricLogin(@Valid @RequestBody BiometricLoginRequest request) {
+        return ResponseEntity.ok(authService.biometricLogin(
+                request.getPhone(), request.getBiometricToken(), request.getDeviceKey()));
+    }
+
+    /**
+     * POST /api/auth/device-reset/init
+     * Xác minh danh tính qua CCCD để đặt lại session (dùng khi mất thiết bị cũ).
+     */
+    @PostMapping("/device-reset/init")
+    public ResponseEntity<Map<String, String>> deviceResetInit(@Valid @RequestBody DeviceResetInitRequest request) {
+        return ResponseEntity.ok(authService.initDeviceReset(
+                request.getPhone(), request.getCccdNumber(), request.getIssueDate()));
+    }
+
+    /**
+     * POST /api/auth/device-reset/verify
+     * Xác nhận OTP để vô hiệu hoá toàn bộ session cũ.
+     */
+    @PostMapping("/device-reset/verify")
+    public ResponseEntity<Map<String, String>> deviceResetVerify(@Valid @RequestBody DeviceResetVerifyRequest request) {
+        return ResponseEntity.ok(authService.verifyDeviceReset(request.getPhone(), request.getOtp()));
     }
 
     /**
