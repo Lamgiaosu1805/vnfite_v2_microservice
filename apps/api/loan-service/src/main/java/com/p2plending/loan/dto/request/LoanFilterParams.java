@@ -15,7 +15,7 @@ public class LoanFilterParams {
 
     private LoanStatus status;
     private String borrowerId;
-    /** Lọc theo tỉnh/thành phố — khớp chính xác với giá trị trong cột province. */
+    /** Lọc theo tỉnh/thành phố — hỗ trợ dữ liệu mới ở province và dữ liệu cũ còn trong currentAddress. */
     private String province;
     private BigDecimal minAmount;
     private BigDecimal maxAmount;
