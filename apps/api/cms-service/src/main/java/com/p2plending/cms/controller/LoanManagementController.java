@@ -26,9 +26,10 @@ public class LoanManagementController {
     public ResponseEntity<PagedResponse<LoanSummaryResponse>> getLoans(
             @RequestParam(required = false) String status,
             @RequestParam(required = false) String borrowerId,
+            @RequestParam(required = false) String province,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        return ResponseEntity.ok(loanService.getLoans(status, borrowerId, page, size));
+        return ResponseEntity.ok(loanService.getLoans(status, borrowerId, province, page, size));
     }
 
     /**

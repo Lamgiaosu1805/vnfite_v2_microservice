@@ -15,6 +15,8 @@ public class LoanFilterParams {
 
     private LoanStatus status;
     private String borrowerId;
+    /** Lọc theo tỉnh/thành phố — khớp chính xác với giá trị trong cột province. */
+    private String province;
     private BigDecimal minAmount;
     private BigDecimal maxAmount;
 
@@ -37,7 +39,7 @@ public class LoanFilterParams {
 
     /** Deterministic cache key for all filter combinations. */
     public String cacheKey() {
-        return "%s|%s|%s|%s|%d|%d|%s|%s"
-                .formatted(status, borrowerId, minAmount, maxAmount, page, size, sortBy, sortDir);
+        return "%s|%s|%s|%s|%s|%d|%d|%s|%s"
+                .formatted(status, borrowerId, province, minAmount, maxAmount, page, size, sortBy, sortDir);
     }
 }

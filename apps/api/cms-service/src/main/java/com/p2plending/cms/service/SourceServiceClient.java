@@ -118,11 +118,13 @@ public class SourceServiceClient {
         return parseLoan(exchangeForJson(url, HttpMethod.GET, null));
     }
 
-    public PagedResponse<LoanSummaryResponse> getLoans(String status, String borrowerId, int page, int size) {
+    public PagedResponse<LoanSummaryResponse> getLoans(String status, String borrowerId,
+                                                       String province, int page, int size) {
         String url = UriComponentsBuilder.fromHttpUrl(loanServiceUrl)
                 .path("/internal/loans")
-                .queryParamIfPresent("status", Optional.ofNullable(status))
+                .queryParamIfPresent("status",     Optional.ofNullable(status))
                 .queryParamIfPresent("borrowerId", Optional.ofNullable(borrowerId))
+                .queryParamIfPresent("province",   Optional.ofNullable(province))
                 .queryParam("page", page)
                 .queryParam("size", size)
                 .queryParam("sortBy", "createdAt")
@@ -241,6 +243,8 @@ public class SourceServiceClient {
                 .workplace(text(node, "workplace"))
                 .monthlyIncome(decimal(node, "monthlyIncome"))
                 .currentAddress(text(node, "currentAddress"))
+                .commune(text(node, "commune"))
+                .province(text(node, "province"))
                 .referredBy(text(node, "referredBy"))
                 .status(text(node, "status"))
                 .rejectionReason(text(node, "rejectionReason"))

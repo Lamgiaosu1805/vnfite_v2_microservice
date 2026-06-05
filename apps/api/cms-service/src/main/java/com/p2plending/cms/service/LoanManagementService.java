@@ -19,8 +19,9 @@ public class LoanManagementService {
     private final SourceServiceClient sourceServiceClient;
     private final LoanDecisionAuditLogService auditService;
 
-    public PagedResponse<LoanSummaryResponse> getLoans(String status, String borrowerId, int page, int size) {
-        return sourceServiceClient.getLoans(status, borrowerId, page, size);
+    public PagedResponse<LoanSummaryResponse> getLoans(String status, String borrowerId,
+                                                       String province, int page, int size) {
+        return sourceServiceClient.getLoans(status, borrowerId, province, page, size);
     }
 
     public JsonNode getAppraisalSuggestion(String loanId, boolean discouraged) {

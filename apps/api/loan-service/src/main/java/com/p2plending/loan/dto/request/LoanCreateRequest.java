@@ -72,4 +72,12 @@ public class LoanCreateRequest {
 
     @Size(max = 500)
     private String currentAddress;
+
+    /** Xã / Phường / Thị trấn — lưu riêng, không được tự ghép vào currentAddress. */
+    @Size(max = 200)
+    private String commune;
+
+    /** Tỉnh / Thành phố — theo NQ 202/2025/QH15. */
+    @Size(max = 100)
+    private String province;
 }

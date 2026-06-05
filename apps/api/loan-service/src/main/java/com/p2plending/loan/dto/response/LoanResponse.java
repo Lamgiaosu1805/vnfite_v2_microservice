@@ -41,6 +41,8 @@ public class LoanResponse {
     private String occupation;
     private String workplace;
     private String currentAddress;
+    private String commune;
+    private String province;
     private LoanStatus status;
     private BigDecimal fundedAmount;
     private BigDecimal remainingAmount;

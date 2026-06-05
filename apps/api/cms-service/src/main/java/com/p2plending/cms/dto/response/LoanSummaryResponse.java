@@ -32,6 +32,8 @@ public class LoanSummaryResponse {
     private String workplace;
     private BigDecimal monthlyIncome;
     private String currentAddress;
+    private String commune;
+    private String province;
     private String referredBy;
     private String status;
     private String rejectionReason;

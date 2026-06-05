@@ -22,6 +22,12 @@ public final class LoanSpecification {
             if (params.getBorrowerId() != null) {
                 predicates.add(cb.equal(root.get("borrowerId"), params.getBorrowerId()));
             }
+            if (params.getProvince() != null && !params.getProvince().isBlank()) {
+                // Tìm theo tỉnh — LIKE để bắt cả "TP. Hồ Chí Minh" và "Hồ Chí Minh"
+                predicates.add(cb.like(
+                        cb.lower(root.get("province")),
+                        "%" + params.getProvince().trim().toLowerCase() + "%"));
+            }
             if (params.getMinAmount() != null) {
                 predicates.add(cb.greaterThanOrEqualTo(root.get("amount"), params.getMinAmount()));
             }

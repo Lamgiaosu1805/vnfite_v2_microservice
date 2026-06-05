@@ -117,9 +117,17 @@ public class LoanRequest {
     @Column(length = 255)
     private String workplace;
 
-    /** Địa chỉ hiện tại chi tiết. */
+    /** Địa chỉ hiện tại — số nhà, tên đường/phố (phần tự do). */
     @Column(length = 500)
     private String currentAddress;
+
+    /** Xã / Phường / Thị trấn — lưu riêng để tra cứu. */
+    @Column(length = 200)
+    private String commune;
+
+    /** Tỉnh / Thành phố — theo NQ 202/2025/QH15 (34 đơn vị). Index để filter nhanh. */
+    @Column(length = 100)
+    private String province;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
