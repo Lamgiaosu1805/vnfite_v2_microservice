@@ -73,6 +73,20 @@ jwt:
 app:
   internal:
     secret: ${INTERNAL_API_SECRET:dev-internal-secret}
+  dpd:
+    # Số ngày quá hạn (DPD) → tự đánh khoản vay sang DEFAULTED
+    default-threshold: ${APP_DPD_THRESHOLD:30}
+    # Cron quét DPD hằng ngày (giờ Việt Nam)
+    cron: ${APP_DPD_CRON:0 0 1 * * *}
+  appraisal:
+    # Trần tỷ lệ trả nợ trên thu nhập (Payment-to-Income) khi tính số tiền đề xuất
+    pti-cap: ${APP_APPRAISAL_PTI_CAP:0.40}
+    # Lãi tham chiếu (%/năm) để ước lượng PTI khi chấm điểm (độc lập với hạng)
+    reference-rate: ${APP_APPRAISAL_REFERENCE_RATE:19.0}
+    # Điều 3 — phụ phí lĩnh vực không khuyến khích (+%/năm)
+    discouraged-surcharge: ${APP_APPRAISAL_DISCOURAGED_SURCHARGE:2.0}
+    # Trần lãi suất theo pháp luật / biểu QĐ-LSGV (%/năm)
+    legal-max-rate: ${APP_APPRAISAL_LEGAL_MAX_RATE:20.0}
 
 management:
   endpoints:

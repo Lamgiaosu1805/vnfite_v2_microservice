@@ -1,5 +1,6 @@
 package com.p2plending.cms.controller;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.p2plending.cms.dto.request.LoanActionRequest;
 import com.p2plending.cms.dto.response.LoanSummaryResponse;
 import com.p2plending.cms.dto.response.PagedResponse;
@@ -27,6 +28,25 @@ public class LoanManagementController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
         return ResponseEntity.ok(loanService.getLoans(status, borrowerId, page, size));
+    }
+
+    /**
+     * GET /cms/loans/{loanId}/appraisal-suggestion
+     * Gợi ý hỗ trợ thẩm định: điểm/hạng tín nhiệm, năng lực trả nợ, số tiền & lãi suất + phí
+     * đề xuất (biểu QĐ-LSGV), xem trước lịch trả nợ, checklist thẩm định thủ công.
+     * Cho phép cả OPS (thẩm định viên) xem.
+     */
+    @GetMapping("/{loanId}/appraisal-suggestion")
+    public ResponseEntity<JsonNode> getAppraisalSuggestion(
+            @PathVariable String loanId,
+            @RequestParam(defaultValue = "false") boolean discouraged) {
+        return ResponseEntity.ok(loanService.getAppraisalSuggestion(loanId, discouraged));
+    }
+
+    /** GET /cms/loans/{loanId}/repayments — lịch trả nợ để theo dõi DPD. */
+    @GetMapping("/{loanId}/repayments")
+    public ResponseEntity<JsonNode> getRepaymentSchedule(@PathVariable String loanId) {
+        return ResponseEntity.ok(loanService.getRepaymentSchedule(loanId));
     }
 
     /**

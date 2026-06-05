@@ -1,6 +1,7 @@
 package com.p2plending.loan.domain.entity;
 
 import com.p2plending.loan.domain.enums.ProductCategory;
+import com.p2plending.loan.domain.enums.RepaymentMethod;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
@@ -35,6 +36,23 @@ public class LoanProduct {
     @Builder.Default
     private ProductCategory category = ProductCategory.INDIVIDUAL;
 
+    /**
+     * Nhóm sản phẩm (1–4) theo biểu lãi suất gọi vốn (QĐ-LSGV). Quyết định biểu
+     * lãi suất & phí giải ngân áp dụng theo hạng tín nhiệm. Mặc định nhóm 2 (tiêu dùng).
+     */
+    @Column(name = "product_group", nullable = false)
+    @Builder.Default
+    private int productGroup = 2;
+
+    /**
+     * Sản phẩm ràng buộc theo nghề/đối tượng (bác sĩ, giáo viên, sinh viên...).
+     * Khi true: nghề do sản phẩm xác định, thẩm định cần bằng chứng đúng đối tượng
+     * thay vì nhập nghề tự do.
+     */
+    @Column(name = "profession_bound", nullable = false)
+    @Builder.Default
+    private boolean professionBound = false;
+
     @Column(columnDefinition = "TEXT")
     private String description;
 
@@ -63,6 +81,12 @@ public class LoanProduct {
     @Column(nullable = false, precision = 5, scale = 2)
     @Builder.Default
     private BigDecimal lateFeeRate = new BigDecimal("150.00");
+
+    /** Kiểu trả nợ áp dụng khi sinh lịch trả nợ lúc khoản vay FUNDED. */
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 40)
+    @Builder.Default
+    private RepaymentMethod repaymentMethod = RepaymentMethod.EMI_MONTHLY;
 
     @Column(nullable = false)
     @Builder.Default

@@ -61,6 +61,7 @@ public class LoanService {
     private final LoanOfferMapper       loanOfferMapper;
     private final KafkaProducerService  kafkaProducerService;
     private final LoanProductService    loanProductService;
+    private final RepaymentService      repaymentService;
 
     // ── Create ────────────────────────────────────────────────────
 
@@ -194,8 +195,9 @@ public class LoanService {
         if (loan.isFullyFunded()) {
             loan.setStatus(LoanStatus.FUNDED);
             loanRequestRepository.save(loan);
+            repaymentService.generateSchedule(loan);
             kafkaProducerService.publishLoanFunded(loan);
-            log.info("Loan {} fully funded — publishing loan.funded event", loanId);
+            log.info("Loan {} fully funded — schedule generated, publishing loan.funded event", loanId);
         } else {
             loanRequestRepository.save(loan);
         }

@@ -20,6 +20,9 @@ public interface LoanRequestRepository
 
     List<LoanRequest> findByStatus(LoanStatus status);
 
+    /** Khoản đang trong vòng đời trả nợ — dùng cho job DPD. */
+    List<LoanRequest> findByStatusInAndIsDeletedFalse(Collection<LoanStatus> statuses);
+
     /** Kiểm tra borrower có đang có khoản vay ở một trong các trạng thái chặn không. */
     boolean existsByBorrowerIdAndStatusInAndIsDeletedFalse(
             String borrowerId, Collection<LoanStatus> statuses);

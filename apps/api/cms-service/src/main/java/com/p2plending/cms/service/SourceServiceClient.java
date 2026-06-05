@@ -91,6 +91,25 @@ public class SourceServiceClient {
         return exchangeForJson(url, HttpMethod.GET, null);
     }
 
+    /** Gợi ý hỗ trợ thẩm định — passthrough JSON nguyên bản từ loan-service. */
+    public JsonNode getAppraisalSuggestion(String loanId, boolean discouraged) {
+        String url = UriComponentsBuilder.fromHttpUrl(loanServiceUrl)
+                .path("/internal/loans/{loanId}/appraisal-suggestion")
+                .queryParam("discouraged", discouraged)
+                .buildAndExpand(loanId)
+                .toUriString();
+        return exchangeForJson(url, HttpMethod.GET, null);
+    }
+
+    /** Lịch trả nợ của một khoản — passthrough JSON nguyên bản từ loan-service. */
+    public JsonNode getRepaymentSchedule(String loanId) {
+        String url = UriComponentsBuilder.fromHttpUrl(loanServiceUrl)
+                .path("/internal/loans/{loanId}/repayments")
+                .buildAndExpand(loanId)
+                .toUriString();
+        return exchangeForJson(url, HttpMethod.GET, null);
+    }
+
     public PagedResponse<LoanSummaryResponse> getLoans(String status, String borrowerId, int page, int size) {
         String url = UriComponentsBuilder.fromHttpUrl(loanServiceUrl)
                 .path("/internal/loans")

@@ -2,10 +2,15 @@ package com.p2plending.loan.controller;
 
 import com.p2plending.loan.dto.request.InternalLoanReviewRequest;
 import com.p2plending.loan.dto.request.LoanFilterParams;
+import com.p2plending.loan.dto.request.RecordPaymentRequest;
+import com.p2plending.loan.dto.response.AppraisalSuggestionResponse;
 import com.p2plending.loan.dto.response.InternalLoanStatsResponse;
 import com.p2plending.loan.dto.response.LoanResponse;
 import com.p2plending.loan.dto.response.PagedResponse;
+import com.p2plending.loan.dto.response.RepaymentScheduleResponse;
+import com.p2plending.loan.service.AppraisalSuggestionService;
 import com.p2plending.loan.service.LoanService;
+import com.p2plending.loan.service.RepaymentService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
@@ -16,6 +21,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDate;
+import java.util.List;
 
 @RestController
 @RequestMapping("/internal/loans")
@@ -25,6 +31,8 @@ public class InternalLoanController {
     private static final String INTERNAL_SECRET_HEADER = "X-Internal-Secret";
 
     private final LoanService loanService;
+    private final RepaymentService repaymentService;
+    private final AppraisalSuggestionService appraisalSuggestionService;
 
     @Value("${app.internal.secret:dev-internal-secret}")
     private String internalSecret;
@@ -54,6 +62,19 @@ public class InternalLoanController {
         return ResponseEntity.ok(loanService.getLoanStats(from));
     }
 
+    /**
+     * Gợi ý hỗ trợ thẩm định: điểm rủi ro, năng lực trả nợ, số tiền & lãi suất đề xuất,
+     * xem trước lịch trả nợ, và checklist thẩm định thủ công. Decision-support, không tự quyết.
+     */
+    @GetMapping("/{loanId}/appraisal-suggestion")
+    public ResponseEntity<AppraisalSuggestionResponse> getAppraisalSuggestion(
+            @RequestHeader(INTERNAL_SECRET_HEADER) String secret,
+            @PathVariable String loanId,
+            @RequestParam(defaultValue = "false") boolean discouraged) {
+        requireInternalSecret(secret);
+        return ResponseEntity.ok(appraisalSuggestionService.suggest(loanId, discouraged));
+    }
+
     @PutMapping("/{loanId}/approve")
     public ResponseEntity<LoanResponse> approveLoan(
             @RequestHeader(INTERNAL_SECRET_HEADER) String secret,
@@ -70,6 +91,27 @@ public class InternalLoanController {
             @Valid @RequestBody InternalLoanReviewRequest request) {
         requireInternalSecret(secret);
         return ResponseEntity.ok(loanService.reviewLoan(loanId, "REJECT", null, request.getReason(), request.getReviewedBy()));
+    }
+
+    // ─── Repayment schedule & DPD ───────────────────────────────────────────────
+
+    /** Lịch trả nợ của một khoản (CMS hiển thị + theo dõi DPD). */
+    @GetMapping("/{loanId}/repayments")
+    public ResponseEntity<List<RepaymentScheduleResponse>> getRepaymentSchedule(
+            @RequestHeader(INTERNAL_SECRET_HEADER) String secret,
+            @PathVariable String loanId) {
+        requireInternalSecret(secret);
+        return ResponseEntity.ok(repaymentService.getSchedule(loanId));
+    }
+
+    /** Ghi nhận một lần trả nợ (admin nhập tay hoặc webhook đối tác thu hộ). */
+    @PostMapping("/{loanId}/repayments")
+    public ResponseEntity<List<RepaymentScheduleResponse>> recordPayment(
+            @RequestHeader(INTERNAL_SECRET_HEADER) String secret,
+            @PathVariable String loanId,
+            @Valid @RequestBody RecordPaymentRequest request) {
+        requireInternalSecret(secret);
+        return ResponseEntity.ok(repaymentService.recordPayment(loanId, request));
     }
 
     private void requireInternalSecret(String secret) {

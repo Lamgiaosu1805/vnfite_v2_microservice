@@ -1,5 +1,6 @@
 package com.p2plending.cms.service;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.p2plending.cms.dto.request.LoanActionRequest;
 import com.p2plending.cms.dto.response.LoanSummaryResponse;
 import com.p2plending.cms.dto.response.PagedResponse;
@@ -15,6 +16,14 @@ public class LoanManagementService {
 
     public PagedResponse<LoanSummaryResponse> getLoans(String status, String borrowerId, int page, int size) {
         return sourceServiceClient.getLoans(status, borrowerId, page, size);
+    }
+
+    public JsonNode getAppraisalSuggestion(String loanId, boolean discouraged) {
+        return sourceServiceClient.getAppraisalSuggestion(loanId, discouraged);
+    }
+
+    public JsonNode getRepaymentSchedule(String loanId) {
+        return sourceServiceClient.getRepaymentSchedule(loanId);
     }
 
     public LoanSummaryResponse approve(String loanId, LoanActionRequest req, CmsPrincipal reviewer) {
