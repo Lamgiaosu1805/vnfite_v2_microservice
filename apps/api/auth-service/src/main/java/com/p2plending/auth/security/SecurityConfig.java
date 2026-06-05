@@ -46,7 +46,8 @@ public class SecurityConfig {
                                 "/api/auth/forgot-password/check",
                                 "/api/auth/forgot-password",
                                 "/api/auth/forgot-password/verify-otp",
-                                "/api/auth/forgot-password/reset"
+                                "/api/auth/forgot-password/reset",
+                                "/api/auth/address/**"
                         ).permitAll()
                         // Ops
                         .requestMatchers("/actuator/health", "/actuator/info").permitAll()
