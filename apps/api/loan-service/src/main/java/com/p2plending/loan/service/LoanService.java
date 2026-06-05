@@ -238,19 +238,29 @@ public class LoanService {
 
     private void applyLoanReview(LoanReviewedEvent event) {
         loanRequestRepository.findById(event.getLoanId()).ifPresentOrElse(loan -> {
-            if (loan.getStatus() != LoanStatus.PENDING_REVIEW) {
-                log.warn("loan.reviewed received but loan {} is not PENDING_REVIEW (status={})",
+            // Ban lãnh đạo duyệt được từ khoản đang chờ thẩm định (duyệt thẳng) hoặc đã có đề xuất.
+            Set<LoanStatus> reviewable = EnumSet.of(LoanStatus.PENDING_REVIEW, LoanStatus.PENDING_APPROVAL);
+            if (!reviewable.contains(loan.getStatus())) {
+                log.warn("loan.reviewed received but loan {} is not reviewable (status={})",
                         event.getLoanId(), loan.getStatus());
                 return;
             }
             loan.setReviewedAt(event.getReviewedAt() != null ? event.getReviewedAt() : LocalDateTime.now());
 
             if ("APPROVE".equalsIgnoreCase(event.getAction())) {
-                loan.setInterestRate(event.getInterestRate());
+                // Số tiền cuối: ưu tiên số thẩm định viên đã đề xuất (nếu có).
+                if (loan.getProposedAmount() != null) {
+                    loan.setAmount(loan.getProposedAmount());
+                }
+                // Lãi suất cuối: ưu tiên lãi ban lãnh đạo nhập khi duyệt, fallback lãi đề xuất.
+                BigDecimal finalRate = event.getInterestRate() != null
+                        ? event.getInterestRate()
+                        : loan.getProposedInterestRate();
+                loan.setInterestRate(finalRate);
                 loan.setStatus(LoanStatus.AWAITING_BORROWER_APPROVAL);
                 loanRequestRepository.save(loan);
-                log.info("Loan {} approved by {} — awaiting borrower confirmation (proposed rate={}%)",
-                        event.getLoanId(), event.getReviewedBy(), event.getInterestRate());
+                log.info("Loan {} approved by {} — awaiting borrower confirmation (final amount={}, rate={}%)",
+                        event.getLoanId(), event.getReviewedBy(), loan.getAmount(), finalRate);
             } else {
                 loan.setRejectionReason(event.getRejectionReason());
                 loan.setStatus(LoanStatus.REJECTED);
@@ -258,6 +268,44 @@ public class LoanService {
                 log.info("Loan {} rejected by {}: {}", event.getLoanId(), event.getReviewedBy(), event.getRejectionReason());
             }
         }, () -> log.warn("loan.reviewed received for unknown loan={}", event.getLoanId()));
+    }
+
+    /**
+     * Cấp 1 — Thẩm định viên đề xuất số tiền & lãi suất trình ban lãnh đạo.
+     * PENDING_REVIEW → PENDING_APPROVAL.
+     */
+    @Transactional
+    @Caching(evict = {
+        @CacheEvict(value = CacheConfig.CACHE_LOANS,      allEntries = true),
+        @CacheEvict(value = CacheConfig.CACHE_LOAN_BY_ID, key = "#loanId")
+    })
+    public LoanResponse proposeLoan(String loanId, BigDecimal proposedAmount, BigDecimal proposedInterestRate,
+                                    String note, String proposedBy) {
+        LoanRequest loan = findLoanOrThrow(loanId);
+
+        if (loan.getStatus() != LoanStatus.PENDING_REVIEW) {
+            throw new InvalidLoanStateException(
+                    "Khoản gọi vốn %s không ở trạng thái chờ thẩm định (status: %s)"
+                    .formatted(loan.getLoanCode(), loan.getStatus()));
+        }
+        if (proposedAmount == null || proposedAmount.signum() <= 0) {
+            throw new InvalidLoanStateException("Số tiền đề xuất phải lớn hơn 0");
+        }
+        if (proposedInterestRate == null || proposedInterestRate.signum() <= 0) {
+            throw new InvalidLoanStateException("Lãi suất đề xuất phải lớn hơn 0");
+        }
+
+        loan.setProposedAmount(proposedAmount);
+        loan.setProposedInterestRate(proposedInterestRate);
+        loan.setProposedBy(proposedBy);
+        loan.setProposedAt(LocalDateTime.now());
+        loan.setAppraisalNote(note);
+        loan.setStatus(LoanStatus.PENDING_APPROVAL);
+        loanRequestRepository.save(loan);
+
+        log.info("Loan {} proposed by {} — amount={}, rate={}% → awaiting leadership approval",
+                loanId, proposedBy, proposedAmount, proposedInterestRate);
+        return buildResponse(loan, false);
     }
 
     // ── Borrower confirmation ─────────────────────────────────────

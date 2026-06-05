@@ -45,6 +45,8 @@ public class LoanProductService {
                 .code(p.getCode())
                 .name(p.getName())
                 .category(p.getCategory())
+                .productGroup(p.getProductGroup())
+                .professionBound(p.isProfessionBound())
                 .description(p.getDescription())
                 .minAmount(p.getMinAmount())
                 .maxAmount(p.getMaxAmount())

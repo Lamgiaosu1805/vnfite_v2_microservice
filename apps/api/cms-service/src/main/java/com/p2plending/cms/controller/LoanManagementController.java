@@ -2,6 +2,7 @@ package com.p2plending.cms.controller;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.p2plending.cms.dto.request.LoanActionRequest;
+import com.p2plending.cms.dto.request.LoanProposeRequest;
 import com.p2plending.cms.dto.response.LoanSummaryResponse;
 import com.p2plending.cms.dto.response.PagedResponse;
 import com.p2plending.cms.security.CmsPrincipal;
@@ -50,8 +51,21 @@ public class LoanManagementController {
     }
 
     /**
+     * PUT /cms/loans/{loanId}/propose
+     * Cấp 1 — thẩm định viên (OPS) đề xuất số tiền + lãi suất → trình ban lãnh đạo.
+     * PENDING_REVIEW → PENDING_APPROVAL.
+     */
+    @PutMapping("/{loanId}/propose")
+    public ResponseEntity<LoanSummaryResponse> propose(
+            @PathVariable String loanId,
+            @Valid @RequestBody LoanProposeRequest req,
+            @AuthenticationPrincipal CmsPrincipal proposer) {
+        return ResponseEntity.ok(loanService.propose(loanId, req, proposer));
+    }
+
+    /**
      * PUT /cms/loans/{loanId}/approve
-     * CMS admin approves a PENDING_REVIEW loan and sets the interest rate.
+     * Cấp 2 — ban lãnh đạo (ADMIN) duyệt, có thể sửa lãi suất trước khi duyệt.
      * Publishes loan.reviewed (APPROVE) → loan-service sets ACTIVE and triggers matching.
      */
     @PutMapping("/{loanId}/approve")

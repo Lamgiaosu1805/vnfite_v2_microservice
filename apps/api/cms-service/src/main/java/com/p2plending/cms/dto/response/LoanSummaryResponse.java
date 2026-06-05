@@ -21,6 +21,11 @@ public class LoanSummaryResponse {
     private String productName;
     private BigDecimal amount;
     private BigDecimal interestRate;
+    private BigDecimal proposedAmount;
+    private BigDecimal proposedInterestRate;
+    private String proposedBy;
+    private LocalDateTime proposedAt;
+    private String appraisalNote;
     private Integer termMonths;
     private String purpose;
     private String occupation;

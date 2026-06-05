@@ -1,5 +1,6 @@
 package com.p2plending.loan.controller;
 
+import com.p2plending.loan.dto.request.InternalLoanProposeRequest;
 import com.p2plending.loan.dto.request.InternalLoanReviewRequest;
 import com.p2plending.loan.dto.request.LoanFilterParams;
 import com.p2plending.loan.dto.request.RecordPaymentRequest;
@@ -75,6 +76,19 @@ public class InternalLoanController {
         return ResponseEntity.ok(appraisalSuggestionService.suggest(loanId, discouraged));
     }
 
+    /** Cấp 1 — thẩm định viên đề xuất số tiền + lãi suất trình ban lãnh đạo. */
+    @PutMapping("/{loanId}/propose")
+    public ResponseEntity<LoanResponse> proposeLoan(
+            @RequestHeader(INTERNAL_SECRET_HEADER) String secret,
+            @PathVariable String loanId,
+            @Valid @RequestBody InternalLoanProposeRequest request) {
+        requireInternalSecret(secret);
+        return ResponseEntity.ok(loanService.proposeLoan(loanId,
+                request.getProposedAmount(), request.getProposedInterestRate(),
+                request.getNote(), request.getProposedBy()));
+    }
+
+    /** Cấp 2 — ban lãnh đạo duyệt (có thể sửa lãi suất trước khi duyệt). */
     @PutMapping("/{loanId}/approve")
     public ResponseEntity<LoanResponse> approveLoan(
             @RequestHeader(INTERNAL_SECRET_HEADER) String secret,

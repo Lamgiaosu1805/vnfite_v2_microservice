@@ -16,6 +16,10 @@ public class LoanProductResponse {
     private String code;
     private String name;
     private ProductCategory category;
+    /** Nhóm sản phẩm (1–4) theo biểu lãi suất QĐ-LSGV. */
+    private int productGroup;
+    /** Sản phẩm ràng buộc theo nghề/đối tượng — app ẩn ô nghề, yêu cầu bằng chứng đối tượng. */
+    private boolean professionBound;
     private String description;
     private BigDecimal minAmount;
     private BigDecimal maxAmount;

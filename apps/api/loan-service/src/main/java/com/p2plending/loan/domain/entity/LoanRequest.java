@@ -43,9 +43,31 @@ public class LoanRequest {
     @Column(nullable = false, precision = 15, scale = 2)
     private BigDecimal amount;
 
-    /** Set by CMS during approval — null until approved. */
+    /** Set khi ban lãnh đạo phê duyệt — null cho tới khi duyệt. */
     @Column(precision = 5, scale = 2)
     private BigDecimal interestRate;
+
+    // ── Đề xuất của thẩm định viên (cấp 1) trình ban lãnh đạo (cấp 2) ──
+
+    /** Số tiền thẩm định viên đề xuất có thể gọi vốn (có thể khác số yêu cầu). */
+    @Column(name = "proposed_amount", precision = 15, scale = 2)
+    private BigDecimal proposedAmount;
+
+    /** Lãi suất thẩm định viên đề xuất (%/năm) — lãnh đạo có thể sửa khi duyệt. */
+    @Column(name = "proposed_interest_rate", precision = 5, scale = 2)
+    private BigDecimal proposedInterestRate;
+
+    /** Username thẩm định viên đã trình. */
+    @Column(name = "proposed_by", length = 100)
+    private String proposedBy;
+
+    /** Thời điểm trình ban lãnh đạo. */
+    @Column(name = "proposed_at")
+    private LocalDateTime proposedAt;
+
+    /** Ghi chú thẩm định / cơ sở đề xuất. */
+    @Column(name = "appraisal_note", length = 1000)
+    private String appraisalNote;
 
     @Column(nullable = false)
     private Integer termMonths;

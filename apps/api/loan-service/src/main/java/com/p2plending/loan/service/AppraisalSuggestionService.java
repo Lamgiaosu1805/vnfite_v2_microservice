@@ -77,6 +77,7 @@ public class AppraisalSuggestionService {
                 ? null
                 : loanProductService.findProductById(loan.getProductId()).orElse(null);
         int group = product != null ? product.getProductGroup() : 2;
+        boolean professionBound = product != null && product.isProfessionBound();
 
         BigDecimal requested = loan.getAmount();
         int term = loan.getTermMonths();
@@ -89,7 +90,7 @@ public class AppraisalSuggestionService {
 
         // 2) Chấm điểm expert-prior → hạng tín nhiệm A1..C3
         List<ScoreFactor> factors = new ArrayList<>();
-        int score = computeScore(loan, requested, term, income, hasIncome, scoringPti, factors);
+        int score = computeScore(loan, requested, term, income, hasIncome, scoringPti, professionBound, factors);
         CreditBand band = bandOf(score);
 
         // 3) Tra biểu lãi suất & phí theo (nhóm × hạng)
@@ -131,7 +132,7 @@ public class AppraisalSuggestionService {
         // 8) Khuyến nghị + cảnh báo + checklist
         RecommendedDecision decision = decide(band, available, hasIncome, requestedPti, amountResult.amount);
         List<String> warnings = buildWarnings(loan, group, band, available, discouragedSector,
-                hasIncome, requestedPti, amountResult, requested, term);
+                hasIncome, requestedPti, amountResult, requested, term, professionBound);
         List<ChecklistItem> checklist = buildChecklist(loan, product);
 
         String rateNote = available
@@ -181,7 +182,8 @@ public class AppraisalSuggestionService {
     // ── Chấm điểm ──────────────────────────────────────────────────
 
     private int computeScore(LoanRequest loan, BigDecimal requested, int term, BigDecimal income,
-                             boolean hasIncome, BigDecimal scoringPti, List<ScoreFactor> factors) {
+                             boolean hasIncome, BigDecimal scoringPti, boolean professionBound,
+                             List<ScoreFactor> factors) {
         int score = 50; // baseline trung lập
 
         // (1) PTI — trọng số lớn nhất
@@ -237,12 +239,15 @@ public class AppraisalSuggestionService {
         score += refPts;
         factors.add(factor("REFERENCES", "Người tham chiếu", refImpact, refPts, refDetail));
 
-        // (5) Đầy đủ hồ sơ nghề nghiệp
-        boolean profileComplete = StringUtils.hasText(loan.getOccupation()) && StringUtils.hasText(loan.getWorkplace());
+        // (5) Đầy đủ hồ sơ nghề nghiệp (sản phẩm ràng buộc nghề → nghề do sản phẩm xác định)
+        boolean occupationKnown = professionBound || StringUtils.hasText(loan.getOccupation());
+        boolean profileComplete = occupationKnown && StringUtils.hasText(loan.getWorkplace());
         int profPts = profileComplete ? 5 : -3;
+        String profDetail = profileComplete
+                ? (professionBound ? "Nghề theo sản phẩm & có nơi làm việc." : "Có nghề nghiệp & nơi làm việc.")
+                : "Thiếu nghề nghiệp hoặc nơi làm việc.";
         factors.add(factor("PROFILE", "Hồ sơ nghề nghiệp",
-                profileComplete ? "POSITIVE" : "NEGATIVE", profPts,
-                profileComplete ? "Có nghề nghiệp & nơi làm việc." : "Thiếu nghề nghiệp hoặc nơi làm việc."));
+                profileComplete ? "POSITIVE" : "NEGATIVE", profPts, profDetail));
         score += profPts;
 
         // (6) Người giới thiệu
@@ -328,7 +333,8 @@ public class AppraisalSuggestionService {
 
     private List<String> buildWarnings(LoanRequest loan, int group, CreditBand band, boolean available,
                                        boolean discouraged, boolean hasIncome, BigDecimal requestedPti,
-                                       AmountResult amountResult, BigDecimal requested, int term) {
+                                       AmountResult amountResult, BigDecimal requested, int term,
+                                       boolean professionBound) {
         List<String> w = new ArrayList<>();
         if (!available) {
             w.add("Hạng tín nhiệm " + band + " không được cấp dịch vụ gọi vốn cho nhóm sản phẩm "
@@ -343,8 +349,10 @@ public class AppraisalSuggestionService {
         if (requestedPti != null && requestedPti.compareTo(new BigDecimal("0.50")) > 0) {
             w.add("Tỷ lệ trả nợ/thu nhập vượt 50% — vượt khả năng chi trả ở số tiền yêu cầu.");
         }
-        if (!StringUtils.hasText(loan.getOccupation()) || !StringUtils.hasText(loan.getWorkplace())) {
-            w.add("Thiếu thông tin nghề nghiệp hoặc nơi làm việc.");
+        boolean occupationKnown = professionBound || StringUtils.hasText(loan.getOccupation());
+        if (!occupationKnown || !StringUtils.hasText(loan.getWorkplace())) {
+            w.add(professionBound ? "Thiếu thông tin nơi làm việc."
+                    : "Thiếu thông tin nghề nghiệp hoặc nơi làm việc.");
         }
         if (loan.getProductId() == null) {
             w.add("Khoản gọi vốn chưa gắn sản phẩm — áp dụng biểu nhóm 2 (mặc định).");

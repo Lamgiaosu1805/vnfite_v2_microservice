@@ -123,6 +123,20 @@ public class SourceServiceClient {
         return parseLoanPage(exchangeForJson(url, HttpMethod.GET, null));
     }
 
+    public LoanSummaryResponse proposeLoan(String loanId, BigDecimal proposedAmount,
+                                           BigDecimal proposedInterestRate, String note, String proposedBy) {
+        String url = UriComponentsBuilder.fromHttpUrl(loanServiceUrl)
+                .path("/internal/loans/{loanId}/propose")
+                .buildAndExpand(loanId)
+                .toUriString();
+        var body = new java.util.LinkedHashMap<String, Object>();
+        body.put("proposedAmount", proposedAmount);
+        body.put("proposedInterestRate", proposedInterestRate);
+        body.put("note", note);
+        body.put("proposedBy", proposedBy);
+        return parseLoan(exchangeForJson(url, HttpMethod.PUT, body));
+    }
+
     public LoanSummaryResponse approveLoan(String loanId, LoanActionRequest request, String reviewedBy) {
         return reviewLoan(loanId, "approve", request, reviewedBy);
     }
@@ -208,6 +222,11 @@ public class SourceServiceClient {
                 .productName(text(node, "productName"))
                 .amount(decimal(node, "amount"))
                 .interestRate(decimal(node, "interestRate"))
+                .proposedAmount(decimal(node, "proposedAmount"))
+                .proposedInterestRate(decimal(node, "proposedInterestRate"))
+                .proposedBy(text(node, "proposedBy"))
+                .proposedAt(dateTime(node, "proposedAt"))
+                .appraisalNote(text(node, "appraisalNote"))
                 .termMonths(node.hasNonNull("termMonths") ? node.get("termMonths").asInt() : null)
                 .purpose(text(node, "purpose"))
                 .occupation(text(node, "occupation"))

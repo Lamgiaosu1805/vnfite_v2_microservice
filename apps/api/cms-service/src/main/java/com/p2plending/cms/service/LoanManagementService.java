@@ -2,6 +2,7 @@ package com.p2plending.cms.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.p2plending.cms.dto.request.LoanActionRequest;
+import com.p2plending.cms.dto.request.LoanProposeRequest;
 import com.p2plending.cms.dto.response.LoanSummaryResponse;
 import com.p2plending.cms.dto.response.PagedResponse;
 import com.p2plending.cms.security.CmsPrincipal;
@@ -24,6 +25,11 @@ public class LoanManagementService {
 
     public JsonNode getRepaymentSchedule(String loanId) {
         return sourceServiceClient.getRepaymentSchedule(loanId);
+    }
+
+    public LoanSummaryResponse propose(String loanId, LoanProposeRequest req, CmsPrincipal proposer) {
+        return sourceServiceClient.proposeLoan(loanId, req.getProposedAmount(), req.getProposedInterestRate(),
+                req.getNote(), proposer != null ? proposer.username() : null);
     }
 
     public LoanSummaryResponse approve(String loanId, LoanActionRequest req, CmsPrincipal reviewer) {
