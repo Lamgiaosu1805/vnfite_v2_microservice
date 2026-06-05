@@ -101,6 +101,16 @@ Password validation must match the frontend contract:
 
 Vietnamese phone numbers and CCCD numbers must be validated consistently with the mobile app.
 
+## Mobile OTP UI Rules
+
+All OTP screens in the VNFITE mobile app must use the same OTP entry pattern:
+
+- Display OTP as separate digit boxes, one box per number.
+- Do not use one long plain text input for OTP entry.
+- Prefer the shared mobile OTP component/pattern when available.
+- Keep OTP input numeric-only, fixed length, and visually consistent across registration, password reset, eKYC, biometric enable/disable, and device reset flows.
+- OTPs must remain scoped to their feature/purpose and must not be reusable across unrelated flows.
+
 ## eKYC Flow
 
 Authenticated eKYC has two steps:
