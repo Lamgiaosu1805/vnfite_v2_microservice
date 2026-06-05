@@ -28,8 +28,11 @@ public class OtpService {
 
     private final StringRedisTemplate redisTemplate;
     private final ObjectMapper        objectMapper;
+    private final OtpRateLimitService otpRateLimitService;
 
     public String generateAndStore(PendingRegistration pending) {
+        otpRateLimitService.assertCanRequest(pending.getPhone());
+
         String otp = mockMode ? MOCK_OTP : String.format("%06d", new SecureRandom().nextInt(1_000_000));
         pending.setOtp(otp);
 

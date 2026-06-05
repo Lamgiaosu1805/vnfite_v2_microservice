@@ -49,6 +49,13 @@ public class GlobalExceptionHandler {
         return build(HttpStatus.UNPROCESSABLE_ENTITY, ex.getMessage());
     }
 
+    @ExceptionHandler(OtpRateLimitException.class)
+    public ResponseEntity<ApiResponse<Void>> handleOtpRateLimit(OtpRateLimitException ex) {
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .header("Retry-After", String.valueOf(ex.getRetryAfterSeconds()))
+                .body(ApiResponse.error(RequestIdHolder.get(), HttpStatus.TOO_MANY_REQUESTS.value(), ex.getMessage()));
+    }
+
     @ExceptionHandler(DuplicateCccdException.class)
     public ResponseEntity<ApiResponse<Void>> handleDuplicateCccd(DuplicateCccdException ex) {
         return build(HttpStatus.CONFLICT, ex.getMessage());

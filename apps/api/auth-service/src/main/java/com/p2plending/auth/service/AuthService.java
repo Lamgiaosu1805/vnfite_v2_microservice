@@ -67,6 +67,7 @@ public class AuthService {
     private final StringRedisTemplate   redisTemplate;
     private final JwtProperties         jwtProperties;
     private final OtpService            otpService;
+    private final OtpRateLimitService   otpRateLimitService;
 
     // ── Check phone ───────────────────────────────────────────────
 
@@ -176,6 +177,8 @@ public class AuthService {
 
     @Transactional(readOnly = true)
     public Map<String, String> initBiometric(String userId, String phone) {
+        otpRateLimitService.assertCanRequest(phone);
+
         if (!userRepository.existsById(userId)) {
             throw new ResourceNotFoundException("User not found");
         }
@@ -215,6 +218,8 @@ public class AuthService {
 
     @Transactional(readOnly = true)
     public Map<String, String> initBiometricDisable(String userId, String phone) {
+        otpRateLimitService.assertCanRequest(phone);
+
         if (!userRepository.existsById(userId)) {
             throw new ResourceNotFoundException("User not found");
         }

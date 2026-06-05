@@ -40,11 +40,14 @@ public class ChangePasswordService {
     private final PasswordEncoder     passwordEncoder;
     private final StringRedisTemplate redisTemplate;
     private final ObjectMapper        objectMapper;
+    private final OtpRateLimitService otpRateLimitService;
 
     // ── Bước 1: xác minh mật khẩu hiện tại → gửi OTP ────────────────────
 
     @Transactional(readOnly = true)
     public Map<String, String> initChange(String userId, String phone, ChangePasswordInitRequest request) {
+        otpRateLimitService.assertCanRequest(phone);
+
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 

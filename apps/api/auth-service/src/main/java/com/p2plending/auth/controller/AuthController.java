@@ -224,8 +224,9 @@ public class AuthController {
             @Valid @ModelAttribute KycInitRequest request,
             @AuthenticationPrincipal UserDetails principal
     ) {
-        String userId = authService.getUserIdByPhone(principal.getUsername());
-        return ResponseEntity.ok(kycService.initKyc(userId, request));
+        String phone = principal.getUsername();
+        String userId = authService.getUserIdByPhone(phone);
+        return ResponseEntity.ok(kycService.initKyc(userId, phone, request));
     }
 
     /**

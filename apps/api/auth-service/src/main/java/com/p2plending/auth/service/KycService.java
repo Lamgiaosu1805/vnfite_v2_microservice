@@ -44,11 +44,14 @@ public class KycService {
     private final KafkaProducerService     kafkaProducerService;
     private final StringRedisTemplate      redisTemplate;
     private final ObjectMapper             objectMapper;
+    private final OtpRateLimitService      otpRateLimitService;
 
     // ── Bước 1: kiểm tra CCCD, upload ảnh mock, gửi OTP ─────────────
 
     @Transactional(readOnly = true)
-    public Map<String, String> initKyc(String userId, KycInitRequest request) {
+    public Map<String, String> initKyc(String userId, String phone, KycInitRequest request) {
+        otpRateLimitService.assertCanRequest(phone);
+
         if (kycSubmissionRepository.existsByCccdNumber(request.getCccdNumber())) {
             throw new DuplicateCccdException("Số CCCD đã được đăng ký trong hệ thống");
         }

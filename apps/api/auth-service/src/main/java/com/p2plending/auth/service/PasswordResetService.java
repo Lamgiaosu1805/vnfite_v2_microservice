@@ -46,6 +46,7 @@ public class PasswordResetService {
     private final KycSubmissionRepository kycSubmissionRepository;
     private final PasswordEncoder         passwordEncoder;
     private final StringRedisTemplate     redisTemplate;
+    private final OtpRateLimitService     otpRateLimitService;
 
     // ── Bước 0: kiểm tra phone → frontend biết có cần hiện ô CCCD không ──
 
@@ -61,6 +62,8 @@ public class PasswordResetService {
 
     @Transactional(readOnly = true)
     public Map<String, String> initReset(ForgotPasswordRequest request) {
+        otpRateLimitService.assertCanRequest(request.getPhone());
+
         Optional<User> userOpt = userRepository.findByPhone(request.getPhone());
 
         if (userOpt.isEmpty()) {
