@@ -71,6 +71,8 @@ jwt:
   public-key: ${RSA_PUBLIC_KEY:}
 
 app:
+  otp:
+    mock: ${APP_OTP_MOCK:true}
   internal:
     secret: ${INTERNAL_API_SECRET:dev-internal-secret}
   dpd:

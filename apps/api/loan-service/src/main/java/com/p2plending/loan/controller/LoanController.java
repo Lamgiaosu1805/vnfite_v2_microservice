@@ -5,10 +5,13 @@ import com.p2plending.loan.dto.request.LoanCancelRequest;
 import com.p2plending.loan.dto.request.LoanCreateRequest;
 import com.p2plending.loan.dto.request.LoanFilterParams;
 import com.p2plending.loan.dto.request.LoanOfferCreateRequest;
+import com.p2plending.loan.dto.request.LoanOtpVerifyRequest;
 import com.p2plending.loan.dto.response.LoanOfferResponse;
+import com.p2plending.loan.dto.response.LoanOtpInitResponse;
 import com.p2plending.loan.dto.response.LoanResponse;
 import com.p2plending.loan.dto.response.PagedResponse;
 import com.p2plending.loan.security.AuthenticatedUser;
+import com.p2plending.loan.service.LoanOtpService;
 import com.p2plending.loan.service.LoanService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -24,6 +27,37 @@ import org.springframework.web.bind.annotation.*;
 public class LoanController {
 
     private final LoanService loanService;
+    private final LoanOtpService loanOtpService;
+
+    /**
+     * POST /api/loans/request/init
+     * Bước 1: Validate + lưu payload vào Redis, gửi OTP xác nhận đến SĐT của borrower.
+     * TTL: 10 phút. Mock mode (app.otp.mock=true): trả về otp trong response.
+     */
+    @PostMapping("/request/init")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<LoanOtpInitResponse> initLoan(
+            @Valid @RequestBody LoanCreateRequest request,
+            @AuthenticationPrincipal AuthenticatedUser principal
+    ) {
+        return ResponseEntity.ok(loanOtpService.init(request, principal.userId()));
+    }
+
+    /**
+     * POST /api/loans/request/confirm
+     * Bước 2: Verify OTP, xóa Redis key, tạo khoản gọi vốn.
+     * Publish "loan.submitted" Kafka event cho CMS underwriting queue.
+     */
+    @PostMapping("/request/confirm")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<LoanResponse> confirmLoan(
+            @Valid @RequestBody LoanOtpVerifyRequest request,
+            @AuthenticationPrincipal AuthenticatedUser principal
+    ) {
+        return ResponseEntity
+                .status(HttpStatus.CREATED)
+                .body(loanOtpService.confirm(request.getOtp(), principal.userId()));
+    }
 
     /**
      * POST /api/loans/request
