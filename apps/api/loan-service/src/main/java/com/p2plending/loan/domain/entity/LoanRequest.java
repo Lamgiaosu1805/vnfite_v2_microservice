@@ -142,6 +142,10 @@ public class LoanRequest {
     /** Thời điểm CMS duyệt hoặc từ chối. */
     private LocalDateTime reviewedAt;
 
+    /** Username ban lãnh đạo đã phê duyệt hoặc từ chối. */
+    @Column(name = "reviewed_by", length = 100)
+    private String reviewedBy;
+
     @Column(nullable = false)
     @Builder.Default
     private boolean isDeleted = false;

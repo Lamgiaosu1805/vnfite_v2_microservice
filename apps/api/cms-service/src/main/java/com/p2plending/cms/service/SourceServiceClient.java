@@ -110,6 +110,14 @@ public class SourceServiceClient {
         return exchangeForJson(url, HttpMethod.GET, null);
     }
 
+    public LoanSummaryResponse getLoanById(String loanId) {
+        String url = UriComponentsBuilder.fromHttpUrl(loanServiceUrl)
+                .path("/internal/loans/{loanId}")
+                .buildAndExpand(loanId)
+                .toUriString();
+        return parseLoan(exchangeForJson(url, HttpMethod.GET, null));
+    }
+
     public PagedResponse<LoanSummaryResponse> getLoans(String status, String borrowerId, int page, int size) {
         String url = UriComponentsBuilder.fromHttpUrl(loanServiceUrl)
                 .path("/internal/loans")
@@ -237,6 +245,7 @@ public class SourceServiceClient {
                 .status(text(node, "status"))
                 .rejectionReason(text(node, "rejectionReason"))
                 .reviewedAt(dateTime(node, "reviewedAt"))
+                .reviewedBy(text(node, "reviewedBy"))
                 .createdAt(dateTime(node, "createdAt"))
                 .build();
     }

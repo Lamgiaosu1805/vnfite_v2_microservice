@@ -246,6 +246,7 @@ public class LoanService {
                 return;
             }
             loan.setReviewedAt(event.getReviewedAt() != null ? event.getReviewedAt() : LocalDateTime.now());
+            loan.setReviewedBy(event.getReviewedBy());
 
             if ("APPROVE".equalsIgnoreCase(event.getAction())) {
                 // Số tiền cuối: ưu tiên số thẩm định viên đã đề xuất (nếu có).

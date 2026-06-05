@@ -47,6 +47,7 @@ public class LoanResponse {
     private String rejectionReason;
     private String borrowerCancelledReason;
     private LocalDateTime reviewedAt;
+    private String reviewedBy;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private List<LoanOfferResponse> offers;
