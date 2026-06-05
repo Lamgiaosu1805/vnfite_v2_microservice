@@ -88,6 +88,60 @@ public class AuthController {
     }
 
     /**
+     * POST /api/auth/biometric/init
+     * Gửi OTP để xác nhận bật đăng nhập sinh trắc học trên app.
+     */
+    @PostMapping("/biometric/init")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<Map<String, String>> biometricInit(
+            @AuthenticationPrincipal UserDetails userDetails) {
+        String phone = userDetails.getUsername();
+        String userId = authService.getUserIdByPhone(phone);
+        return ResponseEntity.ok(authService.initBiometric(userId, phone));
+    }
+
+    /**
+     * POST /api/auth/biometric/verify
+     * Xác thực OTP trước khi app lưu trạng thái bật sinh trắc học cục bộ.
+     */
+    @PostMapping("/biometric/verify")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<Map<String, String>> biometricVerify(
+            @AuthenticationPrincipal UserDetails userDetails,
+            @Valid @RequestBody KycVerifyRequest request) {
+        String phone = userDetails.getUsername();
+        String userId = authService.getUserIdByPhone(phone);
+        return ResponseEntity.ok(authService.verifyBiometricEnable(userId, request));
+    }
+
+    /**
+     * POST /api/auth/biometric/disable/init
+     * Gửi OTP để xác nhận tắt đăng nhập sinh trắc học trên app.
+     */
+    @PostMapping("/biometric/disable/init")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<Map<String, String>> biometricDisableInit(
+            @AuthenticationPrincipal UserDetails userDetails) {
+        String phone = userDetails.getUsername();
+        String userId = authService.getUserIdByPhone(phone);
+        return ResponseEntity.ok(authService.initBiometricDisable(userId, phone));
+    }
+
+    /**
+     * POST /api/auth/biometric/disable/verify
+     * Xác thực OTP trước khi app tắt trạng thái sinh trắc học cục bộ.
+     */
+    @PostMapping("/biometric/disable/verify")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<Map<String, String>> biometricDisableVerify(
+            @AuthenticationPrincipal UserDetails userDetails,
+            @Valid @RequestBody KycVerifyRequest request) {
+        String phone = userDetails.getUsername();
+        String userId = authService.getUserIdByPhone(phone);
+        return ResponseEntity.ok(authService.verifyBiometricDisable(userId, request));
+    }
+
+    /**
      * POST /api/auth/forgot-password/check
      * Bước 0: Kiểm tra phone → trả về { "requiresCccd": boolean }.
      * Frontend dùng để quyết định hiện/ẩn ô nhập CCCD trước khi gửi OTP.

@@ -9,6 +9,7 @@ import com.p2plending.auth.domain.repository.KycDocumentRepository;
 import com.p2plending.auth.domain.repository.KycSubmissionRepository;
 import com.p2plending.auth.domain.repository.UserRepository;
 import com.p2plending.auth.dto.request.KycSubmitRequest;
+import com.p2plending.auth.dto.request.KycVerifyRequest;
 import com.p2plending.auth.dto.request.LoginRequest;
 import com.p2plending.auth.dto.request.OtpVerifyRequest;
 import com.p2plending.auth.dto.request.RefreshTokenRequest;
@@ -17,6 +18,7 @@ import com.p2plending.auth.dto.response.AuthResponse;
 import com.p2plending.auth.dto.response.KycDocumentResponse;
 import com.p2plending.auth.dto.response.RegisterInitResponse;
 import com.p2plending.auth.exception.InvalidCredentialsException;
+import com.p2plending.auth.exception.InvalidOtpException;
 import com.p2plending.auth.exception.InvalidReferrerException;
 import com.p2plending.auth.exception.InvalidTokenException;
 import com.p2plending.auth.exception.ResourceNotFoundException;
@@ -35,7 +37,10 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.time.Duration;
+import java.security.SecureRandom;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -43,6 +48,10 @@ import java.util.List;
 public class AuthService {
 
     private static final String REFRESH_TOKEN_PREFIX = "refresh_token:";
+    private static final String BIOMETRIC_ENABLE_OTP_PREFIX = "biometric_enable:";
+    private static final String BIOMETRIC_DISABLE_OTP_PREFIX = "biometric_disable:";
+    private static final Duration BIOMETRIC_OTP_TTL = Duration.ofMinutes(5);
+    private static final String MOCK_OTP = "000000";
 
     @Value("${app.otp.mock:false}")
     private boolean mockMode;
@@ -163,6 +172,86 @@ public class AuthService {
         return issueTokenPair(user);
     }
 
+    // ── Biometric enable OTP ─────────────────────────────────────
+
+    @Transactional(readOnly = true)
+    public Map<String, String> initBiometric(String userId, String phone) {
+        if (!userRepository.existsById(userId)) {
+            throw new ResourceNotFoundException("User not found");
+        }
+
+        String otp = mockMode ? MOCK_OTP
+                : String.format("%06d", new SecureRandom().nextInt(1_000_000));
+
+        redisTemplate.opsForValue().set(biometricEnableOtpKey(userId), otp, BIOMETRIC_OTP_TTL);
+
+        if (mockMode) {
+            log.info("[MOCK] Biometric enable OTP for userId={}: {}", userId, otp);
+        } else {
+            // TODO: gửi OTP qua SMS / Zalo ZNS
+            log.info("Biometric enable OTP sent for userId={} phone={}", userId, phone);
+        }
+
+        Map<String, String> response = new HashMap<>();
+        response.put("message", "OTP đã được gửi đến số điện thoại của bạn");
+        if (mockMode) response.put("otp", otp);
+        return response;
+    }
+
+    @Transactional
+    public Map<String, String> verifyBiometricEnable(String userId, KycVerifyRequest request) {
+        String stored = redisTemplate.opsForValue().get(biometricEnableOtpKey(userId));
+        if (stored == null) {
+            throw new InvalidOtpException("OTP đã hết hạn hoặc chưa thực hiện yêu cầu bật sinh trắc học");
+        }
+        if (!stored.equals(request.getOtp())) {
+            throw new InvalidOtpException("OTP không chính xác");
+        }
+
+        redisTemplate.delete(biometricEnableOtpKey(userId));
+        log.info("Biometric enable OTP verified for userId={}", userId);
+        return Map.of("message", "Xác thực OTP thành công");
+    }
+
+    @Transactional(readOnly = true)
+    public Map<String, String> initBiometricDisable(String userId, String phone) {
+        if (!userRepository.existsById(userId)) {
+            throw new ResourceNotFoundException("User not found");
+        }
+
+        String otp = mockMode ? MOCK_OTP
+                : String.format("%06d", new SecureRandom().nextInt(1_000_000));
+
+        redisTemplate.opsForValue().set(biometricDisableOtpKey(userId), otp, BIOMETRIC_OTP_TTL);
+
+        if (mockMode) {
+            log.info("[MOCK] Biometric disable OTP for userId={}: {}", userId, otp);
+        } else {
+            // TODO: gửi OTP qua SMS / Zalo ZNS
+            log.info("Biometric disable OTP sent for userId={} phone={}", userId, phone);
+        }
+
+        Map<String, String> response = new HashMap<>();
+        response.put("message", "OTP đã được gửi đến số điện thoại của bạn");
+        if (mockMode) response.put("otp", otp);
+        return response;
+    }
+
+    @Transactional
+    public Map<String, String> verifyBiometricDisable(String userId, KycVerifyRequest request) {
+        String stored = redisTemplate.opsForValue().get(biometricDisableOtpKey(userId));
+        if (stored == null) {
+            throw new InvalidOtpException("OTP đã hết hạn hoặc chưa thực hiện yêu cầu tắt sinh trắc học");
+        }
+        if (!stored.equals(request.getOtp())) {
+            throw new InvalidOtpException("OTP không chính xác");
+        }
+
+        redisTemplate.delete(biometricDisableOtpKey(userId));
+        log.info("Biometric disable OTP verified for userId={}", userId);
+        return Map.of("message", "Xác thực OTP thành công");
+    }
+
     // ── KYC submit ────────────────────────────────────────────────
 
     @Transactional
@@ -232,6 +321,14 @@ public class AuthService {
 
     private String refreshTokenKey(String phone) {
         return REFRESH_TOKEN_PREFIX + phone;
+    }
+
+    private String biometricEnableOtpKey(String userId) {
+        return BIOMETRIC_ENABLE_OTP_PREFIX + userId;
+    }
+
+    private String biometricDisableOtpKey(String userId) {
+        return BIOMETRIC_DISABLE_OTP_PREFIX + userId;
     }
 
 }
