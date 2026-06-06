@@ -11,7 +11,7 @@ import java.math.BigDecimal;
 
 /**
  * Dữ liệu khoản gọi vốn đang chờ xác nhận OTP — lưu tạm trong Redis.
- * Key: pending_loan:{borrowerId}, TTL: 10 phút.
+ * Key có namespace, dạng `<env>:loan-service:pending_loan:{borrowerId}`, TTL: 10 phút.
  */
 @Data
 @Builder

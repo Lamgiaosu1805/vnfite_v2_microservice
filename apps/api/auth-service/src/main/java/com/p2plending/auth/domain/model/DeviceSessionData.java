@@ -6,7 +6,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 /**
- * Dữ liệu phiên thiết bị lưu trong Redis key device_session:{phone}.
+ * Dữ liệu phiên thiết bị lưu trong Redis key có namespace, dạng `<env>:auth-service:device_session:{phone}`.
  * Không có TTL — tồn tại cho đến khi user đăng xuất hoặc device reset.
  */
 @Data

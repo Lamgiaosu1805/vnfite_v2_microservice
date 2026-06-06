@@ -26,7 +26,10 @@ public class CacheConfig {
     public static final String CACHE_DASHBOARD_CHART = "dashboard_chart";
 
     @Bean
-    public RedisCacheManager cacheManager(RedisConnectionFactory factory) {
+    public RedisCacheManager cacheManager(
+            RedisConnectionFactory factory,
+            RedisNamespaceProperties redisNamespaceProperties
+    ) {
         // Fix 1: JavaTimeModule để serialize LocalDate/LocalDateTime
         // Fix 2: activateDefaultTyping giống chuẩn GenericJackson2JsonRedisSerializer
         //        → lưu @class vào JSON, tránh ClassCastException khi đọc ra
@@ -44,7 +47,8 @@ public class CacheConfig {
         RedisCacheConfiguration base = RedisCacheConfiguration.defaultCacheConfig()
                 .serializeKeysWith(RedisSerializationContext.SerializationPair.fromSerializer(new StringRedisSerializer()))
                 .serializeValuesWith(RedisSerializationContext.SerializationPair.fromSerializer(json))
-                .disableCachingNullValues();
+                .disableCachingNullValues()
+                .computePrefixWith(redisNamespaceProperties::cachePrefix);
 
         return RedisCacheManager.builder(factory)
                 .cacheDefaults(base)

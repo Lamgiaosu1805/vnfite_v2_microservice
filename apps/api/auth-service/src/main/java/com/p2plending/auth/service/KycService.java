@@ -2,6 +2,7 @@ package com.p2plending.auth.service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.p2plending.auth.config.RedisNamespaceProperties;
 import com.p2plending.auth.domain.entity.KycSubmission;
 import com.p2plending.auth.domain.entity.User;
 import com.p2plending.auth.domain.enums.KycStatus;
@@ -45,6 +46,7 @@ public class KycService {
     private final StringRedisTemplate      redisTemplate;
     private final ObjectMapper             objectMapper;
     private final OtpRateLimitService      otpRateLimitService;
+    private final RedisNamespaceProperties redisNamespaceProperties;
 
     // ── Bước 1: kiểm tra CCCD, upload ảnh mock, gửi OTP ─────────────
 
@@ -152,7 +154,7 @@ public class KycService {
     // ── Helper ───────────────────────────────────────────────────────
 
     private String pendingKey(String userId) {
-        return KYC_PENDING_PREFIX + userId;
+        return redisNamespaceProperties.qualify(KYC_PENDING_PREFIX + userId);
     }
 
     private KycSubmissionResponse toResponse(KycSubmission s) {

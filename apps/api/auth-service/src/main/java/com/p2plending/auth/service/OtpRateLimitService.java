@@ -1,5 +1,6 @@
 package com.p2plending.auth.service;
 
+import com.p2plending.auth.config.RedisNamespaceProperties;
 import com.p2plending.auth.exception.OtpRateLimitException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -20,6 +21,7 @@ public class OtpRateLimitService {
     private static final Duration COOLDOWN = Duration.ofSeconds(60);
 
     private final StringRedisTemplate redisTemplate;
+    private final RedisNamespaceProperties redisNamespaceProperties;
 
     public void assertCanRequest(String phone) {
         if (!StringUtils.hasText(phone)) return;
@@ -49,10 +51,10 @@ public class OtpRateLimitService {
     }
 
     private String requestCountKey(String phone) {
-        return REQUEST_COUNT_PREFIX + phone;
+        return redisNamespaceProperties.qualify(REQUEST_COUNT_PREFIX + phone);
     }
 
     private String cooldownKey(String phone) {
-        return COOLDOWN_PREFIX + phone;
+        return redisNamespaceProperties.qualify(COOLDOWN_PREFIX + phone);
     }
 }

@@ -2,6 +2,7 @@ package com.p2plending.loan.service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.p2plending.loan.config.RedisNamespaceProperties;
 import com.p2plending.loan.dto.request.LoanCreateRequest;
 import com.p2plending.loan.dto.request.PendingLoanData;
 import com.p2plending.loan.dto.response.LoanOtpInitResponse;
@@ -37,6 +38,7 @@ public class LoanOtpService {
     private final StringRedisTemplate redisTemplate;
     private final ObjectMapper objectMapper;
     private final LoanService loanService;
+    private final RedisNamespaceProperties redisNamespaceProperties;
 
     @Value("${app.otp.mock:true}")
     private boolean mockOtp;
@@ -71,7 +73,7 @@ public class LoanOtpService {
 
         try {
             String json = objectMapper.writeValueAsString(pending);
-            redisTemplate.opsForValue().set(KEY_PREFIX + borrowerId, json, TTL);
+            redisTemplate.opsForValue().set(pendingKey(borrowerId), json, TTL);
         } catch (JsonProcessingException e) {
             log.error("Failed to serialize pending loan data for borrower {}", borrowerId, e);
             throw new InvalidLoanStateException("Không thể lưu thông tin tạm thời. Vui lòng thử lại.");
@@ -95,7 +97,7 @@ public class LoanOtpService {
     // ── Confirm ───────────────────────────────────────────────────────────────
 
     public LoanResponse confirm(String otp, String borrowerId) {
-        String key = KEY_PREFIX + borrowerId;
+        String key = pendingKey(borrowerId);
         String json = redisTemplate.opsForValue().get(key);
 
         if (json == null) {
@@ -153,5 +155,9 @@ public class LoanOtpService {
     private String generateOtp() {
         SecureRandom random = new SecureRandom();
         return String.format("%06d", random.nextInt(1_000_000));
+    }
+
+    private String pendingKey(String borrowerId) {
+        return redisNamespaceProperties.qualify(KEY_PREFIX + borrowerId);
     }
 }

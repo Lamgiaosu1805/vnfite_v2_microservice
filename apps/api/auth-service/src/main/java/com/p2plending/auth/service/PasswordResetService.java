@@ -1,5 +1,6 @@
 package com.p2plending.auth.service;
 
+import com.p2plending.auth.config.RedisNamespaceProperties;
 import com.p2plending.auth.domain.entity.User;
 import com.p2plending.auth.domain.enums.KycStatus;
 import com.p2plending.auth.domain.repository.KycSubmissionRepository;
@@ -47,6 +48,7 @@ public class PasswordResetService {
     private final PasswordEncoder         passwordEncoder;
     private final StringRedisTemplate     redisTemplate;
     private final OtpRateLimitService     otpRateLimitService;
+    private final RedisNamespaceProperties redisNamespaceProperties;
 
     // ── Bước 0: kiểm tra phone → frontend biết có cần hiện ô CCCD không ──
 
@@ -134,7 +136,7 @@ public class PasswordResetService {
 
         // Vô hiệu hoá resetToken và buộc đăng xuất tất cả phiên
         redisTemplate.delete(resetTokenKey(request.getResetToken()));
-        redisTemplate.delete(REFRESH_TOKEN_PREFIX + phone);
+        redisTemplate.delete(refreshTokenKey(phone));
 
         log.info("Password reset successful for userId={}", user.getId());
     }
@@ -142,11 +144,15 @@ public class PasswordResetService {
     // ── Helpers ───────────────────────────────────────────────────────────
 
     private String otpKey(String phone) {
-        return OTP_PREFIX + phone;
+        return redisNamespaceProperties.qualify(OTP_PREFIX + phone);
     }
 
     private String resetTokenKey(String token) {
-        return RESET_TOKEN_PREFIX + token;
+        return redisNamespaceProperties.qualify(RESET_TOKEN_PREFIX + token);
+    }
+
+    private String refreshTokenKey(String phone) {
+        return redisNamespaceProperties.qualify(REFRESH_TOKEN_PREFIX + phone);
     }
 
     private Map<String, String> genericOkResponse(String otp) {

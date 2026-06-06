@@ -2,6 +2,7 @@ package com.p2plending.auth.service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.p2plending.auth.config.RedisNamespaceProperties;
 import com.p2plending.auth.domain.model.PendingRegistration;
 import com.p2plending.auth.exception.InvalidOtpException;
 import lombok.RequiredArgsConstructor;
@@ -29,6 +30,7 @@ public class OtpService {
     private final StringRedisTemplate redisTemplate;
     private final ObjectMapper        objectMapper;
     private final OtpRateLimitService otpRateLimitService;
+    private final RedisNamespaceProperties redisNamespaceProperties;
 
     public String generateAndStore(PendingRegistration pending) {
         otpRateLimitService.assertCanRequest(pending.getPhone());
@@ -82,6 +84,6 @@ public class OtpService {
     }
 
     private String pendingKey(String phone) {
-        return PENDING_REG_PREFIX + phone;
+        return redisNamespaceProperties.qualify(PENDING_REG_PREFIX + phone);
     }
 }

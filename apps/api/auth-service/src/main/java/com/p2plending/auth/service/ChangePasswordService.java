@@ -2,6 +2,7 @@ package com.p2plending.auth.service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.p2plending.auth.config.RedisNamespaceProperties;
 import com.p2plending.auth.domain.entity.User;
 import com.p2plending.auth.domain.model.PendingPasswordChange;
 import com.p2plending.auth.domain.repository.UserRepository;
@@ -41,6 +42,7 @@ public class ChangePasswordService {
     private final StringRedisTemplate redisTemplate;
     private final ObjectMapper        objectMapper;
     private final OtpRateLimitService otpRateLimitService;
+    private final RedisNamespaceProperties redisNamespaceProperties;
 
     // ── Bước 1: xác minh mật khẩu hiện tại → gửi OTP ────────────────────
 
@@ -115,12 +117,16 @@ public class ChangePasswordService {
 
         redisTemplate.delete(pendingKey(userId));
         // Buộc đăng xuất tất cả phiên để đảm bảo an toàn
-        redisTemplate.delete(REFRESH_TOKEN_PREFIX + phone);
+        redisTemplate.delete(refreshTokenKey(phone));
 
         log.info("Password changed successfully for userId={}", userId);
     }
 
     private String pendingKey(String userId) {
-        return PENDING_PREFIX + userId;
+        return redisNamespaceProperties.qualify(PENDING_PREFIX + userId);
+    }
+
+    private String refreshTokenKey(String phone) {
+        return redisNamespaceProperties.qualify(REFRESH_TOKEN_PREFIX + phone);
     }
 }

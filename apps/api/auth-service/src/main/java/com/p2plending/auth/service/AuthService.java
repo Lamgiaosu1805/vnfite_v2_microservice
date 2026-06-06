@@ -1,6 +1,7 @@
 package com.p2plending.auth.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.p2plending.auth.config.RedisNamespaceProperties;
 import com.p2plending.auth.config.JwtProperties;
 import com.p2plending.auth.domain.entity.KycDocument;
 import com.p2plending.auth.domain.entity.User;
@@ -86,6 +87,7 @@ public class AuthService {
     private final OtpRateLimitService           otpRateLimitService;
     private final ObjectMapper                  objectMapper;
     private final DeviceLoginHistoryRepository  deviceLoginHistoryRepository;
+    private final RedisNamespaceProperties      redisNamespaceProperties;
 
     // ── Check phone ───────────────────────────────────────────────
 
@@ -392,27 +394,27 @@ public class AuthService {
     }
 
     private String refreshTokenKey(String phone) {
-        return REFRESH_TOKEN_PREFIX + phone;
+        return redisNamespaceProperties.qualify(REFRESH_TOKEN_PREFIX + phone);
     }
 
     private String biometricEnableOtpKey(String userId) {
-        return BIOMETRIC_ENABLE_OTP_PREFIX + userId;
+        return redisNamespaceProperties.qualify(BIOMETRIC_ENABLE_OTP_PREFIX + userId);
     }
 
     private String biometricDisableOtpKey(String userId) {
-        return BIOMETRIC_DISABLE_OTP_PREFIX + userId;
+        return redisNamespaceProperties.qualify(BIOMETRIC_DISABLE_OTP_PREFIX + userId);
     }
 
     private String biometricTokenKey(String phone) {
-        return BIOMETRIC_TOKEN_PREFIX + phone;
+        return redisNamespaceProperties.qualify(BIOMETRIC_TOKEN_PREFIX + phone);
     }
 
     private String deviceSessionKey(String phone) {
-        return DEVICE_SESSION_PREFIX + phone;
+        return redisNamespaceProperties.qualify(DEVICE_SESSION_PREFIX + phone);
     }
 
     private String deviceResetOtpKey(String phone) {
-        return DEVICE_RESET_OTP_PREFIX + phone;
+        return redisNamespaceProperties.qualify(DEVICE_RESET_OTP_PREFIX + phone);
     }
 
     /**

@@ -24,7 +24,11 @@ public class CacheConfig {
     public static final String CACHE_LOAN_BY_ID = "loan_by_id";
 
     @Bean
-    public RedisCacheManager cacheManager(RedisConnectionFactory factory, ObjectMapper objectMapper) {
+    public RedisCacheManager cacheManager(
+            RedisConnectionFactory factory,
+            ObjectMapper objectMapper,
+            RedisNamespaceProperties redisNamespaceProperties
+    ) {
         PolymorphicTypeValidator ptv = BasicPolymorphicTypeValidator.builder()
                 .allowIfSubType(Object.class)
                 .build();
@@ -37,7 +41,8 @@ public class CacheConfig {
                         .fromSerializer(new StringRedisSerializer()))
                 .serializeValuesWith(RedisSerializationContext.SerializationPair
                         .fromSerializer(jsonSerializer))
-                .disableCachingNullValues();
+                .disableCachingNullValues()
+                .computePrefixWith(redisNamespaceProperties::cachePrefix);
 
         return RedisCacheManager.builder(factory)
                 .cacheDefaults(defaults)

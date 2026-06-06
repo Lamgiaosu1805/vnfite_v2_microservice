@@ -73,6 +73,8 @@ jwt:
 app:
   otp:
     mock: ${APP_OTP_MOCK:true}
+  redis:
+    namespace: ${APP_REDIS_NAMESPACE:${SPRING_PROFILES_ACTIVE:dev}}:loan-service
   internal:
     secret: ${INTERNAL_API_SECRET:dev-internal-secret}
   dpd:

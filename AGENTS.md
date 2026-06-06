@@ -58,6 +58,13 @@ Current important internal flows:
 - Protected data includes `loan_requests`, `loan_offers`, `users`, KYC, payment, transaction, audit, notification, and customer/admin operational records.
 - UAT/test deploys can run Flyway repeatable seeds; seeds must be idempotent and data-preserving, usually via `INSERT ... ON DUPLICATE KEY UPDATE`.
 
+## Redis Namespace Rules
+
+- Test/UAT and live currently share one Redis server, so Redis keys must always be namespaced by environment.
+- Use `APP_REDIS_NAMESPACE` as the preferred environment namespace root. If it is absent, fall back to `SPRING_PROFILES_ACTIVE`, then append the service name in code, for example `uat:auth-service:*` and `prod:loan-service:*`.
+- Apply the namespace to both Spring cache keys and any Redis keys written manually for OTP, refresh tokens, sessions, rate limiting, pending KYC, pending loan creation, or similar flows.
+- Utility scripts that clear Redis keys must target namespaced patterns only, so one environment never deletes another environment's cache by mistake.
+
 ## Codex Working Rules
 
 - Prefer the existing Spring Boot service structure and conventions.

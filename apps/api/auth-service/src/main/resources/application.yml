@@ -40,6 +40,11 @@ spring:
           max-idle: 8
           min-idle: 2
 
+  cache:
+    type: redis
+    redis:
+      time-to-live: 300000
+
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
     producer:
@@ -83,6 +88,8 @@ management:
 app:
   otp:
     mock: false
+  redis:
+    namespace: ${APP_REDIS_NAMESPACE:${SPRING_PROFILES_ACTIVE:dev}}:auth-service
   internal:
     secret: ${INTERNAL_API_SECRET:dev-internal-secret}
 

@@ -16,7 +16,7 @@ public class AddressService {
 
     /**
      * Trả về danh sách tên xã/phường/thị trấn theo tỉnh/thành.
-     * Kết quả được cache in-memory — dữ liệu tĩnh, không cần invalidate.
+     * Kết quả được cache trên Redis theo namespace môi trường — dữ liệu tĩnh, không cần invalidate thường xuyên.
      */
     @Cacheable(value = "wards", key = "#provinceCode")
     @Transactional(readOnly = true)
