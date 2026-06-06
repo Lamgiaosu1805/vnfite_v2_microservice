@@ -7,11 +7,13 @@ import com.p2plending.cms.dto.request.LoanActionRequest;
 import com.p2plending.cms.dto.response.LoanSummaryResponse;
 import com.p2plending.cms.dto.response.PagedResponse;
 import com.p2plending.cms.dto.response.UserSummaryResponse;
+import com.p2plending.cms.exception.SourceServiceException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
 
@@ -177,13 +179,7 @@ public class SourceServiceClient {
         headers.setContentType(MediaType.APPLICATION_JSON);
         HttpEntity<Object> entity = new HttpEntity<>(body, headers);
 
-        ResponseEntity<String> response = restTemplate.exchange(url, method, entity, String.class);
-        try {
-            return objectMapper.readTree(response.getBody());
-        } catch (Exception ex) {
-            log.error("Failed to parse source service response from {}", url, ex);
-            throw new IllegalStateException("Không đọc được phản hồi từ service nguồn");
-        }
+        return exchangeAndParse(url, () -> restTemplate.exchange(url, method, entity, String.class));
     }
 
     private JsonNode exchangeForJson(URI uri, HttpMethod method, Object body) {
@@ -192,13 +188,47 @@ public class SourceServiceClient {
         headers.setContentType(MediaType.APPLICATION_JSON);
         HttpEntity<Object> entity = new HttpEntity<>(body, headers);
 
-        ResponseEntity<String> response = restTemplate.exchange(uri, method, entity, String.class);
+        return exchangeAndParse(uri.toString(), () -> restTemplate.exchange(uri, method, entity, String.class));
+    }
+
+    private JsonNode exchangeAndParse(String source, java.util.function.Supplier<ResponseEntity<String>> request) {
+        ResponseEntity<String> response;
         try {
+            response = request.get();
             return objectMapper.readTree(response.getBody());
+        } catch (RestClientResponseException ex) {
+            String message = sourceErrorMessage(ex);
+            log.warn("Source service error from {}: status={}, message={}", source, ex.getStatusCode(), message);
+            throw new SourceServiceException(ex.getStatusCode(), message);
         } catch (Exception ex) {
-            log.error("Failed to parse source service response from {}", uri, ex);
+            log.error("Failed to parse source service response from {}", source, ex);
             throw new IllegalStateException("Không đọc được phản hồi từ service nguồn");
         }
+    }
+
+    private String sourceErrorMessage(RestClientResponseException ex) {
+        String body = ex.getResponseBodyAsString();
+        if (body == null || body.isBlank()) {
+            return "Service nguồn trả lỗi %s".formatted(ex.getStatusCode().value());
+        }
+        try {
+            JsonNode node = objectMapper.readTree(body);
+            if (node.hasNonNull("details") && node.get("details").isArray() && node.get("details").size() > 0) {
+                return joinDetails(node.get("details"));
+            }
+            if (node.hasNonNull("message")) return node.get("message").asText();
+            if (node.hasNonNull("detail")) return node.get("detail").asText();
+            if (node.hasNonNull("error")) return node.get("error").asText();
+        } catch (Exception ignored) {
+            // Fall through to the raw body below.
+        }
+        return body.length() > 500 ? body.substring(0, 500) : body;
+    }
+
+    private String joinDetails(JsonNode details) {
+        List<String> messages = new ArrayList<>();
+        details.forEach(item -> messages.add(item.asText()));
+        return String.join("; ", messages);
     }
 
     private PagedResponse<UserSummaryResponse> parseUserPage(JsonNode pageNode) {

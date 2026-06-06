@@ -20,6 +20,8 @@ Nền tảng cho vay ngang hàng (P2P Lending) dạng microservices, xây dựng
 
 **Mobile OTP UI:** Tất cả màn nhập OTP trên app mobile VNFITE phải dùng cùng một kiểu giao diện: mỗi số OTP là một ô riêng. Không dùng một ô input dài nhập liền toàn bộ OTP. Ưu tiên component/pattern OTP dùng chung nếu có. Áp dụng cho đăng ký, quên mật khẩu, eKYC, bật/tắt sinh trắc học, reset thiết bị và mọi luồng OTP mới. Input OTP phải numeric-only, fixed length, đồng nhất về khoảng cách/kích thước/trạng thái lỗi. OTP phải được scope theo tính năng/purpose, không dùng OTP của tính năng này để xác thực tính năng khác.
 
+**Error handling:** Không che lỗi nghiệp vụ/validation/service nguồn/schema DB bằng câu chung `Internal server error`. Khi service gọi service khác, phải giữ status code của service nguồn và bóc message theo thứ tự `details[]` → `message` → `detail` → `error`. Frontend phải đọc được cả single-message và `details[]`, rồi hiển thị lỗi cụ thể cho người dùng/admin. Backend vẫn phải log exception đầy đủ bằng `@Slf4j` để trace server.
+
 ## Architecture
 
 ```

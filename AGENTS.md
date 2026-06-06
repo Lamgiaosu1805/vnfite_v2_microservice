@@ -44,6 +44,13 @@ Current important internal flows:
 - Prefer source-of-truth service APIs over copying tables between databases.
 - Use service DNS names inside Docker, e.g. `http://auth-service:8081` and `http://loan-service:8082`, unless nginx/internal proxy config says otherwise.
 
+## Error Handling Rules
+
+- Do not hide business, validation, downstream service, or database/schema errors behind generic `Internal server error` messages.
+- When a service calls another service, preserve the source service HTTP status and extract useful error text from `details[]`, `message`, `detail`, or `error`.
+- Frontend clients must read both single-message errors and `details[]` arrays, then show the specific message returned by the API.
+- Still log full server-side exceptions with `@Slf4j`; user-facing messages should be specific enough to troubleshoot UAT issues without requiring immediate server log access.
+
 ## Codex Working Rules
 
 - Prefer the existing Spring Boot service structure and conventions.

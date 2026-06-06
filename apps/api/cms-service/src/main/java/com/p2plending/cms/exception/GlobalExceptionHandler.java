@@ -63,6 +63,11 @@ public class GlobalExceptionHandler {
         return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_IMPLEMENTED, ex.getMessage());
     }
 
+    @ExceptionHandler(SourceServiceException.class)
+    public ProblemDetail sourceService(SourceServiceException ex) {
+        return ProblemDetail.forStatusAndDetail(ex.getStatusCode(), ex.getMessage());
+    }
+
     @ExceptionHandler(NoResourceFoundException.class)
     public ProblemDetail noResource(NoResourceFoundException ex) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, "Resource not found");
