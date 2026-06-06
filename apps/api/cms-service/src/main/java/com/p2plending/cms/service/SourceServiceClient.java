@@ -120,12 +120,13 @@ public class SourceServiceClient {
     }
 
     public PagedResponse<LoanSummaryResponse> getLoans(String status, String borrowerId,
-                                                       String province, int page, int size) {
+                                                       String province, String search, int page, int size) {
         URI uri = UriComponentsBuilder.fromHttpUrl(loanServiceUrl)
                 .path("/internal/loans")
                 .queryParamIfPresent("status",     Optional.ofNullable(status))
                 .queryParamIfPresent("borrowerId", Optional.ofNullable(borrowerId))
                 .queryParamIfPresent("province",   Optional.ofNullable(province))
+                .queryParamIfPresent("search",     Optional.ofNullable(search))
                 .queryParam("page", page)
                 .queryParam("size", size)
                 .queryParam("sortBy", "createdAt")

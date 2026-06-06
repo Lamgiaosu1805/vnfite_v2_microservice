@@ -1,8 +1,10 @@
 package com.p2plending.loan.specification;
 
+import com.p2plending.loan.domain.entity.LoanProduct;
 import com.p2plending.loan.domain.entity.LoanRequest;
 import com.p2plending.loan.dto.request.LoanFilterParams;
 import jakarta.persistence.criteria.Predicate;
+import jakarta.persistence.criteria.Subquery;
 import org.springframework.data.jpa.domain.Specification;
 
 import java.text.Normalizer;
@@ -39,6 +41,42 @@ public final class LoanSpecification {
                         })
                         .toList();
                 predicates.add(cb.or(provincePredicates.toArray(new Predicate[0])));
+            }
+            if (params.getSearch() != null && !params.getSearch().isBlank()) {
+                String term = params.getSearch().trim().toLowerCase(Locale.ROOT);
+                String pattern = "%" + term + "%";
+                List<Predicate> searchPredicates = new ArrayList<>(List.of(
+                        cb.like(cb.lower(root.get("id")), pattern),
+                        cb.like(cb.lower(root.get("borrowerId")), pattern),
+                        cb.like(cb.lower(root.get("purpose")), pattern),
+                        cb.like(cb.lower(root.get("referredBy")), pattern),
+                        cb.like(cb.lower(root.get("ref1FullName")), pattern),
+                        cb.like(cb.lower(root.get("ref1Phone")), pattern),
+                        cb.like(cb.lower(root.get("ref1Address")), pattern),
+                        cb.like(cb.lower(root.get("ref2FullName")), pattern),
+                        cb.like(cb.lower(root.get("ref2Phone")), pattern),
+                        cb.like(cb.lower(root.get("ref2Address")), pattern),
+                        cb.like(cb.lower(root.get("occupation")), pattern),
+                        cb.like(cb.lower(root.get("workplace")), pattern),
+                        cb.like(cb.lower(root.get("currentAddress")), pattern),
+                        cb.like(cb.lower(root.get("commune")), pattern),
+                        cb.like(cb.lower(root.get("province")), pattern),
+                        cb.like(cb.lower(root.get("rejectionReason")), pattern),
+                        cb.like(cb.lower(root.get("reviewedBy")), pattern)
+                ));
+
+                parseLoanSeq(term).ifPresent(seq -> searchPredicates.add(cb.equal(root.get("loanSeq"), seq)));
+
+                Subquery<String> productSubquery = query.subquery(String.class);
+                var product = productSubquery.from(LoanProduct.class);
+                productSubquery.select(product.get("id"))
+                        .where(cb.or(
+                                cb.like(cb.lower(product.get("code")), pattern),
+                                cb.like(cb.lower(product.get("name")), pattern)
+                        ));
+                searchPredicates.add(root.get("productId").in(productSubquery));
+
+                predicates.add(cb.or(searchPredicates.toArray(new Predicate[0])));
             }
             if (params.getMinAmount() != null) {
                 predicates.add(cb.greaterThanOrEqualTo(root.get("amount"), params.getMinAmount()));
@@ -94,6 +132,18 @@ public final class LoanSpecification {
                 .map(String::trim)
                 .distinct()
                 .toList();
+    }
+
+    private static java.util.Optional<Long> parseLoanSeq(String term) {
+        String digits = term.replaceFirst("(?i)^vnf", "").replaceAll("\\D+", "");
+        if (digits.isBlank()) {
+            return java.util.Optional.empty();
+        }
+        try {
+            return java.util.Optional.of(Long.parseLong(digits));
+        } catch (NumberFormatException ignored) {
+            return java.util.Optional.empty();
+        }
     }
 
     private static String normalizeProvinceInput(String province) {
