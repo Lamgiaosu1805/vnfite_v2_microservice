@@ -68,7 +68,8 @@ public class LoanManagementController {
     /**
      * PUT /cms/loans/{loanId}/approve
      * Cấp 2 — ban lãnh đạo (ADMIN) duyệt, có thể sửa lãi suất trước khi duyệt.
-     * Publishes loan.reviewed (APPROVE) → loan-service sets ACTIVE and triggers matching.
+     * Publishes loan.reviewed (APPROVE) → loan-service sets AWAITING_BORROWER_APPROVAL.
+     * Borrower must accept the approved terms before the loan becomes ACTIVE on the marketplace.
      */
     @PutMapping("/{loanId}/approve")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN')")

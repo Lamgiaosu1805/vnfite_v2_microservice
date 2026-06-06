@@ -73,6 +73,9 @@ server:
       force-response: true
       enabled: true
 
+jwt:
+  public-key: ${RSA_PUBLIC_KEY:}
+
 management:
   endpoints:
     web:

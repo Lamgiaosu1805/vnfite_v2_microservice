@@ -1,10 +1,6 @@
--- Dev seed data — chỉ load khi SPRING_PROFILES_ACTIVE=dev
--- Xóa toàn bộ data cũ trước khi seed lại
-
-SET FOREIGN_KEY_CHECKS = 0;
-TRUNCATE TABLE notifications;
-TRUNCATE TABLE notification_templates;
-SET FOREIGN_KEY_CHECKS = 1;
+-- Dev/test seed data.
+-- Only seed notification templates. Never truncate notifications because UAT/test
+-- deploys may run repeatable seeds and notifications are user/business data.
 
 -- ============================================================
 -- NOTIFICATION TEMPLATES (cấu hình — không phải user data)
@@ -46,4 +42,16 @@ VALUES
    'MATCH_OPPORTUNITY',
    'Cơ hội đầu tư mới phù hợp với bạn',
    'Có khoản vay mới phù hợp với tiêu chí đầu tư của bạn: #{loanAmount} VND, lãi suất #{interestRate}%/năm, #{termMonths} tháng.',
-   'EMAIL', 0, NOW(), NOW());
+   'EMAIL', 0, NOW(), NOW()),
+
+  ('79bb4259-148d-45f9-bb72-cf538629c5fa',
+   'LOAN_APPROVED_AWAITING_BORROWER',
+   'Khoản gọi vốn đã được phê duyệt',
+   'Khoản gọi vốn #{loanCode} đã được phê duyệt với số tiền #{amount}, lãi suất #{interestRate}/năm, kỳ hạn #{termMonths} tháng. Vui lòng xác nhận điều kiện để đưa khoản gọi vốn lên sàn cho nhà đầu tư.',
+   'IN_APP', 0, NOW(), NOW())
+ON DUPLICATE KEY UPDATE
+  title = VALUES(title),
+  body = VALUES(body),
+  type = VALUES(type),
+  is_deleted = VALUES(is_deleted),
+  updated_at = NOW();

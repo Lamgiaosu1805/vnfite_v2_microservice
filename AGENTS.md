@@ -115,6 +115,19 @@ Password validation must match the frontend contract:
 
 Vietnamese phone numbers and CCCD numbers must be validated consistently with the mobile app.
 
+## Loan Approval Flow
+
+P2P lending loans must not go live immediately after CMS leadership approval:
+
+1. Borrower submits a capital-raising request.
+2. Appraiser proposes approved amount and annual interest rate.
+3. Leadership approves the proposed/final terms.
+4. `loan-service` sets status to `AWAITING_BORROWER_APPROVAL` and notifies the borrower with approved amount, interest rate, and term.
+5. Borrower accepts the approved terms through `POST /api/loans/{id}/confirm`.
+6. Only after borrower acceptance may the loan become `ACTIVE` and visible on the marketplace for investors.
+
+Never change CMS approval to directly publish a loan to the marketplace unless the user explicitly changes the business flow.
+
 ## Mobile OTP UI Rules
 
 All OTP screens in the VNFITE mobile app must use the same OTP entry pattern:

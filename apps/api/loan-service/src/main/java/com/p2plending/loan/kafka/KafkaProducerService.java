@@ -3,6 +3,7 @@ package com.p2plending.loan.kafka;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.p2plending.loan.domain.entity.LoanRequest;
+import com.p2plending.loan.kafka.event.LoanApprovedAwaitingBorrowerEvent;
 import com.p2plending.loan.kafka.event.LoanCreatedEvent;
 import com.p2plending.loan.kafka.event.LoanFundedEvent;
 import com.p2plending.loan.kafka.event.LoanSubmittedEvent;
@@ -21,6 +22,7 @@ public class KafkaProducerService {
     private static final String TOPIC_LOAN_SUBMITTED = "loan.submitted";
     private static final String TOPIC_LOAN_CREATED   = "loan.created";
     private static final String TOPIC_LOAN_FUNDED    = "loan.funded";
+    private static final String TOPIC_LOAN_APPROVED_AWAITING_BORROWER = "loan.approved.awaiting_borrower";
 
     private final KafkaTemplate<String, String> kafkaTemplate;
     private final ObjectMapper objectMapper;
@@ -65,6 +67,20 @@ public class KafkaProducerService {
                 .fundedAt(LocalDateTime.now())
                 .build();
         send(TOPIC_LOAN_FUNDED, loan.getId(), event);
+    }
+
+    public void publishLoanApprovedAwaitingBorrower(LoanRequest loan) {
+        LoanApprovedAwaitingBorrowerEvent event = LoanApprovedAwaitingBorrowerEvent.builder()
+                .loanId(loan.getId())
+                .loanCode(loan.getLoanCode())
+                .borrowerId(loan.getBorrowerId())
+                .approvedAmount(loan.getAmount())
+                .approvedInterestRate(loan.getInterestRate())
+                .termMonths(loan.getTermMonths())
+                .reviewedBy(loan.getReviewedBy())
+                .approvedAt(loan.getReviewedAt() != null ? loan.getReviewedAt() : LocalDateTime.now())
+                .build();
+        send(TOPIC_LOAN_APPROVED_AWAITING_BORROWER, loan.getId(), event);
     }
 
     private void send(String topic, String key, Object payload) {

@@ -24,6 +24,8 @@ Nền tảng cho vay ngang hàng (P2P Lending) dạng microservices, xây dựng
 
 **Seed/data safety:** Không bao giờ `TRUNCATE`, `DELETE`, drop, recreate, hoặc reset dữ liệu nghiệp vụ/người dùng trong seed, migration, deploy script, local script, hoặc SQL thủ công trừ khi người dùng yêu cầu reset phá dữ liệu rõ ràng và xác nhận đã có backup. Các bảng được bảo vệ gồm `loan_requests`, `loan_offers`, `users`, KYC, payment, transaction, audit, notification, customer/admin operational records. Seed chỉ được insert/update dữ liệu cấu hình, phải idempotent và không phá dữ liệu, ưu tiên `INSERT ... ON DUPLICATE KEY UPDATE`.
 
+**Luồng duyệt khoản gọi vốn:** Ban lãnh đạo phê duyệt xong **không được đưa khoản gọi vốn lên sàn ngay**. Backend phải chuyển khoản sang `AWAITING_BORROWER_APPROVAL` và thông báo cho người gọi vốn số tiền được phê duyệt, lãi suất, kỳ hạn. Chỉ khi người gọi vốn xác nhận điều kiện qua `POST /api/loans/{id}/confirm`, khoản mới chuyển `ACTIVE` và hiển thị trên sàn cho nhà đầu tư. Không đổi CMS approval thành active trực tiếp trừ khi người dùng yêu cầu đổi nghiệp vụ rõ ràng.
+
 ## Architecture
 
 ```

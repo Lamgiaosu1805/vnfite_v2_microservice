@@ -260,6 +260,7 @@ public class LoanService {
                 loan.setInterestRate(finalRate);
                 loan.setStatus(LoanStatus.AWAITING_BORROWER_APPROVAL);
                 loanRequestRepository.save(loan);
+                kafkaProducerService.publishLoanApprovedAwaitingBorrower(loan);
                 log.info("Loan {} approved by {} — awaiting borrower confirmation (final amount={}, rate={}%)",
                         event.getLoanId(), event.getReviewedBy(), loan.getAmount(), finalRate);
             } else {
