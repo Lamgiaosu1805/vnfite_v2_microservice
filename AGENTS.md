@@ -54,7 +54,8 @@ Current important internal flows:
 ## Seed Data Rules
 
 - Seed files may insert/update configuration data only.
-- Never `TRUNCATE`, `DELETE`, or reset business/user tables from seed files, including `loan_requests`, `loan_offers`, `users`, KYC, payment, or transaction tables.
+- Never `TRUNCATE`, `DELETE`, drop, recreate, or reset business/user data from seed files, migrations, deploy scripts, local scripts, or manual SQL unless the user explicitly asks for a destructive reset and confirms a backup exists.
+- Protected data includes `loan_requests`, `loan_offers`, `users`, KYC, payment, transaction, audit, notification, and customer/admin operational records.
 - UAT/test deploys can run Flyway repeatable seeds; seeds must be idempotent and data-preserving, usually via `INSERT ... ON DUPLICATE KEY UPDATE`.
 
 ## Codex Working Rules

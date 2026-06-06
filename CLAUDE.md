@@ -22,7 +22,7 @@ Nền tảng cho vay ngang hàng (P2P Lending) dạng microservices, xây dựng
 
 **Error handling:** Không che lỗi nghiệp vụ/validation/service nguồn/schema DB bằng câu chung `Internal server error`. Khi service gọi service khác, phải giữ status code của service nguồn và bóc message theo thứ tự `details[]` → `message` → `detail` → `error`. Frontend phải đọc được cả single-message và `details[]`, rồi hiển thị lỗi cụ thể cho người dùng/admin. Backend vẫn phải log exception đầy đủ bằng `@Slf4j` để trace server.
 
-**Seed data:** Seed chỉ được insert/update dữ liệu cấu hình. Tuyệt đối không `TRUNCATE`, `DELETE`, hoặc reset bảng dữ liệu nghiệp vụ/người dùng trong seed, đặc biệt `loan_requests`, `loan_offers`, `users`, KYC, payment, transaction. UAT/test deploy có thể chạy Flyway repeatable seed, nên seed phải idempotent và không phá dữ liệu, ưu tiên `INSERT ... ON DUPLICATE KEY UPDATE`.
+**Seed/data safety:** Không bao giờ `TRUNCATE`, `DELETE`, drop, recreate, hoặc reset dữ liệu nghiệp vụ/người dùng trong seed, migration, deploy script, local script, hoặc SQL thủ công trừ khi người dùng yêu cầu reset phá dữ liệu rõ ràng và xác nhận đã có backup. Các bảng được bảo vệ gồm `loan_requests`, `loan_offers`, `users`, KYC, payment, transaction, audit, notification, customer/admin operational records. Seed chỉ được insert/update dữ liệu cấu hình, phải idempotent và không phá dữ liệu, ưu tiên `INSERT ... ON DUPLICATE KEY UPDATE`.
 
 ## Architecture
 
@@ -90,12 +90,13 @@ Profile được set qua `SPRING_PROFILES_ACTIVE` env var. Docker Compose mặc 
 
 ### Seed Data (dev / test)
 
-Flyway Repeatable migration (`R__dev_seed_data.sql`) chạy tự động. Mỗi file bắt đầu bằng `TRUNCATE` để xóa data cũ, sau đó insert lại data cấu hình.
+Flyway Repeatable migration (`R__dev_seed_data.sql`) có thể chạy tự động ở dev/test. Seed phải là data-preserving: chỉ insert/update dữ liệu cấu hình, tuyệt đối không truncate/reset dữ liệu nghiệp vụ hoặc user data.
 
 **Quy tắc bắt buộc cho seed data:**
 - **ID phải là UUID v4 random thật** — ví dụ `23657e3f-4271-46d7-b920-923d101f0519`. **Tuyệt đối không dùng pattern ID** kiểu `d1000001-0000-0000-0000-000000000001`.
 - Dùng `python3 -c "import uuid; print(uuid.uuid4())"` để generate UUID khi cần thêm seed.
 - Seed chỉ chứa **data cấu hình** (loan_products, notification_templates, cms_admin_users). Không seed user data — user tự đăng ký qua app.
+- Không dùng `TRUNCATE`, `DELETE`, drop/recreate bảng, hoặc reset sequence trên bảng nghiệp vụ/người dùng trong seed.
 
 **Tài khoản CMS admin** (password: `Admin@1234`):
 
