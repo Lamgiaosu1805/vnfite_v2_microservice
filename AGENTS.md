@@ -51,6 +51,12 @@ Current important internal flows:
 - Frontend clients must read both single-message errors and `details[]` arrays, then show the specific message returned by the API.
 - Still log full server-side exceptions with `@Slf4j`; user-facing messages should be specific enough to troubleshoot UAT issues without requiring immediate server log access.
 
+## Seed Data Rules
+
+- Seed files may insert/update configuration data only.
+- Never `TRUNCATE`, `DELETE`, or reset business/user tables from seed files, including `loan_requests`, `loan_offers`, `users`, KYC, payment, or transaction tables.
+- UAT/test deploys can run Flyway repeatable seeds; seeds must be idempotent and data-preserving, usually via `INSERT ... ON DUPLICATE KEY UPDATE`.
+
 ## Codex Working Rules
 
 - Prefer the existing Spring Boot service structure and conventions.

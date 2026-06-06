@@ -22,6 +22,8 @@ Nền tảng cho vay ngang hàng (P2P Lending) dạng microservices, xây dựng
 
 **Error handling:** Không che lỗi nghiệp vụ/validation/service nguồn/schema DB bằng câu chung `Internal server error`. Khi service gọi service khác, phải giữ status code của service nguồn và bóc message theo thứ tự `details[]` → `message` → `detail` → `error`. Frontend phải đọc được cả single-message và `details[]`, rồi hiển thị lỗi cụ thể cho người dùng/admin. Backend vẫn phải log exception đầy đủ bằng `@Slf4j` để trace server.
 
+**Seed data:** Seed chỉ được insert/update dữ liệu cấu hình. Tuyệt đối không `TRUNCATE`, `DELETE`, hoặc reset bảng dữ liệu nghiệp vụ/người dùng trong seed, đặc biệt `loan_requests`, `loan_offers`, `users`, KYC, payment, transaction. UAT/test deploy có thể chạy Flyway repeatable seed, nên seed phải idempotent và không phá dữ liệu, ưu tiên `INSERT ... ON DUPLICATE KEY UPDATE`.
+
 ## Architecture
 
 ```
