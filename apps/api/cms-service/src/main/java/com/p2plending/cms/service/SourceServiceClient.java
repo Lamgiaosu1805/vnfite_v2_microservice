@@ -20,6 +20,9 @@ import org.springframework.web.util.UriComponentsBuilder;
 import java.math.BigDecimal;
 import java.net.URI;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeFormatterBuilder;
+import java.time.temporal.ChronoField;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -30,6 +33,17 @@ import java.util.Optional;
 public class SourceServiceClient {
 
     private static final String INTERNAL_SECRET_HEADER = "X-Internal-Secret";
+
+    /**
+     * Lenient formatter — accepts ISO-8601 local datetimes with or without fractional seconds.
+     * Covers: "2024-06-05T10:30:00", "2024-06-05T10:30:00.123", "2024-06-05T10:30:00.123456"
+     */
+    private static final DateTimeFormatter LENIENT_DT = new DateTimeFormatterBuilder()
+            .appendPattern("yyyy-MM-dd'T'HH:mm:ss")
+            .optionalStart()
+            .appendFraction(ChronoField.NANO_OF_SECOND, 0, 9, true)
+            .optionalEnd()
+            .toFormatter();
 
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
@@ -195,14 +209,34 @@ public class SourceServiceClient {
         ResponseEntity<String> response;
         try {
             response = request.get();
-            return objectMapper.readTree(response.getBody());
         } catch (RestClientResponseException ex) {
             String message = sourceErrorMessage(ex);
-            log.warn("Source service error from {}: status={}, message={}", source, ex.getStatusCode(), message);
+            log.warn("Source service HTTP error from {}: status={}, message={}", source, ex.getStatusCode(), message);
             throw new SourceServiceException(ex.getStatusCode(), message);
         } catch (Exception ex) {
-            log.error("Failed to parse source service response from {}", source, ex);
-            throw new IllegalStateException("Không đọc được phản hồi từ service nguồn");
+            // Connection refused, read timeout, DNS failure, etc.
+            log.error("Cannot connect to source service {}: {} — {}", source, ex.getClass().getSimpleName(), ex.getMessage());
+            throw new SourceServiceException(
+                    org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE,
+                    "Không thể kết nối đến service nguồn (" + ex.getMessage() + ")");
+        }
+
+        String body = response.getBody();
+        if (body == null || body.isBlank()) {
+            log.error("Source service {} returned empty body (status={})", source, response.getStatusCode());
+            throw new SourceServiceException(
+                    org.springframework.http.HttpStatus.BAD_GATEWAY,
+                    "Service nguồn trả về nội dung trống");
+        }
+
+        try {
+            return objectMapper.readTree(body);
+        } catch (Exception ex) {
+            log.error("Cannot parse JSON from source service {}: {} — body preview: {}",
+                    source, ex.getMessage(), body.length() > 200 ? body.substring(0, 200) : body);
+            throw new SourceServiceException(
+                    org.springframework.http.HttpStatus.BAD_GATEWAY,
+                    "Phản hồi từ service nguồn không hợp lệ (JSON parse error)");
         }
     }
 
@@ -260,7 +294,13 @@ public class SourceServiceClient {
 
     private PagedResponse<LoanSummaryResponse> parseLoanPage(JsonNode pageNode) {
         List<LoanSummaryResponse> content = new ArrayList<>();
-        pageNode.path("content").forEach(node -> content.add(parseLoan(node)));
+        pageNode.path("content").forEach(node -> {
+            try {
+                content.add(parseLoan(node));
+            } catch (Exception ex) {
+                log.warn("Skipping malformed loan entry — {}: {}", ex.getClass().getSimpleName(), ex.getMessage());
+            }
+        });
         return PagedResponse.<LoanSummaryResponse>builder()
                 .content(content)
                 .page(pageNode.path("page").asInt())
@@ -328,6 +368,14 @@ public class SourceServiceClient {
     }
 
     private LocalDateTime dateTime(JsonNode node, String field) {
-        return node.hasNonNull(field) ? LocalDateTime.parse(node.get(field).asText()) : null;
+        if (!node.hasNonNull(field)) return null;
+        String text = node.get(field).asText();
+        if (text.isBlank()) return null;
+        try {
+            return LocalDateTime.parse(text, LENIENT_DT);
+        } catch (Exception ex) {
+            log.warn("Cannot parse dateTime field '{}' value '{}': {}", field, text, ex.getMessage());
+            return null;
+        }
     }
 }

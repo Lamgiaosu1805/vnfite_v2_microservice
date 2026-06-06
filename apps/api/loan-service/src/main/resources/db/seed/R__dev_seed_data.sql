@@ -1,11 +1,6 @@
--- Dev seed data — chỉ load khi SPRING_PROFILES_ACTIVE=dev
--- Xóa toàn bộ data cũ trước khi seed lại
-
-SET FOREIGN_KEY_CHECKS = 0;
-TRUNCATE TABLE loan_offers;
-TRUNCATE TABLE loan_requests;
-TRUNCATE TABLE loan_products;
-SET FOREIGN_KEY_CHECKS = 1;
+-- Dev/test seed data.
+-- Only seed configuration data. Never truncate business/user data such as
+-- loan_requests or loan_offers because UAT deploys also run with the test profile.
 
 -- ============================================================
 -- LOAN PRODUCTS (cấu hình sản phẩm — không phải user data)
@@ -44,4 +39,19 @@ VALUES
    3000000.00, 50000000.00, '1,3,6,9,12',
    90.00, 150.00,
    'https://service.vnfite.com.vn/static-file//images/loan/image/giaovien.png',
-   1, 0, 4);
+   1, 0, 4)
+ON DUPLICATE KEY UPDATE
+  name = VALUES(name),
+  category = VALUES(category),
+  product_group = VALUES(product_group),
+  profession_bound = VALUES(profession_bound),
+  description = VALUES(description),
+  min_amount = VALUES(min_amount),
+  max_amount = VALUES(max_amount),
+  available_terms = VALUES(available_terms),
+  max_interest_rate = VALUES(max_interest_rate),
+  late_fee_rate = VALUES(late_fee_rate),
+  image_url = VALUES(image_url),
+  is_active = VALUES(is_active),
+  is_deleted = VALUES(is_deleted),
+  sort_order = VALUES(sort_order);
