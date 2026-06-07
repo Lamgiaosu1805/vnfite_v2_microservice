@@ -59,8 +59,10 @@ jobs:
           ssh-keyscan -H 42.113.122.119 >> ~/.ssh/known_hosts 2>/dev/null
 
       - name: Sync .env to server
+        env:
+          ENV_CONTENT: ${{ secrets.ENV_FILE_TEST }}
         run: |
-          printf '%s\n' "${{ secrets.ENV_FILE_TEST }}" > /tmp/.env_test
+          printf '%s' "$ENV_CONTENT" > /tmp/.env_test
           scp -i ~/.ssh/deploy_key /tmp/.env_test ${{ env.SERVER }}:${{ env.APP_DIR }}/.env
           rm -f /tmp/.env_test
 

@@ -47,7 +47,7 @@ Admin → cms.p2plending.local → cms-service (8090)
 | loan-service | 8082      | 8082 | loan_db | Tạo khoản vay, quản lý offer, vòng đời khoản vay |
 | matching-service | 8083      | 8083 | matching_db | Thuật toán ghép vay, lịch chạy 30 phút/lần |
 | cms-service | 8090      | 8090 | cms_db | CMS admin/auth service |
-| notification-service | 8085      | 8084 | notification_db | Gửi email/SMS qua Kafka consumer |
+| notification-service | 8085      | 8084 | notification_db | Gửi email/SMS qua Kafka consumer + push notification qua service.vnfite.com.vn |
 
 ### Infrastructure
 
@@ -292,6 +292,22 @@ PENDING → ACTIVE → FUNDED → REPAYING → COMPLETED
 | `created_at` | DATETIME | YES | |
 | `updated_at` | DATETIME | YES | |
 
+#### user_fcm_tokens
+
+Lưu FCM token của thiết bị đang đăng nhập — 1 user tối đa 1 thiết bị active tại một thời điểm.
+
+| Column | Type | Nullable | Mô tả |
+|--------|------|----------|-------|
+| `user_id` | VARCHAR(36) | NO | PK = users.id, 1 user 1 dòng |
+| `fcm_token` | TEXT | NO | Firebase Cloud Messaging token |
+| `device_key` | VARCHAR(100) | YES | Unique device identifier từ mobile |
+| `updated_at` | DATETIME | NO | Tự cập nhật khi upsert |
+
+**Quy tắc:**
+- Khi user mới đăng nhập trên thiết bị, nếu `fcm_token` đó đã thuộc user khác → xóa record cũ trước (account switching on same device)
+- Khi logout → xóa record của user đó
+- `notification-service` gọi `GET /internal/users/{userId}/fcm-token` để lấy token trước khi push
+
 #### refresh_tokens
 | Column | Type | Nullable | Mô tả |
 |--------|------|----------|-------|
@@ -418,6 +434,7 @@ Unique constraint: `(loan_id, investor_id)` — mỗi cặp vay-investor chỉ c
 | POST | `/api/auth/forgot-password/reset` | No | Bước 3 quên MK: dùng resetToken + newPassword → đặt lại MK, vô hiệu hoá phiên cũ |
 | POST | `/api/auth/change-password/init` | JWT | Bước 1 đổi MK: xác minh mật khẩu hiện tại → gửi OTP |
 | POST | `/api/auth/change-password/verify` | JWT | Bước 2 đổi MK: xác thực OTP → đặt MK mới, vô hiệu hoá phiên cũ |
+| POST | `/api/auth/devices/fcm-token` | JWT | Đăng ký FCM token của thiết bị để nhận push notification |
 
 ### Loan Service (`/api/loans`)
 
@@ -457,6 +474,11 @@ Không có REST endpoint — chỉ nhận event từ Kafka.
 | `loan.funded` | loan-service | matching-service | Đánh dấu fully_funded trong matching-service |
 | `match.found` | matching-service | notification-service | Thông báo cho investor |
 | `payment.completed` | (future) | loan-service | Cập nhật trạng thái trả nợ |
+
+**Push Notification flow (ngoài Kafka):**
+`notification-service` gọi thẳng HTTP đến `service.vnfite.com.vn` để push FCM:
+1. Lấy FCM token: `GET /internal/users/{userId}/fcm-token` → auth-service (kèm header `X-Internal-Secret`)
+2. Push: `POST https://service.vnfite.com.vn/push-notification/v2/notification/pushNotification` với `{ alias, token, title, body, data }`
 
 Consumer Group IDs: `{service-name}-group` (vd: `loan-service-group`)
 
@@ -506,6 +528,10 @@ RSA_PUBLIC_KEY    # Base64 X509 PEM — tất cả services
 
 # Email
 MAIL_HOST, MAIL_PORT, MAIL_USERNAME, MAIL_PASSWORD
+
+# Push Notification (notification-service → service.vnfite.com.vn)
+PUSH_NOTIFICATION_URL   # https://service.vnfite.com.vn/push-notification/v2/notification
+PUSH_NOTIFICATION_ALIAS # vnfite
 ```
 
 ## Tech Stack
