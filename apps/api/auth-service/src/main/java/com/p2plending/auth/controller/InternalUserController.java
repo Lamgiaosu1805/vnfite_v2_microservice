@@ -4,6 +4,7 @@ import com.p2plending.auth.domain.enums.KycStatus;
 import com.p2plending.auth.dto.response.InternalUserStatsResponse;
 import com.p2plending.auth.dto.response.InternalUserSummaryResponse;
 import com.p2plending.auth.dto.response.PagedResponse;
+import com.p2plending.auth.service.FcmTokenService;
 import com.p2plending.auth.service.InternalUserQueryService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
@@ -14,6 +15,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDate;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/internal/users")
@@ -23,6 +25,7 @@ public class InternalUserController {
     private static final String INTERNAL_SECRET_HEADER = "X-Internal-Secret";
 
     private final InternalUserQueryService userQueryService;
+    private final FcmTokenService          fcmTokenService;
 
     @Value("${app.internal.secret:dev-internal-secret}")
     private String internalSecret;
@@ -54,6 +57,21 @@ public class InternalUserController {
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from) {
         requireInternalSecret(secret);
         return ResponseEntity.ok(userQueryService.getStats(from));
+    }
+
+    /**
+     * GET /internal/users/{userId}/fcm-token
+     * notification-service gọi để lấy FCM token trước khi push notification.
+     * Response: { "fcmToken": "..." } hoặc 204 No Content nếu không có.
+     */
+    @GetMapping("/{userId}/fcm-token")
+    public ResponseEntity<Map<String, String>> getFcmToken(
+            @RequestHeader(INTERNAL_SECRET_HEADER) String secret,
+            @PathVariable String userId) {
+        requireInternalSecret(secret);
+        return fcmTokenService.getToken(userId)
+                .map(token -> ResponseEntity.ok(Map.of("fcmToken", token)))
+                .orElse(ResponseEntity.noContent().build());
     }
 
     private void requireInternalSecret(String secret) {

@@ -1,5 +1,6 @@
 package com.p2plending.notification.service;
 
+import com.p2plending.notification.client.PushNotificationClient;
 import com.p2plending.notification.domain.entity.Notification;
 import com.p2plending.notification.domain.enums.NotificationType;
 import com.p2plending.notification.domain.repository.NotificationRepository;
@@ -16,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.text.NumberFormat;
 import java.time.LocalDateTime;
+import java.util.Map;
 import java.util.Locale;
 
 @Service
@@ -23,7 +25,8 @@ import java.util.Locale;
 @Slf4j
 public class NotificationService {
 
-    private final NotificationRepository notificationRepository;
+    private final NotificationRepository  notificationRepository;
+    private final PushNotificationClient  pushClient;
 
     @Transactional(readOnly = true)
     public PagedResponse<NotificationResponse> getUserNotifications(String userId, int page, int size) {
@@ -71,6 +74,15 @@ public class NotificationService {
         notificationRepository.save(notification);
         log.info("Stored loan approval notification for borrower={} loan={}",
                 event.getBorrowerId(), event.getLoanId());
+
+        // Gửi push notification đến thiết bị của borrower
+        pushClient.pushToUser(
+                event.getBorrowerId(),
+                title,
+                "Khoản gọi vốn %s đã được phê duyệt. Nhấn để xem và xác nhận điều kiện.".formatted(
+                        event.getLoanCode() != null ? event.getLoanCode() : event.getLoanId()),
+                Map.of("action", "OPEN_LOAN_DETAIL", "loanId", event.getLoanId())
+        );
     }
 
     private String formatMoney(BigDecimal value) {

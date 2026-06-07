@@ -76,6 +76,18 @@ server:
 jwt:
   public-key: ${RSA_PUBLIC_KEY:}
 
+# External push notification service
+push:
+  notification:
+    base-url: ${PUSH_NOTIFICATION_URL:https://service.vnfite.com.vn/push-notification/v2/notification}
+    alias: ${PUSH_NOTIFICATION_ALIAS:vnfite}
+
+# Internal service-to-service calls (để lấy FCM token từ auth-service)
+cms:
+  sources:
+    auth-url: ${AUTH_SERVICE_URL:http://auth-service:8081}
+    internal-secret: ${INTERNAL_API_SECRET:dev-internal-secret}
+
 management:
   endpoints:
     web:

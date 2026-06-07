@@ -22,6 +22,7 @@ import com.p2plending.auth.dto.response.KycSubmissionResponse;
 import com.p2plending.auth.dto.response.RegisterInitResponse;
 import com.p2plending.auth.service.AuthService;
 import com.p2plending.auth.service.ChangePasswordService;
+import com.p2plending.auth.service.FcmTokenService;
 import com.p2plending.auth.service.KycService;
 import com.p2plending.auth.service.PasswordResetService;
 import jakarta.validation.Valid;
@@ -46,6 +47,7 @@ public class AuthController {
     private final KycService            kycService;
     private final PasswordResetService  passwordResetService;
     private final ChangePasswordService changePasswordService;
+    private final FcmTokenService       fcmTokenService;
 
     /**
      * POST /api/auth/check-phone
@@ -304,5 +306,26 @@ public class AuthController {
     ) {
         String userId = authService.getUserIdByPhone(principal.getUsername());
         return ResponseEntity.status(HttpStatus.CREATED).body(kycService.verifyKyc(userId, request));
+    }
+
+    /**
+     * POST /api/auth/devices/fcm-token
+     * Mobile gọi sau khi nhận FCM token từ Firebase SDK (hoặc khi token refresh).
+     * Body: { "fcmToken": "...", "deviceKey": "..." }
+     */
+    @PostMapping("/devices/fcm-token")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<Map<String, String>> saveFcmToken(
+            @RequestBody Map<String, String> body,
+            @AuthenticationPrincipal UserDetails principal
+    ) {
+        String userId = authService.getUserIdByPhone(principal.getUsername());
+        String fcmToken = body.get("fcmToken");
+        String deviceKey = body.get("deviceKey");
+        if (fcmToken == null || fcmToken.isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("message", "fcmToken là bắt buộc"));
+        }
+        fcmTokenService.saveToken(userId, fcmToken, deviceKey);
+        return ResponseEntity.ok(Map.of("message", "FCM token đã được lưu"));
     }
 }
