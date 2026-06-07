@@ -38,6 +38,14 @@ public class Notification {
     @Column(length = 50)
     private String channel;
 
+    /** ID của đối tượng liên quan — vd: loanId để navigate đến màn chi tiết khoản vay. */
+    @Column(name = "reference_id", length = 36)
+    private String referenceId;
+
+    /** Loại đối tượng — vd: "LOAN", "USER", "PAYMENT". */
+    @Column(name = "reference_type", length = 50)
+    private String referenceType;
+
     @Column(name = "is_read", nullable = false)
     @Builder.Default
     private boolean isRead = false;

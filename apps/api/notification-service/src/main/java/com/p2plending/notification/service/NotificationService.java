@@ -68,6 +68,8 @@ public class NotificationService {
                 ))
                 .type(NotificationType.IN_APP)
                 .channel("LOAN_APPROVAL")
+                .referenceId(event.getLoanId())
+                .referenceType("LOAN")
                 .sentAt(LocalDateTime.now())
                 .build();
 
@@ -102,6 +104,8 @@ public class NotificationService {
                 .message(notification.getMessage())
                 .type(notification.getType())
                 .channel(notification.getChannel())
+                .referenceId(notification.getReferenceId())
+                .referenceType(notification.getReferenceType())
                 .read(notification.isRead())
                 .sentAt(notification.getSentAt())
                 .createdAt(notification.getCreatedAt())

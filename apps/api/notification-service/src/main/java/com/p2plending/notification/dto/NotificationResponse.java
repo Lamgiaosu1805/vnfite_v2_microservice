@@ -14,6 +14,8 @@ public class NotificationResponse {
     private String message;
     private NotificationType type;
     private String channel;
+    private String referenceId;
+    private String referenceType;
     private boolean read;
     private LocalDateTime sentAt;
     private LocalDateTime createdAt;
