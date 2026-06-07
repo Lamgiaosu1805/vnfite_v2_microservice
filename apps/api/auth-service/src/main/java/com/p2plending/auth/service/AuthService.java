@@ -88,6 +88,7 @@ public class AuthService {
     private final ObjectMapper                  objectMapper;
     private final DeviceLoginHistoryRepository  deviceLoginHistoryRepository;
     private final RedisNamespaceProperties      redisNamespaceProperties;
+    private final FcmTokenService               fcmTokenService;
 
     // ── Check phone ───────────────────────────────────────────────
 
@@ -276,6 +277,11 @@ public class AuthService {
     public void serverLogout(String phone) {
         redisTemplate.delete(deviceSessionKey(phone));
         redisTemplate.delete(refreshTokenKey(phone));
+
+        // Xóa FCM token để thiết bị không nhận push của tài khoản vừa logout
+        userRepository.findByPhone(phone).ifPresent(user ->
+                fcmTokenService.removeToken(user.getId()));
+
         log.info("Server logout completed for phone={}", phone);
     }
 

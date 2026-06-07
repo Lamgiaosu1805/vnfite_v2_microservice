@@ -19,9 +19,15 @@ public class FcmTokenService {
     /**
      * Lưu hoặc cập nhật FCM token của user.
      * Gọi sau khi mobile nhận token từ Firebase SDK.
+     *
+     * Tự động xóa token này khỏi bất kỳ user nào khác đang giữ nó —
+     * xử lý trường hợp đổi tài khoản trên cùng thiết bị mà không logout.
      */
     @Transactional
     public void saveToken(String userId, String fcmToken, String deviceKey) {
+        // Xóa token này khỏi user cũ nếu cùng thiết bị đổi tài khoản
+        fcmTokenRepository.deleteByFcmTokenAndUserIdNot(fcmToken, userId);
+
         UserFcmToken token = fcmTokenRepository.findByUserId(userId)
                 .orElse(UserFcmToken.builder().userId(userId).build());
 
