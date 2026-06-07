@@ -14,7 +14,7 @@ Services:
 - `loan-service`: loan request lifecycle and investment offers
 - `matching-service`: investor preference matching
 - `cms-service`: CMS admin/auth service
-- `notification-service`: Kafka-driven notification worker
+- `notification-service`: Kafka-driven notification worker + push notification via `service.vnfite.com.vn`
 
 Infrastructure:
 
@@ -40,9 +40,17 @@ Current important internal flows:
 
 - `cms-service` gets customer data from `auth-service` internal user APIs.
 - `cms-service` gets loan data and sends loan review actions to `loan-service` internal loan APIs.
+- `notification-service` calls `GET /internal/users/{userId}/fcm-token` on `auth-service` to retrieve the FCM push token before sending push notifications.
 - Internal APIs must be protected with `INTERNAL_API_SECRET` / `X-Internal-Secret`.
 - Prefer source-of-truth service APIs over copying tables between databases.
 - Use service DNS names inside Docker, e.g. `http://auth-service:8081` and `http://loan-service:8082`, unless nginx/internal proxy config says otherwise.
+
+**FCM token rules:**
+- `auth_db.user_fcm_tokens` stores one active FCM token per user (PK = `user_id`).
+- Mobile registers token via `POST /api/auth/devices/fcm-token` (JWT) after every login.
+- On logout, auth-service deletes the token record.
+- On same-device account switch, the old owner's token is cleared before the new user's token is saved.
+- Push notifications are sent via `service.vnfite.com.vn` (alias `vnfite`), not directly via Firebase SDK on backend.
 
 ## Error Handling Rules
 
