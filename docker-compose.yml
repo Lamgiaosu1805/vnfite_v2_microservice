@@ -211,6 +211,8 @@ services:
       AUTH_SERVICE_URL: ${AUTH_SERVICE_URL:-http://auth-service:8081}
       LOAN_SERVICE_URL: ${LOAN_SERVICE_URL:-http://loan-service:8082}
       INTERNAL_API_SECRET: ${INTERNAL_API_SECRET:-dev-internal-secret}
+      PUSH_NOTIFICATION_URL: ${PUSH_NOTIFICATION_URL:-https://service.vnfite.com.vn/push-notification/v2/notification}
+      PUSH_NOTIFICATION_ALIAS: ${PUSH_NOTIFICATION_ALIAS:-vnfite}
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
     extra_hosts:
       - "host.docker.internal:host-gateway"

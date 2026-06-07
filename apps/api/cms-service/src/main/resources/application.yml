@@ -51,6 +51,11 @@ cms:
     loan-url: ${LOAN_SERVICE_URL:http://loan-service:8082}
     internal-secret: ${INTERNAL_API_SECRET:dev-internal-secret}
 
+push:
+  notification:
+    base-url: ${PUSH_NOTIFICATION_URL:https://service.vnfite.com.vn/push-notification/v2/notification}
+    alias: ${PUSH_NOTIFICATION_ALIAS:vnfite}
+
 app:
   redis:
     namespace: ${APP_REDIS_NAMESPACE:${SPRING_PROFILES_ACTIVE:dev}}:cms-service

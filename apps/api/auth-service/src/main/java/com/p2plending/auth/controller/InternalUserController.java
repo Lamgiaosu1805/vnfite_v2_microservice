@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -72,6 +73,19 @@ public class InternalUserController {
         return fcmTokenService.getToken(userId)
                 .map(token -> ResponseEntity.ok(Map.of("fcmToken", token)))
                 .orElse(ResponseEntity.noContent().build());
+    }
+
+    /**
+     * GET /internal/users/fcm-tokens-all
+     * Trả về danh sách tất cả FCM token đang active — dùng cho broadcast push notification.
+     * Response: { "tokens": [...], "count": N }
+     */
+    @GetMapping("/fcm-tokens-all")
+    public ResponseEntity<Map<String, Object>> getAllFcmTokens(
+            @RequestHeader(INTERNAL_SECRET_HEADER) String secret) {
+        requireInternalSecret(secret);
+        List<String> tokens = fcmTokenService.getAllTokens();
+        return ResponseEntity.ok(Map.of("tokens", tokens, "count", tokens.size()));
     }
 
     private void requireInternalSecret(String secret) {

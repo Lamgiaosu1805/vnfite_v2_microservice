@@ -7,6 +7,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.Optional;
 
 @Service
@@ -55,5 +56,16 @@ public class FcmTokenService {
     @Transactional(readOnly = true)
     public Optional<String> getToken(String userId) {
         return fcmTokenRepository.findByUserId(userId).map(UserFcmToken::getFcmToken);
+    }
+
+    /**
+     * Lấy tất cả FCM token đang active — dùng cho broadcast / test push.
+     */
+    @Transactional(readOnly = true)
+    public List<String> getAllTokens() {
+        return fcmTokenRepository.findAll().stream()
+                .map(UserFcmToken::getFcmToken)
+                .filter(t -> t != null && !t.isBlank())
+                .toList();
     }
 }
