@@ -58,6 +58,7 @@ Current important internal flows:
 - When a service calls another service, preserve the source service HTTP status and extract useful error text from `details[]`, `message`, `detail`, or `error`.
 - Frontend clients must read both single-message errors and `details[]` arrays, then show the specific message returned by the API.
 - Frontend must never show raw API base URLs, internal hostnames, HTTP stack details, or low-level connectivity text directly to users. Network/connectivity failures should use a generic friendly message such as `Không thể kết nối với máy chủ. Vui lòng thử lại.`.
+- On the VNFITE mobile app, auth and OTP-related connectivity failures should prefer the shared `VnfiteAlert` modal with the generic message above, instead of exposing raw API text inline in the form.
 - Still log full server-side exceptions with `@Slf4j`; user-facing messages should be specific enough to troubleshoot UAT issues without requiring immediate server log access.
 
 ## Seed Data Rules
