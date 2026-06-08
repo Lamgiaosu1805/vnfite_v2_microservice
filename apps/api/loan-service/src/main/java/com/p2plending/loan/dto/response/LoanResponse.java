@@ -27,6 +27,7 @@ public class LoanResponse {
     private LocalDateTime proposedAt;
     private String appraisalNote;
     private Integer termMonths;
+    private Integer repaymentDay;
     private String purpose;
     private String referredBy;
     private String ref1FullName;

@@ -72,6 +72,13 @@ public class LoanRequest {
     @Column(nullable = false)
     private Integer termMonths;
 
+    /**
+     * Ngày trả nợ hàng tháng do người gọi vốn chọn: 5 hoặc 20.
+     * NULL = dữ liệu cũ (trước khi có tính năng). Generator sẽ fallback về +1 tháng khi null.
+     */
+    @Column(name = "repayment_day")
+    private Integer repaymentDay;
+
     @Column(nullable = false, length = 500)
     private String purpose;
 

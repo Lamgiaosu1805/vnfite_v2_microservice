@@ -76,12 +76,15 @@ public class RepaymentService {
         LocalDate fundedDate = LocalDate.now(TZ);
 
         List<RepaymentSchedule> schedule = generator.generate(
-                loan.getAmount(), loan.getInterestRate(), loan.getTermMonths(), method, fundedDate);
+                loan.getAmount(), loan.getInterestRate(), loan.getTermMonths(), method, fundedDate,
+                loan.getRepaymentDay());
         schedule.forEach(s -> s.setLoanId(loan.getId()));
         scheduleRepository.saveAll(schedule);
 
-        log.info("Generated {}-period repayment schedule for loan {} (method={}, firstDue={})",
-                schedule.size(), loan.getId(), method, fundedDate.plusMonths(1));
+        int totalPeriods = schedule.size();
+        String firstDueInfo = schedule.isEmpty() ? "N/A" : schedule.get(0).getDueDate().toString();
+        log.info("Generated {}-period repayment schedule for loan {} (method={}, repaymentDay={}, firstDue={})",
+                totalPeriods, loan.getId(), method, loan.getRepaymentDay(), firstDueInfo);
     }
 
     private RepaymentMethod resolveMethod(LoanRequest loan) {

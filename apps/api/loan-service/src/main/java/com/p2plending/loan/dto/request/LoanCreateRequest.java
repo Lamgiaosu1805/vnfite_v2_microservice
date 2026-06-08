@@ -80,4 +80,11 @@ public class LoanCreateRequest {
     /** Tỉnh / Thành phố — theo NQ 202/2025/QH15. */
     @Size(max = 100)
     private String province;
+
+    /**
+     * Ngày trả nợ hàng tháng: chỉ được chọn 5 hoặc 20.
+     * Bắt buộc khi tạo hồ sơ — dùng để tính kỳ đầu (pro-rated) và lịch trả nợ.
+     */
+    @NotNull(message = "Vui lòng chọn ngày trả nợ hàng tháng (ngày 5 hoặc ngày 20)")
+    private Integer repaymentDay;
 }

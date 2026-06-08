@@ -430,7 +430,8 @@ public class AppraisalSuggestionService {
     // ── Lịch trả nợ xem trước ──────────────────────────────────────
 
     private SchedulePreview buildPreview(BigDecimal amount, BigDecimal rate, int term, RepaymentMethod method) {
-        List<RepaymentSchedule> rows = generator.generate(amount, rate, term, method, LocalDate.now(TZ));
+        // Preview không có repaymentDay cụ thể → truyền null để dùng logic +1 tháng (legacy fallback)
+        List<RepaymentSchedule> rows = generator.generate(amount, rate, term, method, LocalDate.now(TZ), null);
         BigDecimal totalPrincipal = BigDecimal.ZERO;
         BigDecimal totalInterest = BigDecimal.ZERO;
         for (RepaymentSchedule r : rows) {

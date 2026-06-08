@@ -14,6 +14,8 @@ Nền tảng cho vay ngang hàng (P2P Lending) dạng microservices, xây dựng
 
 **Thuật ngữ UI:** Dùng **"người gọi vốn"** và **"nhà đầu tư"** — không dùng "người vay" hay "cho vay". Áp dụng cho mọi label, tiêu đề, nội dung trên cả CMS web và mobile app.
 
+**Số tiền đã nhận đầu tư:** Luôn dùng **"đã được đầu tư"** — không dùng "đã huy động", "đã gọi được", hay bất kỳ cách diễn đạt khác. Áp dụng cho mọi label hiển thị `raisedAmount` trên mobile app và CMS web.
+
 **CMS Dark Mode:** `VnFiteCMS` đã có dark mode. Toggle bằng nút mặt trăng/mặt trời ở header, lưu vào `localStorage` key `cms_theme`. Cơ chế: toggle class `dark` trên `document.documentElement` → Tailwind `dark:` variant. Khi thiết kế hoặc sửa bất kỳ component CMS nào, **bắt buộc thêm `dark:` classes** cho mọi màu nền, chữ, border, input, modal.
 
 **Không mirror user/loan vào CMS:** `cms-service` không còn đồng bộ `auth_db.users` hoặc `loan_db.loan_requests` sang DB riêng. `cms_db` chỉ lưu dữ liệu nội bộ CMS như admin users, quyền, cấu hình, audit/ops data. Khi CMS cần dữ liệu khách hàng hoặc khoản gọi vốn, hãy gọi API từ service nguồn (`auth-service`, `loan-service`) thay vì copy bảng.
