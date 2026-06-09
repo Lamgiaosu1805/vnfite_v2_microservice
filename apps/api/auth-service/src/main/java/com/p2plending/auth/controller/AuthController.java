@@ -11,6 +11,8 @@ import com.p2plending.auth.dto.request.KycInitRequest;
 import com.p2plending.auth.dto.request.KycVerifyRequest;
 import com.p2plending.auth.dto.request.LoginRequest;
 import com.p2plending.auth.dto.request.OtpVerifyRequest;
+import com.p2plending.auth.dto.request.BiometricChallengeRequest;
+import com.p2plending.auth.dto.request.BiometricEnableRequest;
 import com.p2plending.auth.dto.request.BiometricLoginRequest;
 import com.p2plending.auth.dto.request.DeviceResetInitRequest;
 import com.p2plending.auth.dto.request.DeviceResetVerifyRequest;
@@ -123,13 +125,24 @@ public class AuthController {
     }
 
     /**
+     * POST /api/auth/biometric/challenge
+     * Bước 1 đăng nhập sinh trắc học: cấp challenge (nonce) để thiết bị ký. Không cần JWT.
+     */
+    @PostMapping("/biometric/challenge")
+    public ResponseEntity<Map<String, String>> biometricChallenge(
+            @Valid @RequestBody BiometricChallengeRequest request) {
+        return ResponseEntity.ok(authService.createBiometricChallenge(request.getPhone()));
+    }
+
+    /**
      * POST /api/auth/biometric/login
-     * Đăng nhập bằng biometric token lưu trên thiết bị — không cần JWT, không giới hạn thời gian.
+     * Bước 2: thiết bị gửi chữ ký của challenge. Server verify bằng public key đã lưu.
+     * Không có shared secret truyền qua mạng — không cần JWT, không giới hạn thời gian.
      */
     @PostMapping("/biometric/login")
     public ResponseEntity<AuthResponse> biometricLogin(@Valid @RequestBody BiometricLoginRequest request) {
         return ResponseEntity.ok(authService.biometricLogin(
-                request.getPhone(), request.getBiometricToken(),
+                request.getPhone(), request.getSignature(),
                 request.getDeviceKey(), request.getDeviceName(), request.getPlatform()));
     }
 
@@ -167,13 +180,13 @@ public class AuthController {
 
     /**
      * POST /api/auth/biometric/verify
-     * Xác thực OTP trước khi app lưu trạng thái bật sinh trắc học cục bộ.
+     * Xác thực OTP + lưu public key của thiết bị để bật đăng nhập sinh trắc học.
      */
     @PostMapping("/biometric/verify")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<Map<String, String>> biometricVerify(
             @AuthenticationPrincipal UserDetails userDetails,
-            @Valid @RequestBody KycVerifyRequest request) {
+            @Valid @RequestBody BiometricEnableRequest request) {
         String phone = userDetails.getUsername();
         String userId = authService.getUserIdByPhone(phone);
         return ResponseEntity.ok(authService.verifyBiometricEnable(userId, request));

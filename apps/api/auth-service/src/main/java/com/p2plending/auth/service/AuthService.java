@@ -13,6 +13,7 @@ import com.p2plending.auth.domain.repository.DeviceLoginHistoryRepository;
 import com.p2plending.auth.domain.repository.KycDocumentRepository;
 import com.p2plending.auth.domain.repository.KycSubmissionRepository;
 import com.p2plending.auth.domain.repository.UserRepository;
+import com.p2plending.auth.dto.request.BiometricEnableRequest;
 import com.p2plending.auth.dto.request.KycSubmitRequest;
 import com.p2plending.auth.dto.request.KycVerifyRequest;
 import com.p2plending.auth.dto.request.LoginRequest;
@@ -43,12 +44,18 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.nio.charset.StandardCharsets;
+import java.security.KeyFactory;
+import java.security.PublicKey;
+import java.security.SecureRandom;
+import java.security.Signature;
+import java.security.spec.X509EncodedKeySpec;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.LinkedHashMap;
-import java.security.SecureRandom;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -61,12 +68,13 @@ import java.util.UUID;
 public class AuthService {
 
     private static final String REFRESH_TOKEN_PREFIX = "refresh_token:";
-    private static final String BIOMETRIC_ENABLE_OTP_PREFIX = "biometric_enable:";
+    private static final String BIOMETRIC_ENABLE_OTP_PREFIX  = "biometric_enable:";
     private static final String BIOMETRIC_DISABLE_OTP_PREFIX = "biometric_disable:";
-    private static final String BIOMETRIC_TOKEN_PREFIX = "biometric_token:";
+    private static final String BIOMETRIC_CHALLENGE_PREFIX   = "biometric_challenge:";
     private static final String DEVICE_SESSION_PREFIX  = "device_session:";
     private static final String DEVICE_RESET_OTP_PREFIX = "device_reset:";
     private static final Duration BIOMETRIC_OTP_TTL = Duration.ofMinutes(5);
+    private static final Duration BIOMETRIC_CHALLENGE_TTL = Duration.ofMinutes(2);
     private static final Duration DEVICE_RESET_OTP_TTL = Duration.ofMinutes(10);
     private static final String MOCK_OTP = "000000";
 
@@ -225,7 +233,7 @@ public class AuthService {
     }
 
     @Transactional
-    public Map<String, String> verifyBiometricEnable(String userId, KycVerifyRequest request) {
+    public Map<String, String> verifyBiometricEnable(String userId, BiometricEnableRequest request) {
         String stored = redisTemplate.opsForValue().get(biometricEnableOtpKey(userId));
         if (stored == null) {
             throw new InvalidOtpException("OTP đã hết hạn hoặc chưa thực hiện yêu cầu bật sinh trắc học");
@@ -234,36 +242,76 @@ public class AuthService {
             throw new InvalidOtpException("OTP không chính xác");
         }
 
+        // Public key phải parse được — chặn dữ liệu rác trước khi lưu vào DB
+        if (!isValidPublicKey(request.getPublicKey())) {
+            throw new InvalidTokenException("Public key sinh trắc học không hợp lệ");
+        }
+
         redisTemplate.delete(biometricEnableOtpKey(userId));
 
-        // Issue a persistent biometric token (no expiry) — dùng để login không giới hạn thời gian
+        // Lưu PUBLIC key vào DB. Private key nằm trong Secure Enclave / Keystore của thiết bị,
+        // không bao giờ rời máy. Đây là credential lâu dài → DB, không phải Redis.
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
-        String biometricToken = UUID.randomUUID().toString();
-        // Không set TTL — token tồn tại vĩnh viễn cho đến khi user tắt sinh trắc học
-        redisTemplate.opsForValue().set(biometricTokenKey(user.getPhone()), biometricToken);
+        user.setBiometricPublicKey(request.getPublicKey());
+        userRepository.save(user);
 
         log.info("Biometric enabled for userId={}", userId);
         Map<String, String> response = new HashMap<>();
         response.put("message", "Đăng nhập sinh trắc học đã được bật");
-        response.put("biometricToken", biometricToken);
         return response;
     }
 
-    // ── Biometric login (không cần JWT — dùng biometric token từ thiết bị) ──────
+    // ── Biometric login: challenge–response bằng chữ ký bất đối xứng ─────────────
 
-    @Transactional
-    public AuthResponse biometricLogin(String phone, String biometricToken, String deviceKey,
-                                       String deviceName, String platform) {
-        String stored = redisTemplate.opsForValue().get(biometricTokenKey(phone));
-        if (stored == null || !stored.equals(biometricToken)) {
+    /**
+     * Bước 1: cấp một challenge (nonce ngẫu nhiên, one-time, TTL ngắn) để thiết bị ký.
+     * Challenge nằm Redis là đúng mục đích — ephemeral; mất chỉ cần xin lại, không "thu hồi" gì.
+     */
+    @Transactional(readOnly = true)
+    public Map<String, String> createBiometricChallenge(String phone) {
+        User user = userRepository.findByPhone(phone)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+        if (user.getBiometricPublicKey() == null) {
             throw new InvalidTokenException(
                     "Sinh trắc học chưa được kích hoạt hoặc đã bị thu hồi. Vui lòng đăng nhập bằng mật khẩu.");
         }
 
-        // Find user trước để có userId cho history
+        byte[] nonce = new byte[32];
+        new SecureRandom().nextBytes(nonce);
+        String challenge = Base64.getUrlEncoder().withoutPadding().encodeToString(nonce);
+
+        redisTemplate.opsForValue().set(biometricChallengeKey(phone), challenge, BIOMETRIC_CHALLENGE_TTL);
+
+        log.info("Biometric challenge issued for userId={}", user.getId());
+        return Map.of("challenge", challenge);
+    }
+
+    /**
+     * Bước 2: verify chữ ký của challenge bằng public key đã lưu.
+     * Không pass biometric ở thiết bị thì không ký được → server từ chối.
+     */
+    @Transactional
+    public AuthResponse biometricLogin(String phone, String signature, String deviceKey,
+                                       String deviceName, String platform) {
         User user = userRepository.findByPhone(phone)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+        if (user.getBiometricPublicKey() == null) {
+            throw new InvalidTokenException(
+                    "Sinh trắc học chưa được kích hoạt hoặc đã bị thu hồi. Vui lòng đăng nhập bằng mật khẩu.");
+        }
+
+        String challenge = redisTemplate.opsForValue().get(biometricChallengeKey(phone));
+        if (challenge == null) {
+            throw new InvalidTokenException("Phiên sinh trắc học đã hết hạn. Vui lòng thử lại.");
+        }
+
+        if (!verifySignature(user.getBiometricPublicKey(), challenge, signature)) {
+            throw new InvalidTokenException("Xác thực sinh trắc học thất bại. Vui lòng đăng nhập bằng mật khẩu.");
+        }
+
+        // Challenge dùng một lần — xóa ngay để chống replay
+        redisTemplate.delete(biometricChallengeKey(phone));
 
         checkAndBindDevice(user.getId(), phone, deviceKey, deviceName, platform);
 
@@ -323,10 +371,11 @@ public class AuthService {
 
         redisTemplate.delete(biometricDisableOtpKey(userId));
 
-        // Xóa biometric token khỏi Redis → vô hiệu hóa biometric login
+        // Xóa public key khỏi DB → vô hiệu hóa biometric login
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
-        redisTemplate.delete(biometricTokenKey(user.getPhone()));
+        user.setBiometricPublicKey(null);
+        userRepository.save(user);
 
         log.info("Biometric disabled for userId={}", userId);
         return Map.of("message", "Đăng nhập sinh trắc học đã được tắt");
@@ -411,8 +460,41 @@ public class AuthService {
         return redisNamespaceProperties.qualify(BIOMETRIC_DISABLE_OTP_PREFIX + userId);
     }
 
-    private String biometricTokenKey(String phone) {
-        return redisNamespaceProperties.qualify(BIOMETRIC_TOKEN_PREFIX + phone);
+    private String biometricChallengeKey(String phone) {
+        return redisNamespaceProperties.qualify(BIOMETRIC_CHALLENGE_PREFIX + phone);
+    }
+
+    /** Kiểm tra public key base64 (X.509 SPKI) có parse được thành RSA key không. */
+    private boolean isValidPublicKey(String publicKeyBase64) {
+        try {
+            parsePublicKey(publicKeyBase64);
+            return true;
+        } catch (Exception e) {
+            log.warn("Invalid biometric public key submitted: {}", e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Verify chữ ký SHA256withRSA: payload (challenge) được thiết bị ký bằng private key,
+     * server verify bằng public key đã lưu.
+     */
+    private boolean verifySignature(String publicKeyBase64, String payload, String signatureBase64) {
+        try {
+            PublicKey publicKey = parsePublicKey(publicKeyBase64);
+            Signature verifier = Signature.getInstance("SHA256withRSA");
+            verifier.initVerify(publicKey);
+            verifier.update(payload.getBytes(StandardCharsets.UTF_8));
+            return verifier.verify(Base64.getDecoder().decode(signatureBase64));
+        } catch (Exception e) {
+            log.warn("Biometric signature verification error: {}", e.getMessage());
+            return false;
+        }
+    }
+
+    private PublicKey parsePublicKey(String publicKeyBase64) throws Exception {
+        byte[] der = Base64.getDecoder().decode(publicKeyBase64);
+        return KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(der));
     }
 
     private String deviceSessionKey(String phone) {
@@ -588,10 +670,15 @@ public class AuthService {
         }
 
         redisTemplate.delete(deviceResetOtpKey(phone));
-        // Xóa toàn bộ session, device binding và biometric token → buộc đăng nhập lại từ đầu
+        // Xóa toàn bộ session và device binding trong Redis
         redisTemplate.delete(refreshTokenKey(phone));
-        redisTemplate.delete(biometricTokenKey(phone));
         redisTemplate.delete(deviceSessionKey(phone));
+        redisTemplate.delete(biometricChallengeKey(phone));
+        // Xóa public key sinh trắc học trong DB → buộc đăng nhập lại từ đầu (reset từ thiết bị khác)
+        userRepository.findByPhone(phone).ifPresent(u -> {
+            u.setBiometricPublicKey(null);
+            userRepository.save(u);
+        });
 
         log.info("Device reset verified for phone={} — all sessions revoked", phone);
         return Map.of("message", "Đặt lại thiết bị thành công. Vui lòng đăng nhập lại bằng mật khẩu.");

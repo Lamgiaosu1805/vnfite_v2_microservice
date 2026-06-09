@@ -44,6 +44,15 @@ public class User {
     @Column(length = 20)
     private String referredBy;
 
+    /**
+     * Public key (base64 X.509 SPKI) cho đăng nhập sinh trắc học theo challenge–response.
+     * Private key tương ứng nằm trong Secure Enclave / Android Keystore của thiết bị,
+     * không bao giờ rời máy. Server chỉ dùng key này để verify chữ ký challenge.
+     * Null = chưa bật hoặc đã tắt sinh trắc học.
+     */
+    @Column(name = "biometric_public_key", columnDefinition = "TEXT")
+    private String biometricPublicKey;
+
     @Column(nullable = false)
     @Builder.Default
     private boolean isDeleted = false;
