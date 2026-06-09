@@ -12,5 +12,5 @@ public interface NotificationRepository extends JpaRepository<Notification, Stri
 
     Optional<Notification> findByIdAndUserIdAndIsDeletedFalse(String id, String userId);
 
-    long countByUserIdAndReadFalseAndIsDeletedFalse(String userId);
+    long countByUserIdAndIsReadFalseAndIsDeletedFalse(String userId);
 }

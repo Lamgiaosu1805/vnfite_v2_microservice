@@ -44,7 +44,7 @@ public class NotificationService {
 
     @Transactional(readOnly = true)
     public long getUnreadCount(String userId) {
-        return notificationRepository.countByUserIdAndReadFalseAndIsDeletedFalse(userId);
+        return notificationRepository.countByUserIdAndIsReadFalseAndIsDeletedFalse(userId);
     }
 
     @Transactional
