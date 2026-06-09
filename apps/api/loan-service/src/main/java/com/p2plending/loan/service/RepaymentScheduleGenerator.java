@@ -36,8 +36,10 @@ import java.util.List;
 @Slf4j
 public class RepaymentScheduleGenerator {
 
-    private static final int    MONEY_SCALE = 2;
+    private static final int        MONEY_SCALE  = 2;
     private static final BigDecimal DAYS_IN_YEAR = BigDecimal.valueOf(365);
+    /** 100 × 365 — mẫu số duy nhất cho công thức lãi actual/365: B × r × days / 36500 */
+    private static final BigDecimal RATE_BASE    = BigDecimal.valueOf(36500);
 
     /**
      * @param principal    số tiền vay
@@ -85,12 +87,8 @@ public class RepaymentScheduleGenerator {
         long actualDays = ChronoUnit.DAYS.between(fundedDate, firstDueDate);
         BigDecimal monthlyRate = annualRate.divide(BigDecimal.valueOf(1200), 10, RoundingMode.HALF_UP);
 
-        BigDecimal firstInterest = money(
-                principal
-                .multiply(annualRate.divide(BigDecimal.valueOf(100), 10, RoundingMode.HALF_UP))
-                .multiply(BigDecimal.valueOf(actualDays))
-                .divide(DAYS_IN_YEAR, 10, RoundingMode.HALF_UP)
-        );
+        // Lãi kỳ 1 = P × annualRate × days / 36500  (actual/365, chia một lần duy nhất)
+        BigDecimal firstInterest = calcInterest(principal, annualRate, actualDays);
 
         List<RepaymentSchedule> schedule = new ArrayList<>(termMonths + 1);
 
@@ -155,8 +153,6 @@ public class RepaymentScheduleGenerator {
                                                                int n, LocalDate startDate) {
         BigDecimal monthlyRate = annualRate.divide(BigDecimal.valueOf(1200), 10, RoundingMode.HALF_UP);
         BigDecimal emi         = annuityPayment(principal, monthlyRate, n);
-        BigDecimal ratePerDay  = annualRate.divide(BigDecimal.valueOf(100), 10, RoundingMode.HALF_UP)
-                                           .divide(DAYS_IN_YEAR, 10, RoundingMode.HALF_UP);
 
         List<RepaymentSchedule> schedule = new ArrayList<>(n);
         BigDecimal outstanding = principal;
@@ -166,7 +162,8 @@ public class RepaymentScheduleGenerator {
             LocalDate dueDate  = startDate.plusMonths(k);
             long days          = ChronoUnit.DAYS.between(prevDate, dueDate);
 
-            BigDecimal interest = money(outstanding.multiply(ratePerDay).multiply(BigDecimal.valueOf(days)));
+            // Lãi = dư_nợ × annualRate × days / 36500  (công thức giống kỳ 1, chia một lần)
+            BigDecimal interest = calcInterest(outstanding, annualRate, days);
             BigDecimal princ    = (k == n) ? outstanding : money(emi.subtract(interest));
             if (princ.compareTo(outstanding) > 0) princ = outstanding;
             outstanding = outstanding.subtract(princ);
@@ -214,15 +211,35 @@ public class RepaymentScheduleGenerator {
         return schedule;
     }
 
-    /** Công thức niên kim: M = P·r·(1+r)^n / ((1+r)^n − 1). r=0 → P/n. */
+    /**
+     * Công thức niên kim: EMI = P × r × (1+r)^n / ((1+r)^n − 1).
+     * Dùng BigDecimal.pow(int) — chính xác hoàn toàn (không qua double).
+     * r = 0 → P/n (trả gốc đều, không lãi).
+     */
     private BigDecimal annuityPayment(BigDecimal principal, BigDecimal monthlyRate, int n) {
         if (monthlyRate.signum() == 0) {
             return money(principal.divide(BigDecimal.valueOf(n), 10, RoundingMode.HALF_UP));
         }
-        double r = monthlyRate.doubleValue();
-        double pow = Math.pow(1 + r, n);
-        double emi = principal.doubleValue() * r * pow / (pow - 1);
-        return money(BigDecimal.valueOf(emi));
+        // (1+r)^n: BigDecimal.pow(int) cho kết quả chính xác, scale = n × scale(monthlyRate)
+        BigDecimal onePlusR = BigDecimal.ONE.add(monthlyRate);
+        BigDecimal powN     = onePlusR.pow(n);
+        // EMI = P × r × (1+r)^n / ((1+r)^n − 1)
+        return money(
+            principal.multiply(monthlyRate).multiply(powN)
+                     .divide(powN.subtract(BigDecimal.ONE), 10, RoundingMode.HALF_UP)
+        );
+    }
+
+    /**
+     * Lãi actual/365: balance × annualRate(%) × days / 36500.
+     * Chia một lần duy nhất (không có lần làm tròn trung gian).
+     */
+    private BigDecimal calcInterest(BigDecimal balance, BigDecimal annualRate, long days) {
+        return money(
+            balance.multiply(annualRate)
+                   .multiply(BigDecimal.valueOf(days))
+                   .divide(RATE_BASE, 10, RoundingMode.HALF_UP)
+        );
     }
 
     private RepaymentSchedule buildPeriod(int period, LocalDate dueDate, BigDecimal princ, BigDecimal interest) {
