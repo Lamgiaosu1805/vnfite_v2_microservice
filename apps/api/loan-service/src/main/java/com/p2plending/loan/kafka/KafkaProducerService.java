@@ -2,9 +2,12 @@ package com.p2plending.loan.kafka;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.p2plending.loan.domain.entity.LoanContract;
 import com.p2plending.loan.domain.entity.LoanRequest;
+import com.p2plending.loan.kafka.event.ContractReadyEvent;
 import com.p2plending.loan.kafka.event.LoanApprovedAwaitingBorrowerEvent;
 import com.p2plending.loan.kafka.event.LoanCreatedEvent;
+import com.p2plending.loan.kafka.event.LoanDisbursedEvent;
 import com.p2plending.loan.kafka.event.LoanFundedEvent;
 import com.p2plending.loan.kafka.event.LoanSubmittedEvent;
 import lombok.RequiredArgsConstructor;
@@ -13,6 +16,7 @@ import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -23,6 +27,8 @@ public class KafkaProducerService {
     private static final String TOPIC_LOAN_CREATED   = "loan.created";
     private static final String TOPIC_LOAN_FUNDED    = "loan.funded";
     private static final String TOPIC_LOAN_APPROVED_AWAITING_BORROWER = "loan.approved.awaiting_borrower";
+    private static final String TOPIC_CONTRACT_READY = "contract.ready";
+    private static final String TOPIC_LOAN_DISBURSED = "loan.disbursed";
 
     private final KafkaTemplate<String, String> kafkaTemplate;
     private final ObjectMapper objectMapper;
@@ -81,6 +87,34 @@ public class KafkaProducerService {
                 .approvedAt(loan.getReviewedAt() != null ? loan.getReviewedAt() : LocalDateTime.now())
                 .build();
         send(TOPIC_LOAN_APPROVED_AWAITING_BORROWER, loan.getId(), event);
+    }
+
+    /** Published when the borrower's loan agreement is ready to sign (loan just FUNDED). */
+    public void publishContractReady(LoanRequest loan, LoanContract contract) {
+        ContractReadyEvent event = ContractReadyEvent.builder()
+                .loanId(loan.getId())
+                .loanCode(loan.getLoanCode())
+                .borrowerId(loan.getBorrowerId())
+                .contractId(contract.getId())
+                .amount(loan.getAmount())
+                .interestRate(loan.getInterestRate())
+                .termMonths(loan.getTermMonths())
+                .issuedAt(contract.getIssuedAt() != null ? contract.getIssuedAt() : LocalDateTime.now())
+                .build();
+        send(TOPIC_CONTRACT_READY, loan.getId(), event);
+    }
+
+    /** Published when OPS disburses funds to the borrower (loan → DISBURSED). */
+    public void publishLoanDisbursed(LoanRequest loan, List<String> investorIds) {
+        LoanDisbursedEvent event = LoanDisbursedEvent.builder()
+                .loanId(loan.getId())
+                .loanCode(loan.getLoanCode())
+                .borrowerId(loan.getBorrowerId())
+                .amount(loan.getAmount())
+                .disbursedAt(loan.getDisbursedAt() != null ? loan.getDisbursedAt() : LocalDateTime.now())
+                .investorIds(investorIds)
+                .build();
+        send(TOPIC_LOAN_DISBURSED, loan.getId(), event);
     }
 
     private void send(String topic, String key, Object payload) {

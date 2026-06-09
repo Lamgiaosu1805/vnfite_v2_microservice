@@ -135,6 +135,26 @@ public class SourceServiceClient {
         return parseLoan(exchangeForJson(url, HttpMethod.GET, null));
     }
 
+    /** Danh sách hợp đồng (vay + đầu tư) của một khoản — raw JSON cho CMS web. */
+    public JsonNode getLoanContracts(String loanId) {
+        String url = UriComponentsBuilder.fromHttpUrl(loanServiceUrl)
+                .path("/internal/loans/{loanId}/contracts")
+                .buildAndExpand(loanId)
+                .toUriString();
+        return exchangeForJson(url, HttpMethod.GET, null);
+    }
+
+    /** Giải ngân vốn cho người gọi vốn (OPS bấm trên CMS). */
+    public LoanSummaryResponse disburseLoan(String loanId, String disbursedBy) {
+        String url = UriComponentsBuilder.fromHttpUrl(loanServiceUrl)
+                .path("/internal/loans/{loanId}/disburse")
+                .buildAndExpand(loanId)
+                .toUriString();
+        var body = new java.util.LinkedHashMap<String, Object>();
+        body.put("disbursedBy", disbursedBy);
+        return parseLoan(exchangeForJson(url, HttpMethod.POST, body));
+    }
+
     public PagedResponse<LoanSummaryResponse> getLoans(String status, String borrowerId,
                                                        String province, String search, int page, int size) {
         URI uri = UriComponentsBuilder.fromHttpUrl(loanServiceUrl)

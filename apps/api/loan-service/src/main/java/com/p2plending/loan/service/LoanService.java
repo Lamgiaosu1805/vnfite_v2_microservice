@@ -1,6 +1,7 @@
 package com.p2plending.loan.service;
 
 import com.p2plending.loan.config.CacheConfig;
+import com.p2plending.loan.domain.entity.LoanContract;
 import com.p2plending.loan.domain.entity.LoanOffer;
 import com.p2plending.loan.domain.entity.LoanProduct;
 import com.p2plending.loan.domain.entity.LoanRequest;
@@ -13,6 +14,7 @@ import com.p2plending.loan.dto.request.LoanFilterParams;
 import com.p2plending.loan.dto.request.LoanOfferCreateRequest;
 import com.p2plending.loan.dto.response.LoanOfferResponse;
 import com.p2plending.loan.dto.response.LoanResponse;
+import com.p2plending.loan.dto.response.OfferCreateResponse;
 import com.p2plending.loan.dto.response.PagedResponse;
 import com.p2plending.loan.exception.InvalidLoanStateException;
 import com.p2plending.loan.exception.LoanNotFoundException;
@@ -52,6 +54,8 @@ public class LoanService {
             LoanStatus.AWAITING_BORROWER_APPROVAL,
             LoanStatus.ACTIVE,
             LoanStatus.FUNDED,
+            LoanStatus.AWAITING_DISBURSEMENT,
+            LoanStatus.DISBURSED,
             LoanStatus.REPAYING
     );
 
@@ -62,6 +66,7 @@ public class LoanService {
     private final KafkaProducerService  kafkaProducerService;
     private final LoanProductService    loanProductService;
     private final RepaymentService      repaymentService;
+    private final ContractService       contractService;
 
     // ── Create ────────────────────────────────────────────────────
 
@@ -140,7 +145,7 @@ public class LoanService {
         @CacheEvict(value = CacheConfig.CACHE_LOANS,      allEntries = true),
         @CacheEvict(value = CacheConfig.CACHE_LOAN_BY_ID, key = "#loanId")
     })
-    public LoanOfferResponse createOffer(String loanId, LoanOfferCreateRequest request, String investorId) {
+    public OfferCreateResponse createOffer(String loanId, LoanOfferCreateRequest request, String investorId) {
         LoanRequest loan = findLoanOrThrow(loanId);
 
         if (!OFFERABLE_STATUSES.contains(loan.getStatus())) {
@@ -182,29 +187,60 @@ public class LoanService {
                         : "Hãy đầu tư toàn bộ %,.0f VNĐ còn lại.".formatted(remaining)));
         }
 
+        // Offer ở trạng thái PENDING (giữ chỗ) — chỉ tính vào fundedAmount sau khi nhà đầu tư
+        // ký hợp đồng đầu tư bằng OTP (ContractService.signContract).
         LoanOffer offer = LoanOffer.builder()
                 .loanRequestId(loanId)
                 .investorId(investorId)
                 .amount(request.getAmount())
-                .status(OfferStatus.ACCEPTED)
+                .status(OfferStatus.PENDING)
                 .build();
 
         LoanOffer saved = loanOfferRepository.save(offer);
 
-        loan.setFundedAmount(loan.getFundedAmount().add(request.getAmount()));
-        if (loan.isFullyFunded()) {
-            loan.setStatus(LoanStatus.FUNDED);
-            loanRequestRepository.save(loan);
-            repaymentService.generateSchedule(loan);
-            kafkaProducerService.publishLoanFunded(loan);
-            log.info("Loan {} fully funded — schedule generated, publishing loan.funded event", loanId);
-        } else {
-            loanRequestRepository.save(loan);
+        // Phát hành hợp đồng đầu tư PENDING_SIGNATURE để nhà đầu tư ký OTP.
+        LoanContract contract = contractService.issueInvestmentContract(loan, saved);
+
+        log.info("Offer created (PENDING, awaiting signature): id={} loan={} investor={} amount={} contract={}",
+                saved.getId(), loanId, investorId, request.getAmount(), contract.getId());
+        return OfferCreateResponse.builder()
+                .offerId(saved.getId())
+                .contract(contractService.toContractResponse(contract, loan))
+                .build();
+    }
+
+    /** Giải ngân (OPS trên CMS): AWAITING_DISBURSEMENT → DISBURSED, sinh lịch trả nợ từ ngày giải ngân. */
+    @Transactional
+    @Caching(evict = {
+        @CacheEvict(value = CacheConfig.CACHE_LOANS,      allEntries = true),
+        @CacheEvict(value = CacheConfig.CACHE_LOAN_BY_ID, key = "#loanId")
+    })
+    public LoanResponse disburse(String loanId, String disbursedBy) {
+        LoanRequest loan = findLoanOrThrow(loanId);
+
+        if (loan.getStatus() != LoanStatus.AWAITING_DISBURSEMENT) {
+            throw new InvalidLoanStateException(
+                    "Khoản gọi vốn %s không ở trạng thái chờ giải ngân (status: %s)"
+                    .formatted(loan.getLoanCode(), loan.getStatus()));
         }
 
-        log.info("Offer created: id={} loan={} investor={} amount={}",
-                saved.getId(), loanId, investorId, request.getAmount());
-        return loanOfferMapper.toResponse(saved);
+        loan.setStatus(LoanStatus.DISBURSED);
+        loan.setDisbursedAt(LocalDateTime.now());
+        loan.setDisbursedBy(disbursedBy);
+        loanRequestRepository.save(loan);
+
+        // Sinh lịch trả nợ từ ngày giải ngân (generator dùng LocalDate.now).
+        repaymentService.generateSchedule(loan);
+
+        List<String> investorIds = loanOfferRepository
+                .findByLoanRequestIdAndStatus(loanId, OfferStatus.ACCEPTED).stream()
+                .map(LoanOffer::getInvestorId)
+                .distinct()
+                .toList();
+        kafkaProducerService.publishLoanDisbursed(loan, investorIds);
+
+        log.info("Loan {} disbursed by {} — schedule generated, loan.disbursed published", loanId, disbursedBy);
+        return buildResponse(loan, false);
     }
 
     // ── Kafka consumer callbacks ──────────────────────────────────

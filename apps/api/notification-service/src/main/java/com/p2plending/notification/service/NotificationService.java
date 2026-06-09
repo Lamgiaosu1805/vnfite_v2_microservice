@@ -6,7 +6,9 @@ import com.p2plending.notification.domain.enums.NotificationType;
 import com.p2plending.notification.domain.repository.NotificationRepository;
 import com.p2plending.notification.dto.NotificationResponse;
 import com.p2plending.notification.dto.PagedResponse;
+import com.p2plending.notification.kafka.event.ContractReadyEvent;
 import com.p2plending.notification.kafka.event.LoanApprovedAwaitingBorrowerEvent;
+import com.p2plending.notification.kafka.event.LoanDisbursedEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
@@ -17,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.text.NumberFormat;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Map;
 import java.util.Locale;
 
@@ -90,6 +93,90 @@ public class NotificationService {
                         event.getLoanCode() != null ? event.getLoanCode() : event.getLoanId()),
                 Map.of("action", "OPEN_LOAN_DETAIL", "loanId", event.getLoanId())
         );
+    }
+
+    /** Hợp đồng vay đã sẵn sàng để người gọi vốn ký (khoản vừa đủ vốn). */
+    @Transactional
+    public void notifyContractReady(ContractReadyEvent event) {
+        String code = event.getLoanCode() != null ? event.getLoanCode() : event.getLoanId();
+        String title = "Hợp đồng đã sẵn sàng để ký";
+        String message = ("Khoản gọi vốn %s đã được đầu tư đủ. Hợp đồng vay (số tiền %s, lãi suất %s/năm, "
+                + "kỳ hạn %s tháng) đã sẵn sàng. Vui lòng ký hợp đồng để hoàn tất.")
+                .formatted(code, formatMoney(event.getAmount()), formatRate(event.getInterestRate()),
+                        event.getTermMonths() != null ? event.getTermMonths() : 0);
+
+        Notification notification = Notification.builder()
+                .userId(event.getBorrowerId())
+                .title(title)
+                .message(message)
+                .type(NotificationType.IN_APP)
+                .channel("CONTRACT")
+                .referenceId(event.getContractId())
+                .referenceType("CONTRACT")
+                .sentAt(LocalDateTime.now())
+                .build();
+        notificationRepository.save(notification);
+        log.info("Stored contract.ready notification for borrower={} loan={} contract={}",
+                event.getBorrowerId(), event.getLoanId(), event.getContractId());
+
+        pushClient.pushToUser(
+                event.getBorrowerId(),
+                title,
+                "Khoản gọi vốn %s đã sẵn sàng để ký hợp đồng. Nhấn để ký.".formatted(code),
+                Map.of("action", "OPEN_CONTRACT_SIGN",
+                        "loanId", event.getLoanId(),
+                        "contractId", event.getContractId())
+        );
+    }
+
+    /** Vốn đã được giải ngân — thông báo cho người gọi vốn và các nhà đầu tư. */
+    @Transactional
+    public void notifyLoanDisbursed(LoanDisbursedEvent event) {
+        String code = event.getLoanCode() != null ? event.getLoanCode() : event.getLoanId();
+
+        // Người gọi vốn — đã nhận vốn
+        String bTitle = "Đã nhận vốn";
+        String bMessage = "Khoản gọi vốn %s đã được giải ngân với số tiền %s. Bạn đã nhận vốn thành công."
+                .formatted(code, formatMoney(event.getAmount()));
+        notificationRepository.save(Notification.builder()
+                .userId(event.getBorrowerId())
+                .title(bTitle)
+                .message(bMessage)
+                .type(NotificationType.IN_APP)
+                .channel("DISBURSEMENT")
+                .referenceId(event.getLoanId())
+                .referenceType("LOAN")
+                .sentAt(LocalDateTime.now())
+                .build());
+        pushClient.pushToUser(event.getBorrowerId(), bTitle,
+                "Khoản gọi vốn %s đã được giải ngân. Nhấn để xem lịch thanh toán.".formatted(code),
+                Map.of("action", "OPEN_LOAN_DETAIL", "loanId", event.getLoanId()));
+
+        // Nhà đầu tư — khoản đã giải ngân
+        List<String> investorIds = event.getInvestorIds();
+        if (investorIds != null) {
+            for (String investorId : investorIds) {
+                String iTitle = "Khoản đầu tư đã giải ngân";
+                String iMessage = "Khoản %s bạn đầu tư đã được giải ngân. Bạn sẽ bắt đầu nhận dòng tiền theo lịch."
+                        .formatted(code);
+                notificationRepository.save(Notification.builder()
+                        .userId(investorId)
+                        .title(iTitle)
+                        .message(iMessage)
+                        .type(NotificationType.IN_APP)
+                        .channel("DISBURSEMENT")
+                        .referenceId(event.getLoanId())
+                        .referenceType("LOAN")
+                        .sentAt(LocalDateTime.now())
+                        .build());
+                pushClient.pushToUser(investorId, iTitle,
+                        "Khoản %s bạn đầu tư đã được giải ngân.".formatted(code),
+                        Map.of("action", "OPEN_CASHFLOW", "loanId", event.getLoanId()));
+            }
+        }
+        log.info("Stored loan.disbursed notifications for loan={} borrower={} investors={}",
+                event.getLoanId(), event.getBorrowerId(),
+                investorIds != null ? investorIds.size() : 0);
     }
 
     private String formatMoney(BigDecimal value) {

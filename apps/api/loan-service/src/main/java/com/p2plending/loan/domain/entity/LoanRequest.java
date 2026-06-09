@@ -161,6 +161,14 @@ public class LoanRequest {
     @Column(name = "reviewed_by", length = 100)
     private String reviewedBy;
 
+    /** Thời điểm OPS bấm giải ngân trên CMS. */
+    @Column(name = "disbursed_at")
+    private LocalDateTime disbursedAt;
+
+    /** Username OPS đã thực hiện giải ngân. */
+    @Column(name = "disbursed_by", length = 100)
+    private String disbursedBy;
+
     @Column(nullable = false)
     @Builder.Default
     private boolean isDeleted = false;

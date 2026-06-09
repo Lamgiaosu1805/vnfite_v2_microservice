@@ -1,15 +1,18 @@
 package com.p2plending.loan.controller;
 
+import com.p2plending.loan.dto.request.DisburseRequest;
 import com.p2plending.loan.dto.request.InternalLoanProposeRequest;
 import com.p2plending.loan.dto.request.InternalLoanReviewRequest;
 import com.p2plending.loan.dto.request.LoanFilterParams;
 import com.p2plending.loan.dto.request.RecordPaymentRequest;
 import com.p2plending.loan.dto.response.AppraisalSuggestionResponse;
+import com.p2plending.loan.dto.response.ContractResponse;
 import com.p2plending.loan.dto.response.InternalLoanStatsResponse;
 import com.p2plending.loan.dto.response.LoanResponse;
 import com.p2plending.loan.dto.response.PagedResponse;
 import com.p2plending.loan.dto.response.RepaymentScheduleResponse;
 import com.p2plending.loan.service.AppraisalSuggestionService;
+import com.p2plending.loan.service.ContractService;
 import com.p2plending.loan.service.LoanService;
 import com.p2plending.loan.service.RepaymentService;
 import jakarta.validation.Valid;
@@ -34,6 +37,7 @@ public class InternalLoanController {
     private final LoanService loanService;
     private final RepaymentService repaymentService;
     private final AppraisalSuggestionService appraisalSuggestionService;
+    private final ContractService contractService;
 
     @Value("${app.internal.secret:dev-internal-secret}")
     private String internalSecret;
@@ -126,6 +130,28 @@ public class InternalLoanController {
             @Valid @RequestBody RecordPaymentRequest request) {
         requireInternalSecret(secret);
         return ResponseEntity.ok(repaymentService.recordPayment(loanId, request));
+    }
+
+    // ─── Hợp đồng & giải ngân ───────────────────────────────────────────────────
+
+    /** Danh sách hợp đồng (vay + đầu tư) của một khoản — CMS hiển thị. */
+    @GetMapping("/{loanId}/contracts")
+    public ResponseEntity<List<ContractResponse>> getContracts(
+            @RequestHeader(INTERNAL_SECRET_HEADER) String secret,
+            @PathVariable String loanId) {
+        requireInternalSecret(secret);
+        return ResponseEntity.ok(contractService.getContractsByLoan(loanId));
+    }
+
+    /** Giải ngân vốn cho người gọi vốn (OPS bấm trên CMS): AWAITING_DISBURSEMENT → DISBURSED. */
+    @PostMapping("/{loanId}/disburse")
+    public ResponseEntity<LoanResponse> disburse(
+            @RequestHeader(INTERNAL_SECRET_HEADER) String secret,
+            @PathVariable String loanId,
+            @RequestBody(required = false) DisburseRequest request) {
+        requireInternalSecret(secret);
+        String disbursedBy = request != null ? request.getDisbursedBy() : null;
+        return ResponseEntity.ok(loanService.disburse(loanId, disbursedBy));
     }
 
     private void requireInternalSecret(String secret) {

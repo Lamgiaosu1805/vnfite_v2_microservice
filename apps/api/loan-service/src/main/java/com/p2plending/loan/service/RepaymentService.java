@@ -39,13 +39,13 @@ public class RepaymentService {
 
     private static final ZoneId TZ = ZoneId.of("Asia/Ho_Chi_Minh");
 
-    /** Trạng thái khoản chấp nhận ghi nhận trả nợ. */
+    /** Trạng thái khoản chấp nhận ghi nhận trả nợ (đã giải ngân + có lịch). */
     private static final Set<LoanStatus> PAYABLE_STATUSES =
-            EnumSet.of(LoanStatus.FUNDED, LoanStatus.REPAYING, LoanStatus.DEFAULTED);
+            EnumSet.of(LoanStatus.DISBURSED, LoanStatus.REPAYING, LoanStatus.DEFAULTED);
 
     /** Khoản đang trong vòng đời trả nợ — đối tượng quét DPD. */
     private static final Set<LoanStatus> SERVICING_STATUSES =
-            EnumSet.of(LoanStatus.FUNDED, LoanStatus.REPAYING);
+            EnumSet.of(LoanStatus.DISBURSED, LoanStatus.REPAYING);
 
     private final RepaymentScheduleRepository    scheduleRepository;
     private final RepaymentTransactionRepository transactionRepository;

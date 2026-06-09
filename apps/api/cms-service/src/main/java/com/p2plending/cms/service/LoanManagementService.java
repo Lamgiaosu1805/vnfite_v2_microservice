@@ -32,6 +32,29 @@ public class LoanManagementService {
         return sourceServiceClient.getRepaymentSchedule(loanId);
     }
 
+    public JsonNode getContracts(String loanId) {
+        return sourceServiceClient.getLoanContracts(loanId);
+    }
+
+    /**
+     * Giải ngân vốn cho người gọi vốn (OPS): AWAITING_DISBURSEMENT → DISBURSED.
+     * Ghi audit log quyết định giải ngân.
+     */
+    public LoanSummaryResponse disburse(String loanId, CmsPrincipal operator) {
+        LoanSummaryResponse loanBefore = safeGetLoan(loanId);
+        String decidedBy   = operator != null ? operator.username() : "unknown";
+        String deciderRole = operator != null ? operator.role() : null;
+
+        LoanSummaryResponse result = sourceServiceClient.disburseLoan(loanId, decidedBy);
+
+        try {
+            auditService.record(loanBefore, result, "DISBURSED", null, decidedBy, deciderRole, null);
+        } catch (Exception e) {
+            log.error("Failed to record audit log for disbursement of loan {}: {}", loanId, e.getMessage());
+        }
+        return result;
+    }
+
     public LoanSummaryResponse propose(String loanId, LoanProposeRequest req, CmsPrincipal proposer) {
         return sourceServiceClient.proposeLoan(loanId, req.getProposedAmount(), req.getProposedInterestRate(),
                 req.getNote(), proposer != null ? proposer.username() : null);

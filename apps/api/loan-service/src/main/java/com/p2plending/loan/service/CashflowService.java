@@ -36,7 +36,8 @@ public class CashflowService {
 
     private static final DateTimeFormatter MONTH_FMT = DateTimeFormatter.ofPattern("yyyy-MM");
     private static final Set<LoanStatus> ACTIVE_STATUSES = Set.of(
-            LoanStatus.ACTIVE, LoanStatus.FUNDED, LoanStatus.REPAYING, LoanStatus.COMPLETED,
+            LoanStatus.ACTIVE, LoanStatus.FUNDED, LoanStatus.AWAITING_DISBURSEMENT,
+            LoanStatus.DISBURSED, LoanStatus.REPAYING, LoanStatus.COMPLETED,
             LoanStatus.AWAITING_BORROWER_APPROVAL
     );
 
@@ -93,8 +94,9 @@ public class CashflowService {
 
             totalInvested = totalInvested.add(offer.getAmount());
 
-            // Lịch trả nợ chỉ có với REPAYING và COMPLETED
-            if (loan.getStatus() != LoanStatus.REPAYING
+            // Lịch trả nợ chỉ có sau khi giải ngân: DISBURSED / REPAYING / COMPLETED
+            if (loan.getStatus() != LoanStatus.DISBURSED
+                    && loan.getStatus() != LoanStatus.REPAYING
                     && loan.getStatus() != LoanStatus.COMPLETED) continue;
 
             BigDecimal fundedAmount = loan.getFundedAmount();

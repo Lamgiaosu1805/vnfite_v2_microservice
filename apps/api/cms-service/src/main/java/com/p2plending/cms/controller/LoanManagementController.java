@@ -52,6 +52,24 @@ public class LoanManagementController {
         return ResponseEntity.ok(loanService.getRepaymentSchedule(loanId));
     }
 
+    /** GET /cms/loans/{loanId}/contracts — hợp đồng vay + đầu tư của khoản. */
+    @GetMapping("/{loanId}/contracts")
+    public ResponseEntity<JsonNode> getContracts(@PathVariable String loanId) {
+        return ResponseEntity.ok(loanService.getContracts(loanId));
+    }
+
+    /**
+     * POST /cms/loans/{loanId}/disburse
+     * OPS giải ngân vốn cho người gọi vốn: AWAITING_DISBURSEMENT → DISBURSED.
+     * Sinh lịch trả nợ từ ngày giải ngân + bắn loan.disbursed.
+     */
+    @PostMapping("/{loanId}/disburse")
+    public ResponseEntity<LoanSummaryResponse> disburse(
+            @PathVariable String loanId,
+            @AuthenticationPrincipal CmsPrincipal operator) {
+        return ResponseEntity.ok(loanService.disburse(loanId, operator));
+    }
+
     /**
      * PUT /cms/loans/{loanId}/propose
      * Cấp 1 — thẩm định viên (OPS) đề xuất số tiền + lãi suất → trình ban lãnh đạo.

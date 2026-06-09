@@ -7,9 +7,9 @@ import com.p2plending.loan.dto.request.LoanFilterParams;
 import com.p2plending.loan.dto.request.LoanOfferCreateRequest;
 import com.p2plending.loan.dto.request.LoanOtpVerifyRequest;
 import com.p2plending.loan.dto.response.CashflowResponse;
-import com.p2plending.loan.dto.response.LoanOfferResponse;
 import com.p2plending.loan.dto.response.LoanOtpInitResponse;
 import com.p2plending.loan.dto.response.LoanResponse;
+import com.p2plending.loan.dto.response.OfferCreateResponse;
 import com.p2plending.loan.dto.response.PagedResponse;
 import com.p2plending.loan.dto.response.RepaymentScheduleResponse;
 import com.p2plending.loan.security.AuthenticatedUser;
@@ -177,12 +177,13 @@ public class LoanController {
 
     /**
      * POST /api/loans/{id}/offer
-     * Investor places an offer on an ACTIVE loan.
-     * Publishes "loan.funded" when fully funded.
+     * Investor places an offer on an ACTIVE loan. Offer is created PENDING and an
+     * investment contract is issued (PENDING_SIGNATURE) — the investor must sign it
+     * with OTP via /api/contracts/{contractId}/sign to complete the investment.
      */
     @PostMapping("/{id}/offer")
     @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<LoanOfferResponse> createOffer(
+    public ResponseEntity<OfferCreateResponse> createOffer(
             @PathVariable String id,
             @Valid @RequestBody LoanOfferCreateRequest request,
             @AuthenticationPrincipal AuthenticatedUser principal

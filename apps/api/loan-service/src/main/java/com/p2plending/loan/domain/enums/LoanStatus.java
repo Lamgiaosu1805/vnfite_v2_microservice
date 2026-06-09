@@ -5,7 +5,9 @@ public enum LoanStatus {
     PENDING_APPROVAL,           // appraiser proposed amount+rate — awaiting leadership approval
     AWAITING_BORROWER_APPROVAL, // leadership approved terms — waiting for borrower to confirm
     ACTIVE,                     // borrower confirmed → live on marketplace, accepting investor offers
-    FUNDED,                     // fully funded by investors
+    FUNDED,                     // fully funded by investors — borrower loan agreement issued, awaiting signature
+    AWAITING_DISBURSEMENT,      // borrower signed the loan agreement — in CMS disbursement queue
+    DISBURSED,                  // OPS released funds to borrower — repayment schedule generated from disbursement date
     REPAYING,                   // borrower making repayments
     COMPLETED,                  // fully repaid
     DEFAULTED,                  // borrower defaulted
