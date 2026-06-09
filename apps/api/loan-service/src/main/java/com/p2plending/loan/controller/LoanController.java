@@ -6,12 +6,14 @@ import com.p2plending.loan.dto.request.LoanCreateRequest;
 import com.p2plending.loan.dto.request.LoanFilterParams;
 import com.p2plending.loan.dto.request.LoanOfferCreateRequest;
 import com.p2plending.loan.dto.request.LoanOtpVerifyRequest;
+import com.p2plending.loan.dto.response.CashflowResponse;
 import com.p2plending.loan.dto.response.LoanOfferResponse;
 import com.p2plending.loan.dto.response.LoanOtpInitResponse;
 import com.p2plending.loan.dto.response.LoanResponse;
 import com.p2plending.loan.dto.response.PagedResponse;
 import com.p2plending.loan.dto.response.RepaymentScheduleResponse;
 import com.p2plending.loan.security.AuthenticatedUser;
+import com.p2plending.loan.service.CashflowService;
 import com.p2plending.loan.service.LoanOtpService;
 import com.p2plending.loan.service.LoanService;
 import com.p2plending.loan.service.RepaymentService;
@@ -33,6 +35,7 @@ public class LoanController {
     private final LoanService loanService;
     private final LoanOtpService loanOtpService;
     private final RepaymentService repaymentService;
+    private final CashflowService cashflowService;
 
     /**
      * POST /api/loans/request/init
@@ -94,6 +97,19 @@ public class LoanController {
             @AuthenticationPrincipal AuthenticatedUser principal
     ) {
         return ResponseEntity.ok(loanService.getMyLoans(principal.userId(), page, size));
+    }
+
+    /**
+     * GET /api/loans/cashflow
+     * Dữ liệu dòng tiền của nhà đầu tư đang đăng nhập.
+     * Bao gồm: tổng hợp, lịch kỳ sắp đến, lịch sử đầu tư, biểu đồ tháng.
+     */
+    @GetMapping("/cashflow")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<CashflowResponse> getCashflow(
+            @AuthenticationPrincipal AuthenticatedUser principal
+    ) {
+        return ResponseEntity.ok(cashflowService.getCashflow(principal.userId()));
     }
 
     /**
