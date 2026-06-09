@@ -10,9 +10,11 @@ import com.p2plending.loan.dto.response.LoanOfferResponse;
 import com.p2plending.loan.dto.response.LoanOtpInitResponse;
 import com.p2plending.loan.dto.response.LoanResponse;
 import com.p2plending.loan.dto.response.PagedResponse;
+import com.p2plending.loan.dto.response.RepaymentScheduleResponse;
 import com.p2plending.loan.security.AuthenticatedUser;
 import com.p2plending.loan.service.LoanOtpService;
 import com.p2plending.loan.service.LoanService;
+import com.p2plending.loan.service.RepaymentService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -21,6 +23,8 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/api/loans")
 @RequiredArgsConstructor
@@ -28,6 +32,7 @@ public class LoanController {
 
     private final LoanService loanService;
     private final LoanOtpService loanOtpService;
+    private final RepaymentService repaymentService;
 
     /**
      * POST /api/loans/request/init
@@ -139,6 +144,19 @@ public class LoanController {
     ) {
         String reason = request != null ? request.getReason() : null;
         return ResponseEntity.ok(loanService.cancelLoan(id, principal.userId(), reason));
+    }
+
+    /**
+     * GET /api/loans/{id}/repayments
+     * Lịch trả nợ theo kỳ — người gọi vốn xem trong app sau khi khoản FUNDED/REPAYING.
+     * Trả về list rỗng nếu khoản chưa được giải ngân (chưa có lịch).
+     */
+    @GetMapping("/{id}/repayments")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<List<RepaymentScheduleResponse>> getRepaymentSchedule(
+            @PathVariable String id
+    ) {
+        return ResponseEntity.ok(repaymentService.getSchedule(id));
     }
 
     /**
