@@ -42,6 +42,11 @@ public class NotificationService {
                 .build();
     }
 
+    @Transactional(readOnly = true)
+    public long getUnreadCount(String userId) {
+        return notificationRepository.countByUserIdAndReadFalseAndIsDeletedFalse(userId);
+    }
+
     @Transactional
     public NotificationResponse markAsRead(String notificationId, String userId) {
         Notification notification = notificationRepository
