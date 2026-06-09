@@ -40,6 +40,7 @@ public class SecurityConfig {
                                 "/api/auth/register/verify",
                                 "/api/auth/login",
                                 "/api/auth/refresh",
+                                "/api/auth/biometric/challenge",
                                 "/api/auth/biometric/login",
                                 "/api/auth/device-reset/init",
                                 "/api/auth/device-reset/verify",
