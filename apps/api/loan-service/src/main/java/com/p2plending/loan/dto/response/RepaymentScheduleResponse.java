@@ -9,7 +9,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Getter
-@Builder(toBuilder = true)
+@Builder
 public class RepaymentScheduleResponse {
     private Integer periodNumber;
     private LocalDate dueDate;
@@ -20,9 +20,4 @@ public class RepaymentScheduleResponse {
     private RepaymentStatus status;
     private Integer dpd;
     private LocalDateTime paidAt;
-    /**
-     * true = lịch dự kiến tính theo điều khoản đã duyệt, chưa phải lịch thật (khoản chưa FUNDED).
-     * false / null = lịch đã được tạo chính thức sau khi khoản FUNDED.
-     */
-    private Boolean projected;
 }
