@@ -175,13 +175,42 @@ public class RepaymentService {
 
     // ── Đọc lịch ──────────────────────────────────────────────────
 
+    /**
+     * Trả về lịch trả nợ của khoản vay.
+     * <ul>
+     *   <li>Nếu khoản đã FUNDED/REPAYING → lịch thật đã lưu DB ({@code projected = false}).</li>
+     *   <li>Nếu chưa có lịch thật nhưng đã có lãi suất (ACTIVE / AWAITING_BORROWER_APPROVAL) →
+     *       sinh lịch dự kiến on-the-fly từ điều khoản đã duyệt ({@code projected = true}).
+     *       Ngày giải ngân giả định = hôm nay.</li>
+     *   <li>Khoản chưa có lãi suất → trả về list rỗng.</li>
+     * </ul>
+     */
     @Transactional(readOnly = true)
     public List<RepaymentScheduleResponse> getSchedule(String loanId) {
-        if (!loanRequestRepository.existsById(loanId)) {
-            throw new LoanNotFoundException(loanId);
+        LoanRequest loan = loanRequestRepository.findById(loanId)
+                .orElseThrow(() -> new LoanNotFoundException(loanId));
+
+        // Lịch thật — ưu tiên trước
+        List<RepaymentSchedule> saved =
+                scheduleRepository.findByLoanIdAndIsDeletedFalseOrderByPeriodNumberAsc(loanId);
+        if (!saved.isEmpty()) {
+            return saved.stream().map(this::toResponse).toList();
         }
-        return scheduleRepository.findByLoanIdAndIsDeletedFalseOrderByPeriodNumberAsc(loanId).stream()
-                .map(this::toResponse)
+
+        // Không có lịch thật → thử generate dự kiến
+        if (loan.getInterestRate() == null || loan.getTermMonths() == null) {
+            return List.of();
+        }
+
+        RepaymentMethod method = resolveMethod(loan);
+        LocalDate today = LocalDate.now(TZ);
+        List<RepaymentSchedule> projected = generator.generate(
+                loan.getAmount(), loan.getInterestRate(), loan.getTermMonths(),
+                method, today, loan.getRepaymentDay());
+
+        log.info("Returning projected repayment schedule for loan {} (status={})", loanId, loan.getStatus());
+        return projected.stream()
+                .map(s -> toResponse(s).toBuilder().projected(true).build())
                 .toList();
     }
 
