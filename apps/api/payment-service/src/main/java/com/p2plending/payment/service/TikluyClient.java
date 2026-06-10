@@ -61,12 +61,12 @@ public class TikluyClient {
                     JsonNode.class);
 
             JsonNode body = resp.getBody();
-            // TIKLUY BaseResponse: { result: {ok, message}, data: { token: "..." } }
-            if (body == null || !body.path("data").has("token")) {
+            // TIKLUY BaseResponse: { result: {isOK, responseCode, responseMessage}, data: { accessToken: "..." } }
+            if (body == null || !body.path("data").has("accessToken")) {
                 throw new RuntimeException("TIKLUY /auth/token returned unexpected response: " + body);
             }
 
-            String token = body.path("data").path("token").asText();
+            String token = body.path("data").path("accessToken").asText();
             // TIKLUY JWT TTL = 300s, cache với buffer 30s
             cachedToken.set(token);
             tokenExpiresAt = Instant.now().getEpochSecond() + 300;
@@ -201,7 +201,7 @@ public class TikluyClient {
 
     private JsonNode extractData(JsonNode body, String op) {
         if (body == null) throw new RuntimeException(op + ": empty response");
-        // TIKLUY BaseResponse wraps data in { result: { success }, data: {...} }
+        // TIKLUY BaseResponse: { result: {isOK, responseCode, responseMessage}, data: {...} }
         if (body.has("data") && !body.get("data").isNull()) {
             return body.get("data");
         }
