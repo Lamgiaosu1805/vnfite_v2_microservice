@@ -98,8 +98,9 @@ services:
       AUTH_DB: ${AUTH_DB:-auth_db}
       DB_USERNAME: ${DB_USERNAME:-p2p_user}
       DB_PASSWORD: ${DB_PASSWORD:-p2p_pass}
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
+      REDIS_HOST: ${REDIS_HOST:-redis}
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       RSA_PRIVATE_KEY: ${RSA_PRIVATE_KEY:-}
       RSA_PUBLIC_KEY: ${RSA_PUBLIC_KEY:-}
@@ -134,8 +135,9 @@ services:
       LOAN_DB: ${LOAN_DB:-loan_db}
       DB_USERNAME: ${DB_USERNAME:-p2p_user}
       DB_PASSWORD: ${DB_PASSWORD:-p2p_pass}
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
+      REDIS_HOST: ${REDIS_HOST:-redis}
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       CMS_JWT_SECRET: ${CMS_JWT_SECRET:-dev-only-cms-jwt-secret-change-me-at-least-32-bytes}
       CMS_ACCESS_TOKEN_EXPIRY: ${CMS_ACCESS_TOKEN_EXPIRY:-28800}
@@ -174,8 +176,9 @@ services:
       MATCHING_DB: ${MATCHING_DB:-matching_db}
       DB_USERNAME: ${DB_USERNAME:-p2p_user}
       DB_PASSWORD: ${DB_PASSWORD:-p2p_pass}
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
+      REDIS_HOST: ${REDIS_HOST:-redis}
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
       APP_REDIS_NAMESPACE: ${APP_REDIS_NAMESPACE:-dev}
       RSA_PUBLIC_KEY: ${RSA_PUBLIC_KEY:-}
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
@@ -204,8 +207,9 @@ services:
       CMS_DB: ${CMS_DB:-cms_db}
       DB_USERNAME: ${DB_USERNAME:-p2p_user}
       DB_PASSWORD: ${DB_PASSWORD:-p2p_pass}
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
+      REDIS_HOST: ${REDIS_HOST:-redis}
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
       RSA_PUBLIC_KEY: ${RSA_PUBLIC_KEY:-}
       APP_REDIS_NAMESPACE: ${APP_REDIS_NAMESPACE:-dev}
       AUTH_SERVICE_URL: ${AUTH_SERVICE_URL:-http://auth-service:8081}
@@ -240,8 +244,9 @@ services:
       NOTIFICATION_DB: ${NOTIFICATION_DB:-notification_db}
       DB_USERNAME: ${DB_USERNAME:-p2p_user}
       DB_PASSWORD: ${DB_PASSWORD:-p2p_pass}
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
+      REDIS_HOST: ${REDIS_HOST:-redis}
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       RSA_PUBLIC_KEY: ${RSA_PUBLIC_KEY:-}
       APP_REDIS_NAMESPACE: ${APP_REDIS_NAMESPACE:-dev}
@@ -279,8 +284,9 @@ services:
       PAYMENT_DB: ${PAYMENT_DB:-payment_db}
       DB_USERNAME: ${DB_USERNAME:-p2p_user}
       DB_PASSWORD: ${DB_PASSWORD:-p2p_pass}
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
+      REDIS_HOST: ${REDIS_HOST:-redis}
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       RSA_PUBLIC_KEY: ${RSA_PUBLIC_KEY:-}
       APP_REDIS_NAMESPACE: ${APP_REDIS_NAMESPACE:-dev}
