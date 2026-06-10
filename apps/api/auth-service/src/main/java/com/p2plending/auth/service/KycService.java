@@ -135,7 +135,7 @@ public class KycService {
                 .frontImageId(pending.getFrontImageId())
                 .backImageId(pending.getBackImageId())
                 .portraitImageId(pending.getPortraitImageId())
-                .status(KycStatus.APPROVED)
+                .status(KycStatus.APPROVED)  // eKYC tự động xác minh, không cần CMS duyệt
                 .build();
 
         KycSubmission saved = kycSubmissionRepository.save(submission);
@@ -145,7 +145,11 @@ public class KycService {
         user.setKycStatus(KycStatus.APPROVED);
         userRepository.save(user);
 
+        // Notify analytics/notification về submission
         kafkaProducerService.publishKycSubmitted(userId, saved.getId());
+
+        // Trigger tạo ví — payment-service lắng nghe event này
+        kafkaProducerService.publishKycApproved(userId, saved.getFullName(), saved.getCccdNumber());
 
         log.info("KYC verified: userId={} submissionId={}", userId, saved.getId());
         return toResponse(saved);

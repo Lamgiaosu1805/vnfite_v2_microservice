@@ -16,6 +16,7 @@ import java.time.LocalDateTime;
 public class KafkaProducerService {
 
     private static final String TOPIC_KYC_SUBMITTED  = "kyc.submitted";
+    private static final String TOPIC_KYC_APPROVED   = "kyc.approved";
     private static final String TOPIC_USER_REGISTERED = "user.registered";
 
     private final KafkaTemplate<String, String> kafkaTemplate;
@@ -33,6 +34,28 @@ public class KafkaProducerService {
                     });
         } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
             log.error("Serialisation error for user.registered userId={}", userId, e);
+        }
+    }
+
+    /**
+     * Publish khi CMS duyệt KYC thành công.
+     * payment-service lắng nghe event này để tạo ví + VA TIKLUY.
+     */
+    public void publishKycApproved(String userId, String fullName, String cccdNumber) {
+        try {
+            java.util.Map<String, Object> data = new java.util.HashMap<>();
+            data.put("userId", userId);
+            data.put("fullName", fullName);
+            data.put("cccdNumber", cccdNumber);
+            data.put("approvedAt", LocalDateTime.now().toString());
+            String payload = objectMapper.writeValueAsString(data);
+            kafkaTemplate.send(TOPIC_KYC_APPROVED, userId, payload)
+                    .whenComplete((result, ex) -> {
+                        if (ex != null) log.error("Failed to publish kyc.approved userId={}: {}", userId, ex.getMessage());
+                        else log.info("Published kyc.approved userId={}", userId);
+                    });
+        } catch (JsonProcessingException e) {
+            log.error("Serialisation error for kyc.approved userId={}", userId, e);
         }
     }
 

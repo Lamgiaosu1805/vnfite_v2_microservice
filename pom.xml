@@ -16,6 +16,7 @@
         <module>apps/api/matching-service</module>
         <module>apps/api/cms-service</module>
         <module>apps/api/notification-service</module>
+        <module>apps/api/payment-service</module>
     </modules>
 
     <properties>

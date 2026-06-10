@@ -210,6 +210,7 @@ services:
       APP_REDIS_NAMESPACE: ${APP_REDIS_NAMESPACE:-dev}
       AUTH_SERVICE_URL: ${AUTH_SERVICE_URL:-http://auth-service:8081}
       LOAN_SERVICE_URL: ${LOAN_SERVICE_URL:-http://loan-service:8082}
+      PAYMENT_SERVICE_URL: ${PAYMENT_SERVICE_URL:-http://payment-service:8086}
       INTERNAL_API_SECRET: ${INTERNAL_API_SECRET:-dev-internal-secret}
       PUSH_NOTIFICATION_URL: ${PUSH_NOTIFICATION_URL:-https://service.vnfite.com.vn/push-notification/v2/notification}
       PUSH_NOTIFICATION_ALIAS: ${PUSH_NOTIFICATION_ALIAS:-vnfite}
@@ -264,6 +265,46 @@ services:
       - p2p-network
     restart: on-failure
 
+  payment-service:
+    image: ${GHCR_REGISTRY:-ghcr.io/lamgiaosu1805/vnfite_v2_microservice}/payment-service:${IMAGE_TAG:-latest}
+    build:
+      context: ./apps/api/payment-service
+      dockerfile: Dockerfile
+    container_name: p2p-payment-service
+    ports:
+      - "8086:8086"
+    environment:
+      MYSQL_HOST: ${MYSQL_HOST:-mysql}
+      MYSQL_PORT: ${MYSQL_PORT:-3306}
+      PAYMENT_DB: ${PAYMENT_DB:-payment_db}
+      DB_USERNAME: ${DB_USERNAME:-p2p_user}
+      DB_PASSWORD: ${DB_PASSWORD:-p2p_pass}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      RSA_PUBLIC_KEY: ${RSA_PUBLIC_KEY:-}
+      APP_REDIS_NAMESPACE: ${APP_REDIS_NAMESPACE:-dev}
+      APP_PAYMENT_MOCK: ${APP_PAYMENT_MOCK:-true}
+      APP_OTP_MOCK: ${APP_OTP_MOCK:-true}
+      TIKLUY_BASE_URL: ${TIKLUY_BASE_URL:-http://42.113.122.155:8888}
+      TIKLUY_CLIENT_ID: ${TIKLUY_CLIENT_ID:-VF-NSK3SDF}
+      TIKLUY_CLIENT_SECRET: ${TIKLUY_CLIENT_SECRET:-2tzMGst67sZfXqmx68TxnQUzyriBti}
+      TIKLUY_SOURCE: ${TIKLUY_SOURCE:-VNFITE}
+      INTERNAL_API_SECRET: ${INTERNAL_API_SECRET:-dev-internal-secret}
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    networks:
+      - p2p-network
+    restart: on-failure
+
   kafka-ui:
     image: provectuslabs/kafka-ui:latest
     container_name: kafka-ui
@@ -293,6 +334,7 @@ services:
       - matching-service
       - cms-service
       - notification-service
+      - payment-service
     networks:
       - p2p-network
     restart: unless-stopped
