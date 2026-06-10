@@ -82,7 +82,7 @@ public class TikluyClient {
     private HttpHeaders authHeaders(String txnId) {
         HttpHeaders h = new HttpHeaders();
         h.set("Authorization", "Bearer " + getToken());
-        h.set("transactionId", txnId);
+        h.set("requestId", txnId);
         h.setContentType(MediaType.APPLICATION_JSON);
         return h;
     }
