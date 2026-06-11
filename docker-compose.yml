@@ -328,8 +328,11 @@ services:
       DB_PASSWORD: ${DB_PASSWORD:-p2p_pass}
       INTERNAL_API_SECRET: ${INTERNAL_API_SECRET:-dev-internal-secret}
       APP_AI_ENABLED: ${APP_AI_ENABLED:-false}
+      APP_AI_MODE: ${APP_AI_MODE:-claude}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       APP_AI_MODEL: ${APP_AI_MODEL:-claude-opus-4-8}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.0-flash}
       FILE_MANAGER_URL: ${FILE_MANAGER_URL:-https://service.vnfite.com.vn/file-manager/v2}
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
     extra_hosts:

@@ -26,9 +26,19 @@ public class AppProperties {
 
     @Data
     public static class Ai {
-        /** Khi false: dùng MockAiRiskAssessor, không gọi Claude API */
+        /**
+         * false       → mock (null, không có advisory)
+         * true + demo → DemoAiRiskAssessor (fake text, không cần key)
+         * true + gemini → Gemini Flash (miễn phí, cần GEMINI_API_KEY)
+         * true + claude → Claude API (cần ANTHROPIC_API_KEY)
+         */
         private boolean enabled = false;
+        private String mode = "claude";
+        // Claude
         private String apiKey = "";
         private String model = "claude-opus-4-8";
+        // Gemini
+        private String geminiApiKey = "";
+        private String geminiModel = "gemini-2.0-flash";
     }
 }

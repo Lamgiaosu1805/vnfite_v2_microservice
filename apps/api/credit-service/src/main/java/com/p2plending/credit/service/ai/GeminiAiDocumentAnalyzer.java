@@ -1,0 +1,150 @@
+package com.p2plending.credit.service.ai;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.p2plending.credit.config.AppProperties;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
+import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestTemplate;
+
+import java.util.ArrayList;
+import java.util.List;
+
+/**
+ * Dùng Gemini Flash Vision để phân tích chứng từ thu nhập (ảnh + PDF).
+ * Bật bằng: APP_AI_ENABLED=true + APP_AI_MODE=gemini
+ *
+ * Kết quả là CẢNH BÁO mức độ tin cậy để hỗ trợ admin — không phải phán quyết.
+ * AI không thể khẳng định 100% chứng từ là giả.
+ */
+@Service
+@ConditionalOnExpression("'${app.ai.enabled:false}'.equals('true') and '${app.ai.mode:claude}'.equals('gemini')")
+@Slf4j
+public class GeminiAiDocumentAnalyzer implements AiDocumentAnalyzer {
+
+    private static final String SCHEMA = """
+            Trả về JSON với cấu trúc sau (không có text nào ngoài JSON):
+            {
+              "docTypeDetected": "loại chứng từ AI nhận diện được (vd: Sao kê lương MB Bank, Hợp đồng lao động)",
+              "verdict": "CONSISTENT hoặc SUSPICIOUS hoặc HIGH_RISK hoặc UNREADABLE",
+              "trustScore": <số nguyên 0-100, 100 = hoàn toàn nhất quán>,
+              "ownerName": "tên chủ tài khoản/người lao động trích xuất, hoặc null",
+              "organizationName": "tên ngân hàng/công ty phát hành, hoặc null",
+              "extractedMonthlyIncome": "thu nhập hàng tháng dạng số (VND), hoặc null",
+              "findings": ["phát hiện 1", "phát hiện 2"],
+              "consistencyIssues": ["điểm không khớp với khai báo 1", ...],
+              "summary": "tóm tắt 2-3 câu cho admin thẩm định bằng tiếng Việt"
+            }
+            verdict:
+            - CONSISTENT: không phát hiện bất thường
+            - SUSPICIOUS: có điểm đáng ngờ cần kiểm tra thêm
+            - HIGH_RISK: nhiều dấu hiệu bất thường nghiêm trọng
+            - UNREADABLE: không đọc được nội dung
+            """;
+
+    private static final String SYSTEM_INSTRUCTION = """
+            Bạn là chuyên gia thẩm định chứng từ tài chính của nền tảng cho vay ngang hàng VNFITE tại Việt Nam.
+            Đây là quy trình phòng chống gian lận hợp pháp: người gọi vốn tự nguyện nộp chứng từ để chứng minh thu nhập.
+
+            Quy trình phân tích 4 bước:
+            1. TRÍCH XUẤT: loại chứng từ, tên người/tổ chức, thu nhập/số dư
+            2. KIỂM TRA NỘI TẠI: số dư chạy có khớp không, định dạng ngày/số, font chữ đồng nhất
+            3. ĐỐI CHIẾU: thông tin trích xuất có khớp với thông tin khai báo không
+            4. ĐÁNH GIÁ: mức độ tin cậy tổng thể
+
+            Tuyệt đối không phán quyết giả/thật — chỉ đánh giá mức độ tin cậy và nêu các điểm cần xác minh thêm.
+            """;
+
+    private final GeminiClient gemini;
+    private final ObjectMapper objectMapper;
+
+    public GeminiAiDocumentAnalyzer(AppProperties props, RestTemplate restTemplate, ObjectMapper objectMapper) {
+        this.gemini       = new GeminiClient(restTemplate, objectMapper,
+                props.getAi().getGeminiApiKey(), props.getAi().getGeminiModel());
+        this.objectMapper = objectMapper;
+        log.info("GeminiAiDocumentAnalyzer bật — model={}", props.getAi().getGeminiModel());
+    }
+
+    @Override
+    public DocumentCheckResult analyze(String mimeType, String fileBase64, String context) {
+        String prompt = SYSTEM_INSTRUCTION + "\n\n" + context + "\n\n" + SCHEMA;
+
+        try {
+            List<GeminiClient.Part> parts = List.of(
+                    GeminiClient.Part.file(mimeType, fileBase64),
+                    GeminiClient.Part.text(prompt)
+            );
+
+            String json = gemini.generateContent(parts);
+            if (json == null || json.isBlank()) {
+                log.warn("Gemini trả về rỗng cho document analysis");
+                return fallbackUnreadable("Gemini không trả về kết quả phân tích.");
+            }
+
+            return parseResult(json);
+
+        } catch (Exception e) {
+            log.error("Gemini document analysis failed: {}", e.getMessage(), e);
+            throw new RuntimeException("Phân tích chứng từ thất bại: " + e.getMessage(), e);
+        }
+    }
+
+    private DocumentCheckResult parseResult(String json) throws Exception {
+        // Gemini đôi khi bọc JSON trong markdown code block — strip nếu có
+        String clean = json.trim();
+        if (clean.startsWith("```")) {
+            clean = clean.replaceAll("^```[a-z]*\\n?", "").replaceAll("```$", "").trim();
+        }
+
+        JsonNode node = objectMapper.readTree(clean);
+
+        String verdict = node.path("verdict").asText("UNREADABLE").toUpperCase();
+        if (!List.of("CONSISTENT", "SUSPICIOUS", "HIGH_RISK", "UNREADABLE").contains(verdict)) {
+            verdict = "UNREADABLE";
+        }
+
+        List<String> findings = parseStringArray(node.path("findings"));
+        List<String> issues   = parseStringArray(node.path("consistencyIssues"));
+
+        String incomeRaw = node.path("extractedMonthlyIncome").asText(null);
+        if ("null".equalsIgnoreCase(incomeRaw) || (incomeRaw != null && incomeRaw.isBlank())) {
+            incomeRaw = null;
+        }
+
+        return new DocumentCheckResult(
+                nullIfBlank(node.path("docTypeDetected").asText(null)),
+                verdict,
+                node.path("trustScore").asInt(50),
+                nullIfBlank(node.path("ownerName").asText(null)),
+                nullIfBlank(node.path("organizationName").asText(null)),
+                incomeRaw,
+                findings,
+                issues,
+                node.path("summary").asText("Không có tóm tắt.")
+        );
+    }
+
+    private List<String> parseStringArray(JsonNode arrayNode) {
+        List<String> result = new ArrayList<>();
+        if (arrayNode.isArray()) {
+            for (JsonNode item : arrayNode) {
+                String v = item.asText("").trim();
+                if (!v.isEmpty() && !"null".equalsIgnoreCase(v)) result.add(v);
+            }
+        }
+        return result;
+    }
+
+    private String nullIfBlank(String s) {
+        return (s == null || s.isBlank() || "null".equalsIgnoreCase(s)) ? null : s;
+    }
+
+    private DocumentCheckResult fallbackUnreadable(String reason) {
+        return new DocumentCheckResult(
+                null, "UNREADABLE", 0, null, null, null,
+                List.of(reason), List.of(),
+                "Không thể phân tích chứng từ. " + reason
+        );
+    }
+}

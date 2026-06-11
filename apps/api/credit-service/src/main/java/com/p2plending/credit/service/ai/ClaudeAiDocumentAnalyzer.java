@@ -5,7 +5,7 @@ import com.anthropic.client.okhttp.AnthropicOkHttpClient;
 import com.anthropic.models.messages.*;
 import com.p2plending.credit.config.AppProperties;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -16,7 +16,7 @@ import java.util.List;
  * tính nhất quán nội tại và đối chiếu với thông tin khai báo.
  */
 @Service
-@ConditionalOnProperty(name = "app.ai.enabled", havingValue = "true")
+@ConditionalOnExpression("'${app.ai.enabled:false}'.equals('true') and '${app.ai.mode:claude}'.equals('claude')")
 @Slf4j
 public class ClaudeAiDocumentAnalyzer implements AiDocumentAnalyzer {
 

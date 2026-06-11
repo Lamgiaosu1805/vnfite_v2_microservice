@@ -44,11 +44,17 @@ app:
     # Điểm có hiệu lực bao nhiêu ngày trước khi phải chấm lại
     score-ttl-days: 90
   ai:
-    # AI risk assessment (Claude) — chỉ mang tính tư vấn cho admin thẩm định,
-    # không bao giờ tự quyết định duyệt/từ chối. Tắt mặc định.
+    # AI risk assessment — chỉ mang tính tư vấn cho admin thẩm định,
+    # không bao giờ tự quyết định duyệt/từ chối.
+    # enabled=false  → tắt hoàn toàn (mock trả null)
+    # enabled=true + mode=demo  → fake realistic, không cần API key (dùng để test UI)
+    # enabled=true + mode=claude → gọi Claude API thật (cần ANTHROPIC_API_KEY)
     enabled: ${APP_AI_ENABLED:false}
+    mode: ${APP_AI_MODE:claude}
     api-key: ${ANTHROPIC_API_KEY:}
     model: ${APP_AI_MODEL:claude-opus-4-8}
+    gemini-api-key: ${GEMINI_API_KEY:}
+    gemini-model: ${GEMINI_MODEL:gemini-2.0-flash}
 
 # File-manager dùng chung của VNFITE — nơi lưu file chứng từ gốc
 file-manager:
