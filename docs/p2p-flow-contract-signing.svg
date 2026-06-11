@@ -1,0 +1,128 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="1708" viewBox="0 0 1280 1708" font-family="Helvetica, Arial, sans-serif">
+<rect x="0" y="0" width="1280" height="1708" fill="#FAFAFB"/>
+<defs>
+<marker id="arr" markerWidth="10" markerHeight="10" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#94A3B8"/></marker>
+<marker id="arrRed" markerWidth="10" markerHeight="10" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#C82020"/></marker>
+</defs>
+<text x="640" y="56" text-anchor="middle" font-size="28" font-weight="700" fill="#0F172A">VNFITE P2P — Luồng gọi vốn → giải ngân &amp; điểm ký hợp đồng</text>
+<text x="640" y="86" text-anchor="middle" font-size="15" fill="#64748B">Ký hợp đồng điện tử bằng OTP (mock VNPT eContract) · 2 điểm ký · đối ứng các HĐ là VNFITE (nền tảng)</text>
+<text x="640" y="112" text-anchor="middle" font-size="13" fill="#94A3B8">PENDING_REVIEW → PENDING_APPROVAL → AWAITING_BORROWER_APPROVAL → ACTIVE → FUNDED → AWAITING_DISBURSEMENT → DISBURSED → REPAYING</text>
+<line x1="535.0" y1="258.0" x2="535.0" y2="310.0" stroke="#94A3B8" stroke-width="2.5" marker-end="url(#arr)"/>
+<line x1="535.0" y1="408.0" x2="535.0" y2="460.0" stroke="#94A3B8" stroke-width="2.5" marker-end="url(#arr)"/>
+<line x1="535.0" y1="558.0" x2="535.0" y2="610.0" stroke="#94A3B8" stroke-width="2.5" marker-end="url(#arr)"/>
+<line x1="535.0" y1="708.0" x2="535.0" y2="760.0" stroke="#94A3B8" stroke-width="2.5" marker-end="url(#arr)"/>
+<line x1="535.0" y1="858.0" x2="535.0" y2="910.0" stroke="#94A3B8" stroke-width="2.5" marker-end="url(#arr)"/>
+<line x1="535.0" y1="1008.0" x2="535.0" y2="1060.0" stroke="#94A3B8" stroke-width="2.5" marker-end="url(#arr)"/>
+<line x1="535.0" y1="1158.0" x2="535.0" y2="1210.0" stroke="#94A3B8" stroke-width="2.5" marker-end="url(#arr)"/>
+<line x1="535.0" y1="1308.0" x2="535.0" y2="1360.0" stroke="#94A3B8" stroke-width="2.5" marker-end="url(#arr)"/>
+<rect x="40" y="188" width="215" height="44" rx="22" fill="rgba(37,99,235,0.12)" stroke="#2563EB" stroke-width="1.5"/>
+<text x="147.5" y="215" text-anchor="middle" font-size="14.5" font-weight="700" fill="#2563EB">Người gọi vốn</text>
+<line x1="255" y1="210" x2="300" y2="210" stroke="#CBD5E1" stroke-width="2"/>
+<rect x="300" y="162.0" width="470" height="96" rx="14" fill="#FFFFFF" stroke="#2563EB" stroke-width="2.5"/>
+<rect x="300" y="162.0" width="7" height="96" rx="3" fill="#2563EB"/>
+<rect x="320" y="176.0" width="119.8" height="24" rx="12" fill="rgba(37,99,235,0.14)"/>
+<text x="379.9" y="192.0" text-anchor="middle" font-size="12.5" font-weight="700" fill="#2563EB">PENDING_REVIEW</text>
+<text x="320" y="224.0" font-size="16.5" font-weight="700" fill="#0F172A">1. Nộp hồ sơ gọi vốn</text>
+<text x="320" y="245.0" font-size="13.5" fill="#64748B">Xác nhận bằng OTP. Khoản vào hàng chờ thẩm định.</text>
+<rect x="40" y="338" width="215" height="44" rx="22" fill="rgba(37,99,235,0.12)" stroke="#2563EB" stroke-width="1.5"/>
+<text x="147.5" y="365" text-anchor="middle" font-size="14.5" font-weight="700" fill="#2563EB">Thẩm định viên (OPS)</text>
+<line x1="255" y1="360" x2="300" y2="360" stroke="#CBD5E1" stroke-width="2"/>
+<rect x="300" y="312.0" width="470" height="96" rx="14" fill="#FFFFFF" stroke="#2563EB" stroke-width="2.5"/>
+<rect x="300" y="312.0" width="7" height="96" rx="3" fill="#2563EB"/>
+<rect x="320" y="326.0" width="135.2" height="24" rx="12" fill="rgba(37,99,235,0.14)"/>
+<text x="387.6" y="342.0" text-anchor="middle" font-size="12.5" font-weight="700" fill="#2563EB">PENDING_APPROVAL</text>
+<text x="320" y="374.0" font-size="16.5" font-weight="700" fill="#0F172A">2. Đề xuất số tiền &amp; lãi suất</text>
+<text x="320" y="395.0" font-size="13.5" fill="#64748B">Cấp 1 — trình ban lãnh đạo.</text>
+<rect x="40" y="488" width="215" height="44" rx="22" fill="rgba(79,70,229,0.12)" stroke="#4F46E5" stroke-width="1.5"/>
+<text x="147.5" y="515" text-anchor="middle" font-size="14.5" font-weight="700" fill="#4F46E5">Ban lãnh đạo (ADMIN)</text>
+<line x1="255" y1="510" x2="300" y2="510" stroke="#CBD5E1" stroke-width="2"/>
+<rect x="300" y="462.0" width="470" height="96" rx="14" fill="#FFFFFF" stroke="#4F46E5" stroke-width="2.5"/>
+<rect x="300" y="462.0" width="7" height="96" rx="3" fill="#4F46E5"/>
+<rect x="320" y="476.0" width="212.20000000000002" height="24" rx="12" fill="rgba(79,70,229,0.14)"/>
+<text x="426.1" y="492.0" text-anchor="middle" font-size="12.5" font-weight="700" fill="#4F46E5">AWAITING_BORROWER_APPROVAL</text>
+<text x="320" y="524.0" font-size="16.5" font-weight="700" fill="#0F172A">3. Phê duyệt điều khoản</text>
+<text x="320" y="545.0" font-size="13.5" fill="#64748B">Cấp 2 — chốt số tiền, lãi suất, kỳ hạn.</text>
+<rect x="40" y="638" width="215" height="44" rx="22" fill="rgba(13,148,136,0.12)" stroke="#0D9488" stroke-width="1.5"/>
+<text x="147.5" y="665" text-anchor="middle" font-size="14.5" font-weight="700" fill="#0D9488">Người gọi vốn</text>
+<line x1="255" y1="660" x2="300" y2="660" stroke="#CBD5E1" stroke-width="2"/>
+<rect x="300" y="612.0" width="470" height="96" rx="14" fill="#FFFFFF" stroke="#0D9488" stroke-width="2.5"/>
+<rect x="300" y="612.0" width="7" height="96" rx="3" fill="#0D9488"/>
+<rect x="320" y="626.0" width="58.2" height="24" rx="12" fill="rgba(13,148,136,0.14)"/>
+<text x="349.1" y="642.0" text-anchor="middle" font-size="12.5" font-weight="700" fill="#0D9488">ACTIVE</text>
+<text x="320" y="674.0" font-size="16.5" font-weight="700" fill="#0F172A">4. Xác nhận điều khoản → lên sàn</text>
+<text x="320" y="695.0" font-size="13.5" fill="#64748B">Khoản hiển thị trên sàn cho nhà đầu tư.</text>
+<rect x="40" y="788" width="215" height="44" rx="22" fill="rgba(200,32,32,0.12)" stroke="#C82020" stroke-width="1.5"/>
+<text x="147.5" y="815" text-anchor="middle" font-size="14.5" font-weight="700" fill="#C82020">Nhà đầu tư</text>
+<line x1="255" y1="810" x2="300" y2="810" stroke="#CBD5E1" stroke-width="2"/>
+<rect x="300" y="762.0" width="470" height="96" rx="14" fill="#FFFFFF" stroke="#C82020" stroke-width="2.5"/>
+<rect x="300" y="762.0" width="7" height="96" rx="3" fill="#C82020"/>
+<rect x="320" y="776.0" width="58.2" height="24" rx="12" fill="rgba(200,32,32,0.14)"/>
+<text x="349.1" y="792.0" text-anchor="middle" font-size="12.5" font-weight="700" fill="#C82020">ACTIVE</text>
+<text x="320" y="824.0" font-size="16.5" font-weight="700" fill="#0F172A">5. Rót vốn (offer = PENDING)</text>
+<text x="320" y="845.0" font-size="13.5" fill="#64748B">↻ Lặp lại cho tới khi đủ vốn.</text>
+<line x1="770" y1="810" x2="805" y2="810" stroke="#C82020" stroke-width="2.5" stroke-dasharray="6 4" marker-end="url(#arrRed)"/>
+<rect x="805" y="762.0" width="435" height="96" rx="14" fill="rgba(200,32,32,0.07)" stroke="#C82020" stroke-width="2.5"/>
+<circle cx="839" cy="810" r="22" fill="#C82020"/>
+<text x="839" y="818" text-anchor="middle" font-size="22" font-weight="700" fill="#FFFFFF">①</text>
+<text x="875" y="796.0" font-size="16" font-weight="800" fill="#C82020">✍ KÝ — HỢP ĐỒNG ĐẦU TƯ</text>
+<text x="875" y="819.0" font-size="14" font-weight="700" fill="#0F172A">Nhà đầu tư ký · OTP</text>
+<text x="875" y="840.0" font-size="12.5" fill="#64748B">mỗi NĐT ký 1 HĐ cho phần vốn của mình · đối ứng: VNFITE</text>
+<rect x="40" y="938" width="215" height="44" rx="22" fill="rgba(124,58,237,0.12)" stroke="#7C3AED" stroke-width="1.5"/>
+<text x="147.5" y="965" text-anchor="middle" font-size="14.5" font-weight="700" fill="#7C3AED">Hệ thống</text>
+<line x1="255" y1="960" x2="300" y2="960" stroke="#CBD5E1" stroke-width="2"/>
+<rect x="300" y="912.0" width="470" height="96" rx="14" fill="#FFFFFF" stroke="#7C3AED" stroke-width="2.5"/>
+<rect x="300" y="912.0" width="7" height="96" rx="3" fill="#7C3AED"/>
+<rect x="320" y="926.0" width="58.2" height="24" rx="12" fill="rgba(124,58,237,0.14)"/>
+<text x="349.1" y="942.0" text-anchor="middle" font-size="12.5" font-weight="700" fill="#7C3AED">FUNDED</text>
+<text x="320" y="974.0" font-size="16.5" font-weight="700" fill="#0F172A">6. Đủ vốn</text>
+<text x="320" y="995.0" font-size="13.5" fill="#64748B">Tự phát hành hợp đồng vay cho người gọi vốn.</text>
+<rect x="40" y="1088" width="215" height="44" rx="22" fill="rgba(200,32,32,0.12)" stroke="#C82020" stroke-width="1.5"/>
+<text x="147.5" y="1115" text-anchor="middle" font-size="14.5" font-weight="700" fill="#C82020">Người gọi vốn</text>
+<line x1="255" y1="1110" x2="300" y2="1110" stroke="#CBD5E1" stroke-width="2"/>
+<rect x="300" y="1062.0" width="470" height="96" rx="14" fill="#FFFFFF" stroke="#C82020" stroke-width="2.5"/>
+<rect x="300" y="1062.0" width="7" height="96" rx="3" fill="#C82020"/>
+<rect x="320" y="1076.0" width="173.70000000000002" height="24" rx="12" fill="rgba(200,32,32,0.14)"/>
+<text x="406.85" y="1092.0" text-anchor="middle" font-size="12.5" font-weight="700" fill="#C82020">AWAITING_DISBURSEMENT</text>
+<text x="320" y="1124.0" font-size="16.5" font-weight="700" fill="#0F172A">7. Ký hợp đồng vay</text>
+<text x="320" y="1145.0" font-size="13.5" fill="#64748B">Khế ước nhận nợ.</text>
+<line x1="770" y1="1110" x2="805" y2="1110" stroke="#C82020" stroke-width="2.5" stroke-dasharray="6 4" marker-end="url(#arrRed)"/>
+<rect x="805" y="1062.0" width="435" height="96" rx="14" fill="rgba(200,32,32,0.07)" stroke="#C82020" stroke-width="2.5"/>
+<circle cx="839" cy="1110" r="22" fill="#C82020"/>
+<text x="839" y="1118" text-anchor="middle" font-size="22" font-weight="700" fill="#FFFFFF">②</text>
+<text x="875" y="1096.0" font-size="16" font-weight="800" fill="#C82020">✍ KÝ — HỢP ĐỒNG VAY</text>
+<text x="875" y="1119.0" font-size="14" font-weight="700" fill="#0F172A">Người gọi vốn ký · OTP</text>
+<text x="875" y="1140.0" font-size="12.5" fill="#64748B">khế ước nhận nợ với nhóm NĐT · đối ứng: VNFITE</text>
+<rect x="40" y="1238" width="215" height="44" rx="22" fill="rgba(217,119,6,0.12)" stroke="#D97706" stroke-width="1.5"/>
+<text x="147.5" y="1265" text-anchor="middle" font-size="14.5" font-weight="700" fill="#D97706">OPS (CMS)</text>
+<line x1="255" y1="1260" x2="300" y2="1260" stroke="#CBD5E1" stroke-width="2"/>
+<rect x="300" y="1212.0" width="470" height="96" rx="14" fill="#FFFFFF" stroke="#D97706" stroke-width="2.5"/>
+<rect x="300" y="1212.0" width="7" height="96" rx="3" fill="#D97706"/>
+<rect x="320" y="1226.0" width="81.3" height="24" rx="12" fill="rgba(217,119,6,0.14)"/>
+<text x="360.65" y="1242.0" text-anchor="middle" font-size="12.5" font-weight="700" fill="#D97706">DISBURSED</text>
+<text x="320" y="1274.0" font-size="16.5" font-weight="700" fill="#0F172A">8. Giải ngân vốn</text>
+<text x="320" y="1295.0" font-size="13.5" fill="#64748B">OPS bấm “Giải ngân”. Sinh lịch thanh toán từ ngày giải ngân.</text>
+<line x1="770" y1="1260" x2="805" y2="1260" stroke="#D97706" stroke-width="2.5" stroke-dasharray="6 4" marker-end="url(#arr)"/>
+<rect x="805" y="1212.0" width="435" height="96" rx="14" fill="rgba(217,119,6,0.09)" stroke="#D97706" stroke-width="2.5"/>
+<circle cx="839" cy="1260" r="22" fill="#D97706"/>
+<text x="839" y="1268" text-anchor="middle" font-size="22" fill="#FFFFFF">₫</text>
+<text x="875" y="1246.0" font-size="16" font-weight="800" fill="#D97706">GIẢI NGÂN VỐN</text>
+<text x="875" y="1269.0" font-size="14" font-weight="700" fill="#0F172A">VNFITE → Người gọi vốn</text>
+<text x="875" y="1290.0" font-size="12.5" fill="#64748B">bắn loan.disbursed · push “đã nhận vốn”</text>
+<rect x="40" y="1388" width="215" height="44" rx="22" fill="rgba(22,163,74,0.12)" stroke="#16A34A" stroke-width="1.5"/>
+<text x="147.5" y="1415" text-anchor="middle" font-size="14.5" font-weight="700" fill="#16A34A">Vận hành</text>
+<line x1="255" y1="1410" x2="300" y2="1410" stroke="#CBD5E1" stroke-width="2"/>
+<rect x="300" y="1362.0" width="470" height="96" rx="14" fill="#FFFFFF" stroke="#16A34A" stroke-width="2.5"/>
+<rect x="300" y="1362.0" width="7" height="96" rx="3" fill="#16A34A"/>
+<rect x="320" y="1376.0" width="166.0" height="24" rx="12" fill="rgba(22,163,74,0.14)"/>
+<text x="403.0" y="1392.0" text-anchor="middle" font-size="12.5" font-weight="700" fill="#16A34A">REPAYING → COMPLETED</text>
+<text x="320" y="1424.0" font-size="16.5" font-weight="700" fill="#0F172A">9. Thanh toán theo lịch</text>
+<text x="320" y="1445.0" font-size="13.5" fill="#64748B">Cho tới khi tất toán khoản.</text>
+<rect x="40" y="1508.0" width="1200" height="150" rx="14" fill="#FFFFFF" stroke="#E2E8F0" stroke-width="1.5"/>
+<text x="64" y="1542.0" font-size="17" font-weight="800" fill="#0F172A">Tổng kết — Ai ký, ký lúc nào</text>
+<circle cx="74" cy="1578.0" r="15" fill="#C82020"/><text x="74" y="1584.0" text-anchor="middle" font-size="15" font-weight="700" fill="#FFF">①</text>
+<text x="100" y="1576.0" font-size="14.5" font-weight="700" fill="#0F172A">Hợp đồng ĐẦU TƯ — ký bởi NHÀ ĐẦU TƯ (OTP), tại bước 5 khi rót vốn.</text>
+<text x="100" y="1598.0" font-size="13" fill="#64748B">Mỗi nhà đầu tư ký 1 hợp đồng cho phần vốn của mình. Đối ứng (bên còn lại) là VNFITE đại diện kết nối.</text>
+<circle cx="74" cy="1630.0" r="15" fill="#C82020"/><text x="74" y="1636.0" text-anchor="middle" font-size="15" font-weight="700" fill="#FFF">②</text>
+<text x="100" y="1628.0" font-size="14.5" font-weight="700" fill="#0F172A">Hợp đồng VAY (khế ước nhận nợ) — ký bởi NGƯỜI GỌI VỐN (OTP), tại bước 7 khi đủ vốn.</text>
+<text x="100" y="1650.0" font-size="13" fill="#64748B">Phải ký xong mới sang AWAITING_DISBURSEMENT → OPS mới được Giải ngân (bước 8).</text>
+</svg>
