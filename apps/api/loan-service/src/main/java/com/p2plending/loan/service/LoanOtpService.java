@@ -54,7 +54,9 @@ public class LoanOtpService {
                 .productCode(request.getProductCode())
                 .amount(request.getAmount())
                 .termMonths(request.getTermMonths())
+                .repaymentDay(request.getRepaymentDay())
                 .purpose(request.getPurpose())
+                .documents(request.getDocuments())
                 .monthlyIncome(request.getMonthlyIncome())
                 .occupation(request.getOccupation())
                 .workplace(request.getWorkplace())
@@ -134,7 +136,9 @@ public class LoanOtpService {
         r.setProductCode(p.getProductCode());
         r.setAmount(p.getAmount());
         r.setTermMonths(p.getTermMonths());
+        r.setRepaymentDay(p.getRepaymentDay());
         r.setPurpose(p.getPurpose());
+        r.setDocuments(p.getDocuments());
         r.setMonthlyIncome(p.getMonthlyIncome());
         r.setOccupation(p.getOccupation());
         r.setWorkplace(p.getWorkplace());

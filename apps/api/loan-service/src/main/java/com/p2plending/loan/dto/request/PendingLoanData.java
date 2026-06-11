@@ -8,6 +8,7 @@ import lombok.NoArgsConstructor;
 
 import java.io.Serializable;
 import java.math.BigDecimal;
+import java.util.List;
 
 /**
  * Dữ liệu khoản gọi vốn đang chờ xác nhận OTP — lưu tạm trong Redis.
@@ -27,6 +28,7 @@ public class PendingLoanData implements Serializable {
     private String productCode;
     private BigDecimal amount;
     private Integer termMonths;
+    private Integer repaymentDay;
     private String purpose;
 
     // ── Thông tin cá nhân ────────────────────────────────────────
@@ -48,4 +50,7 @@ public class PendingLoanData implements Serializable {
     private String ref2Relationship;
     private String ref2Phone;
     private String ref2Address;
+
+    // ── Chứng từ đính kèm ────────────────────────────────────────
+    private List<LoanDocumentInput> documents;
 }
