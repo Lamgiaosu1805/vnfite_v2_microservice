@@ -4,6 +4,7 @@ import com.p2plending.auth.domain.enums.KycStatus;
 import lombok.Builder;
 import lombok.Data;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Data
@@ -18,4 +19,6 @@ public class InternalUserSummaryResponse {
     private KycStatus kycStatus;
     private String accountStatus;
     private LocalDateTime createdAt;
+    /** Ngày sinh từ KYC đã duyệt — null nếu chưa eKYC hoặc KYC chưa APPROVED. */
+    private LocalDate dateOfBirth;
 }

@@ -27,6 +27,9 @@ public interface LoanRequestRepository
     boolean existsByBorrowerIdAndStatusInAndIsDeletedFalse(
             String borrowerId, Collection<LoanStatus> statuses);
 
+    /** Số khoản gọi vốn đã hoàn thành của borrower — dùng cho credit scoring. */
+    long countByBorrowerIdAndStatusAndIsDeletedFalse(String borrowerId, LoanStatus status);
+
     @Modifying
     @Query("UPDATE LoanRequest l SET l.status = :status WHERE l.id = :id")
     int updateStatus(@Param("id") String id, @Param("status") LoanStatus status);

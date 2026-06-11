@@ -101,6 +101,7 @@ public class InternalUserQueryService {
                 .kycStatus(user.getKycStatus())
                 .accountStatus(user.isDeleted() ? "LOCKED" : "ACTIVE")
                 .createdAt(user.getCreatedAt())
+                .dateOfBirth(kyc.map(KycSubmission::getDateOfBirth).orElse(null))
                 .build();
     }
 }

@@ -1,5 +1,7 @@
 package com.p2plending.loan.controller;
 
+import com.p2plending.loan.domain.enums.LoanStatus;
+import com.p2plending.loan.domain.repository.LoanRequestRepository;
 import com.p2plending.loan.dto.request.DisburseRequest;
 import com.p2plending.loan.dto.request.InternalLoanProposeRequest;
 import com.p2plending.loan.dto.request.InternalLoanReviewRequest;
@@ -39,6 +41,7 @@ public class InternalLoanController {
     private final RepaymentService repaymentService;
     private final AppraisalSuggestionService appraisalSuggestionService;
     private final ContractService contractService;
+    private final LoanRequestRepository loanRequestRepository;
 
     @Value("${app.internal.secret:dev-internal-secret}")
     private String internalSecret;
@@ -153,6 +156,16 @@ public class InternalLoanController {
         requireInternalSecret(secret);
         String disbursedBy = request != null ? request.getDisbursedBy() : null;
         return ResponseEntity.ok(loanService.disburse(loanId, disbursedBy));
+    }
+
+    /** Số khoản gọi vốn đã COMPLETED của borrower — credit-service dùng cho scoring. */
+    @GetMapping("/borrowers/{borrowerId}/completed-count")
+    public ResponseEntity<Long> getCompletedLoanCount(
+            @RequestHeader(INTERNAL_SECRET_HEADER) String secret,
+            @PathVariable String borrowerId) {
+        requireInternalSecret(secret);
+        return ResponseEntity.ok(
+                loanRequestRepository.countByBorrowerIdAndStatusAndIsDeletedFalse(borrowerId, LoanStatus.COMPLETED));
     }
 
     /** Danh sách chứng từ của một khoản — CMS thẩm định xem. */

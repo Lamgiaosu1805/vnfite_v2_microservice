@@ -6,6 +6,7 @@ import lombok.Data;
 import lombok.AllArgsConstructor;
 import lombok.NoArgsConstructor;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Data @Builder @NoArgsConstructor @AllArgsConstructor
@@ -19,4 +20,6 @@ public class UserSummaryResponse {
     private String kycStatus;
     private UserAccountStatus accountStatus;
     private LocalDateTime createdAt;
+    /** Ngày sinh từ KYC đã duyệt — null nếu chưa eKYC hoặc KYC chưa APPROVED. */
+    private LocalDate dateOfBirth;
 }

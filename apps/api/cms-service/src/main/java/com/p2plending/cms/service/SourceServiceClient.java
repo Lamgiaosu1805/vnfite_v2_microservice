@@ -19,6 +19,7 @@ import org.springframework.web.util.UriComponentsBuilder;
 
 import java.math.BigDecimal;
 import java.net.URI;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeFormatterBuilder;
@@ -164,6 +165,16 @@ public class SourceServiceClient {
         return exchangeForJson(url, HttpMethod.GET, null);
     }
 
+    /** Số khoản gọi vốn đã hoàn thành của borrower — credit-service dùng để chấm điểm COMPLETED_LOANS. */
+    public long getCompletedLoanCount(String borrowerId) {
+        String url = UriComponentsBuilder.fromHttpUrl(loanServiceUrl)
+                .path("/internal/loans/borrowers/{borrowerId}/completed-count")
+                .buildAndExpand(borrowerId)
+                .toUriString();
+        JsonNode node = exchangeForJson(url, HttpMethod.GET, null);
+        return node != null ? node.asLong(0) : 0;
+    }
+
     /**
      * Chấm điểm tín dụng tham khảo cho khoản gọi vốn, gom dữ liệu từ loan-service + auth-service.
      * Gửi kèm toàn bộ chứng từ của khoản → credit-service AI phân tích hết rồi gộp vào advisory,
@@ -172,6 +183,15 @@ public class SourceServiceClient {
     public JsonNode evaluateCreditScore(String loanId) {
         LoanSummaryResponse loan = getLoanById(loanId);
         UserSummaryResponse borrower = loan.getBorrowerId() != null ? safeGetUser(loan.getBorrowerId()) : null;
+
+        long completedCount = 0;
+        if (loan.getBorrowerId() != null) {
+            try {
+                completedCount = getCompletedLoanCount(loan.getBorrowerId());
+            } catch (Exception ex) {
+                log.warn("Could not fetch completed loan count for borrower {}: {}", loan.getBorrowerId(), ex.getMessage());
+            }
+        }
 
         var body = new java.util.LinkedHashMap<String, Object>();
         body.put("userId", loan.getBorrowerId());
@@ -182,9 +202,13 @@ public class SourceServiceClient {
         body.put("monthlyIncome", loan.getMonthlyIncome());
         body.put("occupation", loan.getOccupation());
         body.put("hasReferrer", loan.getReferredBy() != null && !loan.getReferredBy().isBlank());
+        body.put("completedLoanCount", (int) completedCount);
         if (borrower != null) {
             body.put("kycStatus", borrower.getKycStatus());
             body.put("accountCreatedAt", borrower.getCreatedAt());
+            if (borrower.getDateOfBirth() != null) {
+                body.put("dateOfBirth", borrower.getDateOfBirth().toString());
+            }
         }
         body.put("declaredFullName", loan.getBorrowerName());
         body.put("declaredWorkplace", loan.getWorkplace());
@@ -421,6 +445,7 @@ public class SourceServiceClient {
                 .kycStatus(text(node, "kycStatus"))
                 .accountStatus(parseAccountStatus(text(node, "accountStatus")))
                 .createdAt(dateTime(node, "createdAt"))
+                .dateOfBirth(date(node, "dateOfBirth"))
                 .build();
     }
 
@@ -507,6 +532,18 @@ public class SourceServiceClient {
             return LocalDateTime.parse(text, LENIENT_DT);
         } catch (Exception ex) {
             log.warn("Cannot parse dateTime field '{}' value '{}': {}", field, text, ex.getMessage());
+            return null;
+        }
+    }
+
+    private LocalDate date(JsonNode node, String field) {
+        if (!node.hasNonNull(field)) return null;
+        String text = node.get(field).asText();
+        if (text.isBlank()) return null;
+        try {
+            return LocalDate.parse(text, DateTimeFormatter.ISO_LOCAL_DATE);
+        } catch (Exception ex) {
+            log.warn("Cannot parse date field '{}' value '{}': {}", field, text, ex.getMessage());
             return null;
         }
     }

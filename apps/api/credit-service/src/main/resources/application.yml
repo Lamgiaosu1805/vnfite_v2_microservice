@@ -50,7 +50,10 @@ app:
     # enabled=true + mode=demo  → fake realistic, không cần API key (dùng để test UI)
     # enabled=true + mode=claude → gọi Claude API thật (cần ANTHROPIC_API_KEY)
     enabled: ${APP_AI_ENABLED:false}
-    mode: ${APP_AI_MODE:claude}
+    # demo = fake data nhưng có cấu trúc đầy đủ, không cần API key — dùng để test UI
+    # gemini = Gemini Flash thật, cần GEMINI_API_KEY (miễn phí tại aistudio.google.com/apikey)
+    # claude = Claude API thật, cần ANTHROPIC_API_KEY
+    mode: ${APP_AI_MODE:demo}
     api-key: ${ANTHROPIC_API_KEY:}
     model: ${APP_AI_MODEL:claude-opus-4-8}
     gemini-api-key: ${GEMINI_API_KEY:}
