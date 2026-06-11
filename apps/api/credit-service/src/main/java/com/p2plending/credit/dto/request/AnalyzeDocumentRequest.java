@@ -18,7 +18,7 @@ public class AnalyzeDocumentRequest {
     @NotBlank(message = "userId không được để trống")
     private String userId;
 
-    private Long loanRequestId;
+    private String loanRequestId;
 
     /** SALARY_STATEMENT | BANK_STATEMENT | LABOR_CONTRACT | BUSINESS_LICENSE | OTHER */
     @NotBlank(message = "docType không được để trống")

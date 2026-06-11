@@ -54,6 +54,9 @@ public class SourceServiceClient {
     @Value("${cms.sources.loan-url:http://loan-service:8082}")
     private String loanServiceUrl;
 
+    @Value("${cms.sources.credit-url:http://credit-service:8087}")
+    private String creditServiceUrl;
+
     @Value("${cms.sources.internal-secret:dev-internal-secret}")
     private String internalSecret;
 
@@ -144,6 +147,62 @@ public class SourceServiceClient {
         return exchangeForJson(url, HttpMethod.GET, null);
     }
 
+    /** Danh sách chứng từ của một khoản — raw JSON cho CMS web. */
+    public JsonNode getLoanDocuments(String loanId) {
+        String url = UriComponentsBuilder.fromHttpUrl(loanServiceUrl)
+                .path("/internal/loans/{loanId}/documents")
+                .buildAndExpand(loanId)
+                .toUriString();
+        return exchangeForJson(url, HttpMethod.GET, null);
+    }
+
+    /** Chấm điểm tín dụng tham khảo cho khoản gọi vốn, gom dữ liệu từ loan-service + auth-service. */
+    public JsonNode evaluateCreditScore(String loanId) {
+        LoanSummaryResponse loan = getLoanById(loanId);
+        UserSummaryResponse borrower = loan.getBorrowerId() != null ? safeGetUser(loan.getBorrowerId()) : null;
+
+        var body = new java.util.LinkedHashMap<String, Object>();
+        body.put("userId", loan.getBorrowerId());
+        body.put("loanRequestId", loan.getLoanId());
+        body.put("loanAmount", loan.getAmount());
+        body.put("termMonths", loan.getTermMonths());
+        body.put("purpose", loan.getPurpose());
+        body.put("monthlyIncome", loan.getMonthlyIncome());
+        body.put("occupation", loan.getOccupation());
+        body.put("hasReferrer", loan.getReferredBy() != null && !loan.getReferredBy().isBlank());
+        if (borrower != null) {
+            body.put("kycStatus", borrower.getKycStatus());
+            body.put("accountCreatedAt", borrower.getCreatedAt());
+        }
+
+        String url = UriComponentsBuilder.fromHttpUrl(creditServiceUrl)
+                .path("/internal/credit/scores/evaluate")
+                .toUriString();
+        return exchangeForJson(url, HttpMethod.POST, body);
+    }
+
+    /** AI phân tích một chứng từ của khoản gọi vốn, kết quả chỉ phục vụ thẩm định tham khảo. */
+    public JsonNode analyzeLoanDocument(String loanId, String documentId) {
+        LoanSummaryResponse loan = getLoanById(loanId);
+        JsonNode document = findLoanDocument(loanId, documentId);
+
+        var body = new java.util.LinkedHashMap<String, Object>();
+        body.put("userId", loan.getBorrowerId());
+        body.put("loanRequestId", loan.getLoanId());
+        body.put("docType", text(document, "docType"));
+        body.put("fileId", text(document, "fileId"));
+        body.put("fileName", text(document, "fileName"));
+        body.put("declaredFullName", loan.getBorrowerName());
+        body.put("declaredMonthlyIncome", loan.getMonthlyIncome());
+        body.put("declaredOccupation", loan.getOccupation());
+        body.put("declaredWorkplace", loan.getWorkplace());
+
+        String url = UriComponentsBuilder.fromHttpUrl(creditServiceUrl)
+                .path("/internal/credit/documents/analyze")
+                .toUriString();
+        return exchangeForJson(url, HttpMethod.POST, body);
+    }
+
     /** Giải ngân vốn cho người gọi vốn (OPS bấm trên CMS). */
     public LoanSummaryResponse disburseLoan(String loanId, String disbursedBy) {
         String url = UriComponentsBuilder.fromHttpUrl(loanServiceUrl)
@@ -193,6 +252,27 @@ public class SourceServiceClient {
 
     public LoanSummaryResponse rejectLoan(String loanId, LoanActionRequest request, String reviewedBy) {
         return reviewLoan(loanId, "reject", request, reviewedBy);
+    }
+
+    private JsonNode findLoanDocument(String loanId, String documentId) {
+        JsonNode documents = getLoanDocuments(loanId);
+        for (JsonNode document : documents) {
+            if (documentId.equals(text(document, "id"))) {
+                return document;
+            }
+        }
+        throw new SourceServiceException(
+                HttpStatus.NOT_FOUND,
+                "Không tìm thấy chứng từ trong khoản gọi vốn này");
+    }
+
+    private UserSummaryResponse safeGetUser(String userId) {
+        try {
+            return getUser(userId);
+        } catch (Exception ex) {
+            log.warn("Could not fetch borrower {} for credit scoring: {}", userId, ex.getMessage());
+            return null;
+        }
     }
 
     private LoanSummaryResponse reviewLoan(String loanId, String action, LoanActionRequest request, String reviewedBy) {

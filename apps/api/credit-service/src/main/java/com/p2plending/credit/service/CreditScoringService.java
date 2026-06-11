@@ -190,7 +190,7 @@ public class CreditScoringService {
 
     /** loan-service gọi khi khoản vay kết thúc → điền label cho training data */
     @Transactional
-    public void recordOutcome(String userId, Long loanRequestId, String outcome) {
+    public void recordOutcome(String userId, String loanRequestId, String outcome) {
         List<FeatureSnapshot> snapshots =
                 snapshotRepository.findByUserIdAndLoanRequestIdAndIsDeletedFalse(userId, loanRequestId);
         LocalDateTime now = LocalDateTime.now();

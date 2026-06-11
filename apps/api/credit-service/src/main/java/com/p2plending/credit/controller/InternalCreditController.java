@@ -102,7 +102,7 @@ public class InternalCreditController {
     public ResponseEntity<?> listDocuments(
             @RequestHeader(value = "X-Internal-Secret", required = false) String secret,
             @RequestParam(required = false) String userId,
-            @RequestParam(required = false) Long loanRequestId) {
+            @RequestParam(required = false) String loanRequestId) {
 
         if (unauthorized(secret)) return ResponseEntity.status(401).body(Map.of("error", "Unauthorized"));
         if (loanRequestId != null) {
@@ -121,7 +121,7 @@ public class InternalCreditController {
     public ResponseEntity<?> recordOutcome(
             @RequestHeader(value = "X-Internal-Secret", required = false) String secret,
             @RequestParam String userId,
-            @RequestParam Long loanRequestId,
+            @RequestParam String loanRequestId,
             @RequestParam String outcome) {
 
         if (unauthorized(secret)) return ResponseEntity.status(401).body(Map.of("error", "Unauthorized"));

@@ -36,6 +36,18 @@ public class LoanManagementService {
         return sourceServiceClient.getLoanContracts(loanId);
     }
 
+    public JsonNode getDocuments(String loanId) {
+        return sourceServiceClient.getLoanDocuments(loanId);
+    }
+
+    public JsonNode evaluateCreditScore(String loanId) {
+        return sourceServiceClient.evaluateCreditScore(loanId);
+    }
+
+    public JsonNode analyzeDocument(String loanId, String documentId) {
+        return sourceServiceClient.analyzeLoanDocument(loanId, documentId);
+    }
+
     /**
      * Giải ngân vốn cho người gọi vốn (OPS): AWAITING_DISBURSEMENT → DISBURSED.
      * Ghi audit log quyết định giải ngân.

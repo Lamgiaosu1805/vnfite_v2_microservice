@@ -32,7 +32,7 @@ public class FeatureSnapshot {
     private String userId;
 
     @Column(name = "loan_request_id")
-    private Long loanRequestId;
+    private String loanRequestId;
 
     @Column(name = "credit_score_id", length = 36)
     private String creditScoreId;

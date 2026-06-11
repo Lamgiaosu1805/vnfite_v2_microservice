@@ -58,6 +58,26 @@ public class LoanManagementController {
         return ResponseEntity.ok(loanService.getContracts(loanId));
     }
 
+    /** GET /cms/loans/{loanId}/documents — chứng từ người gọi vốn đã nộp. */
+    @GetMapping("/{loanId}/documents")
+    public ResponseEntity<JsonNode> getDocuments(@PathVariable String loanId) {
+        return ResponseEntity.ok(loanService.getDocuments(loanId));
+    }
+
+    /** POST /cms/loans/{loanId}/credit-score — chấm điểm tín dụng tham khảo. */
+    @PostMapping("/{loanId}/credit-score")
+    public ResponseEntity<JsonNode> evaluateCreditScore(@PathVariable String loanId) {
+        return ResponseEntity.ok(loanService.evaluateCreditScore(loanId));
+    }
+
+    /** POST /cms/loans/{loanId}/documents/{documentId}/analyze — AI phân tích chứng từ. */
+    @PostMapping("/{loanId}/documents/{documentId}/analyze")
+    public ResponseEntity<JsonNode> analyzeDocument(
+            @PathVariable String loanId,
+            @PathVariable String documentId) {
+        return ResponseEntity.ok(loanService.analyzeDocument(loanId, documentId));
+    }
+
     /**
      * POST /cms/loans/{loanId}/disburse
      * OPS giải ngân vốn cho người gọi vốn: AWAITING_DISBURSEMENT → DISBURSED.

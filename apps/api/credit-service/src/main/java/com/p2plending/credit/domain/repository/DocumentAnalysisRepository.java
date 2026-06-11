@@ -7,5 +7,5 @@ import java.util.List;
 
 public interface DocumentAnalysisRepository extends JpaRepository<DocumentAnalysis, String> {
     List<DocumentAnalysis> findByUserIdAndIsDeletedFalseOrderByCreatedAtDesc(String userId);
-    List<DocumentAnalysis> findByLoanRequestIdAndIsDeletedFalseOrderByCreatedAtDesc(Long loanRequestId);
+    List<DocumentAnalysis> findByLoanRequestIdAndIsDeletedFalseOrderByCreatedAtDesc(String loanRequestId);
 }

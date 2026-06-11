@@ -28,7 +28,7 @@ public class DocumentAnalysis {
     private String userId;
 
     @Column(name = "loan_request_id")
-    private Long loanRequestId;
+    private String loanRequestId;
 
     /** SALARY_STATEMENT | BANK_STATEMENT | LABOR_CONTRACT | BUSINESS_LICENSE | OTHER */
     @Column(name = "doc_type", nullable = false, length = 30)

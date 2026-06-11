@@ -12,7 +12,7 @@ public class CreditScoreResponse {
 
     private String id;
     private String userId;
-    private Long loanRequestId;
+    private String loanRequestId;
 
     /** Điểm chuẩn hóa 300-850 */
     private Integer score;

@@ -84,7 +84,7 @@ public class DocumentAnalysisService {
     }
 
     @Transactional(readOnly = true)
-    public List<DocumentAnalysis> listByLoan(Long loanRequestId) {
+    public List<DocumentAnalysis> listByLoan(String loanRequestId) {
         return analysisRepository.findByLoanRequestIdAndIsDeletedFalseOrderByCreatedAtDesc(loanRequestId);
     }
 

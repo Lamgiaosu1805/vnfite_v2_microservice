@@ -29,7 +29,7 @@ public class CreditScore {
 
     /** Khoản gọi vốn được chấm kèm (null = pre-score không gắn khoản vay) */
     @Column(name = "loan_request_id")
-    private Long loanRequestId;
+    private String loanRequestId;
 
     /** Điểm chuẩn hóa 300-850 */
     @Column(name = "score", nullable = false)

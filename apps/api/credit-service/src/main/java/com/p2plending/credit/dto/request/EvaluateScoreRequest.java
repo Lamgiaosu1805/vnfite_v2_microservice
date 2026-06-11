@@ -22,7 +22,7 @@ public class EvaluateScoreRequest {
     private String userId;
 
     // ── Thông tin khoản gọi vốn (optional — null nếu pre-score) ──
-    private Long loanRequestId;
+    private String loanRequestId;
     private BigDecimal loanAmount;
     private Integer termMonths;
     private String purpose;
