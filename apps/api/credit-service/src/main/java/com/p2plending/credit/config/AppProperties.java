@@ -33,7 +33,7 @@ public class AppProperties {
          * true + claude → Claude API (cần ANTHROPIC_API_KEY)
          */
         private boolean enabled = false;
-        private String mode = "claude";
+        private String mode = "demo";
         // Claude
         private String apiKey = "";
         private String model = "claude-opus-4-8";

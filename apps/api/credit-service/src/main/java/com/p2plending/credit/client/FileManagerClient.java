@@ -3,6 +3,7 @@ package com.p2plending.credit.client;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.*;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
@@ -21,7 +22,7 @@ import org.springframework.web.client.RestTemplate;
 @Slf4j
 public class FileManagerClient {
 
-    private final RestTemplate restTemplate;
+    private final @Qualifier("restTemplate") RestTemplate restTemplate;
 
     @Value("${file-manager.base-url:https://service.vnfite.com.vn/file-manager/v2}")
     private String baseUrl;

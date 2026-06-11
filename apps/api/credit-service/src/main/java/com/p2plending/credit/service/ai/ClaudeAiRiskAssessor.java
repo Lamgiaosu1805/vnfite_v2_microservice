@@ -8,6 +8,7 @@ import com.anthropic.models.messages.StructuredMessageCreateParams;
 import com.anthropic.models.messages.ThinkingConfigAdaptive;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
 /**
@@ -18,7 +19,8 @@ import org.springframework.stereotype.Service;
  * AI là lớp tư vấn bổ sung, không bao giờ chặn luồng chấm điểm.
  */
 @Service
-@ConditionalOnExpression("'${APP_AI_ENABLED:false}'.equals('true') and '${APP_AI_MODE:claude}'.equals('claude')")
+@ConditionalOnProperty(prefix = "app.ai", name = "enabled", havingValue = "true")
+@ConditionalOnExpression("'${app.ai.mode:demo}'.equals('claude')")
 @Slf4j
 public class ClaudeAiRiskAssessor implements AiRiskAssessor {
 

@@ -4,8 +4,11 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.p2plending.credit.config.AppProperties;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestTemplate;
 
 import java.util.ArrayList;
@@ -18,7 +21,8 @@ import java.util.List;
  * Kết quả chỉ mang tính TƯ VẤN — không tự quyết định duyệt/từ chối.
  */
 @Service
-@ConditionalOnExpression("'${APP_AI_ENABLED:false}'.equals('true') and '${APP_AI_MODE:claude}'.equals('gemini')")
+@ConditionalOnProperty(prefix = "app.ai", name = "enabled", havingValue = "true")
+@ConditionalOnExpression("'${app.ai.mode:demo}'.equals('gemini')")
 @Slf4j
 public class GeminiAiRiskAssessor implements AiRiskAssessor {
 
@@ -36,9 +40,14 @@ public class GeminiAiRiskAssessor implements AiRiskAssessor {
     private final GeminiClient gemini;
     private final ObjectMapper objectMapper;
 
-    public GeminiAiRiskAssessor(AppProperties props, RestTemplate restTemplate, ObjectMapper objectMapper) {
+    public GeminiAiRiskAssessor(
+            AppProperties props,
+            @Qualifier("geminiRestTemplate") RestTemplate restTemplate,
+            ObjectMapper objectMapper
+    ) {
+        validateGeminiConfig(props);
         this.gemini       = new GeminiClient(restTemplate, objectMapper,
-                props.getAi().getGeminiApiKey(), props.getAi().getGeminiModel());
+                props.getAi().getGeminiApiKey().trim(), props.getAi().getGeminiModel());
         this.objectMapper = objectMapper;
         log.info("GeminiAiRiskAssessor bật — model={}", props.getAi().getGeminiModel());
     }
@@ -70,8 +79,21 @@ public class GeminiAiRiskAssessor implements AiRiskAssessor {
             return new AiRiskAssessment(summary, flags, recommendation);
 
         } catch (Exception e) {
-            log.error("Gemini risk assessment failed (bỏ qua, không chặn chấm điểm): {}", e.getMessage());
+            log.error("Gemini risk assessment failed (bỏ qua, không chặn chấm điểm): {}", e.getMessage(), e);
             return null;
+        }
+    }
+
+    private void validateGeminiConfig(AppProperties props) {
+        if (!StringUtils.hasText(props.getAi().getGeminiApiKey())) {
+            throw new IllegalStateException(
+                    "app.ai.enabled=true và app.ai.mode=gemini nhưng GEMINI_API_KEY/app.ai.gemini-api-key đang trống"
+            );
+        }
+        if (!StringUtils.hasText(props.getAi().getGeminiModel())) {
+            throw new IllegalStateException(
+                    "app.ai.enabled=true và app.ai.mode=gemini nhưng GEMINI_MODEL/app.ai.gemini-model đang trống"
+            );
         }
     }
 }

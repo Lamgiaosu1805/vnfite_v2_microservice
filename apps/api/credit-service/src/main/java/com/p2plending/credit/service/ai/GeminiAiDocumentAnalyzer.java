@@ -4,8 +4,11 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.p2plending.credit.config.AppProperties;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestTemplate;
 
 import java.util.ArrayList;
@@ -19,7 +22,8 @@ import java.util.List;
  * AI không thể khẳng định 100% chứng từ là giả.
  */
 @Service
-@ConditionalOnExpression("'${APP_AI_ENABLED:false}'.equals('true') and '${APP_AI_MODE:claude}'.equals('gemini')")
+@ConditionalOnProperty(prefix = "app.ai", name = "enabled", havingValue = "true")
+@ConditionalOnExpression("'${app.ai.mode:demo}'.equals('gemini')")
 @Slf4j
 public class GeminiAiDocumentAnalyzer implements AiDocumentAnalyzer {
 
@@ -59,9 +63,14 @@ public class GeminiAiDocumentAnalyzer implements AiDocumentAnalyzer {
     private final GeminiClient gemini;
     private final ObjectMapper objectMapper;
 
-    public GeminiAiDocumentAnalyzer(AppProperties props, RestTemplate restTemplate, ObjectMapper objectMapper) {
+    public GeminiAiDocumentAnalyzer(
+            AppProperties props,
+            @Qualifier("geminiRestTemplate") RestTemplate restTemplate,
+            ObjectMapper objectMapper
+    ) {
+        validateGeminiConfig(props);
         this.gemini       = new GeminiClient(restTemplate, objectMapper,
-                props.getAi().getGeminiApiKey(), props.getAi().getGeminiModel());
+                props.getAi().getGeminiApiKey().trim(), props.getAi().getGeminiModel());
         this.objectMapper = objectMapper;
         log.info("GeminiAiDocumentAnalyzer bật — model={}", props.getAi().getGeminiModel());
     }
@@ -146,5 +155,18 @@ public class GeminiAiDocumentAnalyzer implements AiDocumentAnalyzer {
                 List.of(reason), List.of(),
                 "Không thể phân tích chứng từ. " + reason
         );
+    }
+
+    private void validateGeminiConfig(AppProperties props) {
+        if (!StringUtils.hasText(props.getAi().getGeminiApiKey())) {
+            throw new IllegalStateException(
+                    "app.ai.enabled=true và app.ai.mode=gemini nhưng GEMINI_API_KEY/app.ai.gemini-api-key đang trống"
+            );
+        }
+        if (!StringUtils.hasText(props.getAi().getGeminiModel())) {
+            throw new IllegalStateException(
+                    "app.ai.enabled=true và app.ai.mode=gemini nhưng GEMINI_MODEL/app.ai.gemini-model đang trống"
+            );
+        }
     }
 }

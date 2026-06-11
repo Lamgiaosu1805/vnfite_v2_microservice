@@ -9,6 +9,8 @@ import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.client.ResourceAccessException;
+import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.client.RestTemplate;
 
 import java.util.List;
@@ -72,17 +74,47 @@ class GeminiClient {
             ResponseEntity<JsonNode> response = restTemplate.postForEntity(
                     url, new HttpEntity<>(body, headers), JsonNode.class);
 
-            if (response.getBody() == null) return null;
+            JsonNode responseBody = response.getBody();
+            if (responseBody == null) {
+                log.warn("Gemini API returned empty response body");
+                return null;
+            }
 
-            return response.getBody()
-                    .path("candidates").path(0)
+            JsonNode candidate = responseBody.path("candidates").path(0);
+            if (candidate.isMissingNode() || candidate.isNull()) {
+                log.warn("Gemini API response has no candidates: {}", responseBody);
+                return null;
+            }
+
+            String text = candidate
                     .path("content").path("parts").path(0)
                     .path("text").asText(null);
+            if (text == null || text.isBlank()) {
+                log.warn("Gemini API response has no text part. finishReason={} response={}",
+                        candidate.path("finishReason").asText(null), responseBody);
+                return null;
+            }
+            return text;
 
+        } catch (RestClientResponseException e) {
+            log.error("Gemini API HTTP error status={} body={}",
+                    e.getStatusCode(), truncate(e.getResponseBodyAsString()), e);
+            return null;
+        } catch (ResourceAccessException e) {
+            log.error("Gemini API network/timeout error: {}", e.getMessage(), e);
+            return null;
         } catch (Exception e) {
-            log.error("Gemini API call failed: {}", e.getMessage());
+            log.error("Gemini API call failed: {}", e.getMessage(), e);
             return null;
         }
+    }
+
+    private String truncate(String body) {
+        if (body == null || body.isBlank()) {
+            return "";
+        }
+        int max = 4000;
+        return body.length() <= max ? body : body.substring(0, max) + "...[truncated]";
     }
 
     record Part(String text, String mimeType, String base64Data) {

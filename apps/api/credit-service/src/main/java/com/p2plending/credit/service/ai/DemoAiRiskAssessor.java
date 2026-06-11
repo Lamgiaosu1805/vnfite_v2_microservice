@@ -2,6 +2,7 @@ package com.p2plending.credit.service.ai;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -16,7 +17,8 @@ import java.util.regex.Pattern;
  * Bật bằng: APP_AI_ENABLED=true + APP_AI_MODE=demo
  */
 @Service
-@ConditionalOnExpression("'${APP_AI_ENABLED:false}'.equals('true') and '${APP_AI_MODE:claude}'.equals('demo')")
+@ConditionalOnProperty(prefix = "app.ai", name = "enabled", havingValue = "true")
+@ConditionalOnExpression("'${app.ai.mode:demo}'.equals('demo')")
 @Slf4j
 public class DemoAiRiskAssessor implements AiRiskAssessor {
 
