@@ -17,6 +17,7 @@ import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.List;
 import java.util.Map;
 
 @Service
@@ -53,10 +54,7 @@ public class FileManagerUploadService {
 
             MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
             body.add("files", new HttpEntity<>(resource, fileHeaders));
-            body.add("mappings", objectMapper.writeValueAsString(Map.of(
-                    "files", safeLabel,
-                    "doc", safeLabel
-            )));
+            body.add("mappings", objectMapper.writeValueAsString(List.of(safeLabel)));
 
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.MULTIPART_FORM_DATA);

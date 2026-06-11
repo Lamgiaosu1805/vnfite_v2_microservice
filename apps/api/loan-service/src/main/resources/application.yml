@@ -65,6 +65,8 @@ spring:
 
 server:
   port: 8082
+  tomcat:
+    max-http-form-post-size: 20MB
   servlet:
     encoding:
       charset: UTF-8
