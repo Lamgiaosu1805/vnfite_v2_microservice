@@ -55,4 +55,5 @@ public class LoanResponse {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private List<LoanOfferResponse> offers;
+    private List<LoanDocumentResponse> documents;
 }

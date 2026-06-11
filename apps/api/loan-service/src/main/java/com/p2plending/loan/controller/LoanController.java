@@ -3,10 +3,12 @@ package com.p2plending.loan.controller;
 
 import com.p2plending.loan.dto.request.LoanCancelRequest;
 import com.p2plending.loan.dto.request.LoanCreateRequest;
+import com.p2plending.loan.dto.request.LoanDocumentInput;
 import com.p2plending.loan.dto.request.LoanFilterParams;
 import com.p2plending.loan.dto.request.LoanOfferCreateRequest;
 import com.p2plending.loan.dto.request.LoanOtpVerifyRequest;
 import com.p2plending.loan.dto.response.CashflowResponse;
+import com.p2plending.loan.dto.response.LoanDocumentResponse;
 import com.p2plending.loan.dto.response.LoanOtpInitResponse;
 import com.p2plending.loan.dto.response.LoanResponse;
 import com.p2plending.loan.dto.response.OfferCreateResponse;
@@ -191,5 +193,22 @@ public class LoanController {
         return ResponseEntity
                 .status(HttpStatus.CREATED)
                 .body(loanService.createOffer(id, request, principal.userId()));
+    }
+
+    /**
+     * POST /api/loans/{id}/documents
+     * Borrower uploads additional supporting documents to an existing loan application.
+     * fileId comes from file-manager after the app calls POST /file-manager/v2/upload.
+     */
+    @PostMapping("/{id}/documents")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<List<LoanDocumentResponse>> addDocuments(
+            @PathVariable String id,
+            @Valid @RequestBody List<LoanDocumentInput> documents,
+            @AuthenticationPrincipal AuthenticatedUser principal
+    ) {
+        return ResponseEntity
+                .status(HttpStatus.CREATED)
+                .body(loanService.addDocuments(id, principal.userId(), documents));
     }
 }

@@ -4,6 +4,7 @@ import jakarta.validation.constraints.*;
 import lombok.Data;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 @Data
 public class LoanCreateRequest {
@@ -87,4 +88,7 @@ public class LoanCreateRequest {
      */
     @NotNull(message = "Vui lòng chọn ngày trả nợ hàng tháng (ngày 5 hoặc ngày 20)")
     private Integer repaymentDay;
+
+    /** Danh sách chứng từ đính kèm (tùy chọn). fileId lấy từ file-manager sau khi upload. */
+    private List<LoanDocumentInput> documents;
 }

@@ -2,16 +2,20 @@ package com.p2plending.loan.service;
 
 import com.p2plending.loan.config.CacheConfig;
 import com.p2plending.loan.domain.entity.LoanContract;
+import com.p2plending.loan.domain.entity.LoanDocument;
 import com.p2plending.loan.domain.entity.LoanOffer;
 import com.p2plending.loan.domain.entity.LoanProduct;
 import com.p2plending.loan.domain.entity.LoanRequest;
 import com.p2plending.loan.domain.enums.LoanStatus;
 import com.p2plending.loan.domain.enums.OfferStatus;
+import com.p2plending.loan.domain.repository.LoanDocumentRepository;
 import com.p2plending.loan.domain.repository.LoanOfferRepository;
 import com.p2plending.loan.domain.repository.LoanRequestRepository;
 import com.p2plending.loan.dto.request.LoanCreateRequest;
+import com.p2plending.loan.dto.request.LoanDocumentInput;
 import com.p2plending.loan.dto.request.LoanFilterParams;
 import com.p2plending.loan.dto.request.LoanOfferCreateRequest;
+import com.p2plending.loan.dto.response.LoanDocumentResponse;
 import com.p2plending.loan.dto.response.LoanOfferResponse;
 import com.p2plending.loan.dto.response.LoanResponse;
 import com.p2plending.loan.dto.response.OfferCreateResponse;
@@ -59,14 +63,15 @@ public class LoanService {
             LoanStatus.REPAYING
     );
 
-    private final LoanRequestRepository loanRequestRepository;
-    private final LoanOfferRepository   loanOfferRepository;
-    private final LoanRequestMapper     loanRequestMapper;
-    private final LoanOfferMapper       loanOfferMapper;
-    private final KafkaProducerService  kafkaProducerService;
-    private final LoanProductService    loanProductService;
-    private final RepaymentService      repaymentService;
-    private final ContractService       contractService;
+    private final LoanRequestRepository  loanRequestRepository;
+    private final LoanOfferRepository    loanOfferRepository;
+    private final LoanDocumentRepository loanDocumentRepository;
+    private final LoanRequestMapper      loanRequestMapper;
+    private final LoanOfferMapper        loanOfferMapper;
+    private final KafkaProducerService   kafkaProducerService;
+    private final LoanProductService     loanProductService;
+    private final RepaymentService       repaymentService;
+    private final ContractService        contractService;
 
     // ── Create ────────────────────────────────────────────────────
 
@@ -112,10 +117,17 @@ public class LoanService {
         // saveAndFlush then re-fetch so MySQL assigns loan_seq before we use getLoanCode()
         loanRequestRepository.saveAndFlush(loan);
         LoanRequest saved = findLoanOrThrow(loan.getId());
+
+        // Lưu chứng từ đính kèm (tùy chọn)
+        if (request.getDocuments() != null && !request.getDocuments().isEmpty()) {
+            saveDocuments(saved.getId(), request.getDocuments());
+        }
+
         kafkaProducerService.publishLoanSubmitted(saved);
 
-        log.info("Loan submitted: id={} code={} borrower={} amount={}",
-                saved.getId(), saved.getLoanCode(), borrowerId, saved.getAmount());
+        log.info("Loan submitted: id={} code={} borrower={} amount={} docs={}",
+                saved.getId(), saved.getLoanCode(), borrowerId, saved.getAmount(),
+                request.getDocuments() != null ? request.getDocuments().size() : 0);
         return buildResponse(saved, false);
     }
 
@@ -443,6 +455,54 @@ public class LoanService {
         }, () -> log.warn("payment.completed received for unknown loan={}", event.getLoanId()));
     }
 
+    // ── Documents ─────────────────────────────────────────────────
+
+    @Transactional(readOnly = true)
+    public List<LoanDocumentResponse> getDocuments(String loanId) {
+        findLoanOrThrow(loanId);
+        return loanDocumentRepository
+                .findByLoanRequestIdAndIsDeletedFalseOrderByCreatedAtAsc(loanId)
+                .stream()
+                .map(this::toDocumentResponse)
+                .toList();
+    }
+
+    @Transactional
+    public List<LoanDocumentResponse> addDocuments(String loanId, String borrowerId,
+                                                   List<LoanDocumentInput> inputs) {
+        LoanRequest loan = findLoanOrThrow(loanId);
+        if (!loan.getBorrowerId().equals(borrowerId)) {
+            throw new InvalidLoanStateException("Bạn không có quyền thêm chứng từ vào khoản gọi vốn này");
+        }
+        if (inputs == null || inputs.isEmpty()) {
+            throw new IllegalArgumentException("Cần ít nhất một chứng từ");
+        }
+        saveDocuments(loanId, inputs);
+        return getDocuments(loanId);
+    }
+
+    private void saveDocuments(String loanId, List<LoanDocumentInput> inputs) {
+        List<LoanDocument> docs = inputs.stream()
+                .map(input -> LoanDocument.builder()
+                        .loanRequestId(loanId)
+                        .docType(input.getDocType())
+                        .fileId(input.getFileId())
+                        .fileName(input.getFileName())
+                        .build())
+                .toList();
+        loanDocumentRepository.saveAll(docs);
+    }
+
+    private LoanDocumentResponse toDocumentResponse(LoanDocument doc) {
+        return LoanDocumentResponse.builder()
+                .id(doc.getId())
+                .docType(doc.getDocType())
+                .fileId(doc.getFileId())
+                .fileName(doc.getFileName())
+                .createdAt(doc.getCreatedAt())
+                .build();
+    }
+
     // ── Internals ─────────────────────────────────────────────────
 
     private LoanRequest findLoanOrThrow(String id) {
@@ -467,6 +527,13 @@ public class LoanService {
                     .map(loanOfferMapper::toResponse)
                     .toList();
             response.setOffers(offers);
+
+            List<LoanDocumentResponse> docs = loanDocumentRepository
+                    .findByLoanRequestIdAndIsDeletedFalseOrderByCreatedAtAsc(loan.getId())
+                    .stream()
+                    .map(this::toDocumentResponse)
+                    .toList();
+            response.setDocuments(docs.isEmpty() ? null : docs);
         }
         return response;
     }

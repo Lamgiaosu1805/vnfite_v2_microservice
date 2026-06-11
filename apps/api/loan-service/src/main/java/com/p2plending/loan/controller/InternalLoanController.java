@@ -8,6 +8,7 @@ import com.p2plending.loan.dto.request.RecordPaymentRequest;
 import com.p2plending.loan.dto.response.AppraisalSuggestionResponse;
 import com.p2plending.loan.dto.response.ContractResponse;
 import com.p2plending.loan.dto.response.InternalLoanStatsResponse;
+import com.p2plending.loan.dto.response.LoanDocumentResponse;
 import com.p2plending.loan.dto.response.LoanResponse;
 import com.p2plending.loan.dto.response.PagedResponse;
 import com.p2plending.loan.dto.response.RepaymentScheduleResponse;
@@ -152,6 +153,15 @@ public class InternalLoanController {
         requireInternalSecret(secret);
         String disbursedBy = request != null ? request.getDisbursedBy() : null;
         return ResponseEntity.ok(loanService.disburse(loanId, disbursedBy));
+    }
+
+    /** Danh sách chứng từ của một khoản — CMS thẩm định xem. */
+    @GetMapping("/{loanId}/documents")
+    public ResponseEntity<List<LoanDocumentResponse>> getDocuments(
+            @RequestHeader(INTERNAL_SECRET_HEADER) String secret,
+            @PathVariable String loanId) {
+        requireInternalSecret(secret);
+        return ResponseEntity.ok(loanService.getDocuments(loanId));
     }
 
     private void requireInternalSecret(String secret) {
