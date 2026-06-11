@@ -32,6 +32,7 @@ public class CreditScoringService {
     private final CreditScoreDetailRepository detailRepository;
     private final FeatureSnapshotRepository snapshotRepository;
     private final ScoringEngine scoringEngine;
+    private final ScoreExplainer scoreExplainer;
     private final AiRiskAssessor aiRiskAssessor;
     private final DocumentAnalysisService documentAnalysisService;
     private final AppProperties appProperties;
@@ -325,7 +326,17 @@ public class CreditScoringService {
                     .append(" → ").append(r.getPoints()).append("/").append(r.getMaxPoints()).append("\n");
         }
         if (!engine.getMissingData().isEmpty()) {
-            sb.append("Tiêu chí thiếu dữ liệu: ").append(String.join(", ", engine.getMissingData())).append("\n");
+            int lostToMissing = engine.getDetails().stream()
+                    .filter(r -> r.getRawValue() != null && r.getRawValue().contains("thiếu dữ liệu"))
+                    .mapToInt(ScoringEngine.CriteriaResult::getMaxPoints).sum();
+            sb.append("Tiêu chí thiếu dữ liệu: ").append(String.join(", ", engine.getMissingData()))
+                    .append(" (mất ").append(lostToMissing).append("/").append(engine.getMaxPoints())
+                    .append(" điểm thô do CHƯA CÓ dữ liệu, không phải tín hiệu xấu)\n");
+            if (lostToMissing >= 0.25 * engine.getMaxPoints()) {
+                sb.append("LƯU Ý QUAN TRỌNG: phần lớn điểm bị mất là do hồ sơ THIẾU DỮ LIỆU chứ chưa chắc do rủi ro. ")
+                  .append("Hãy nói rõ trong summary đâu là điểm thấp do thiếu dữ liệu (có thể bổ sung để nâng hạng) ")
+                  .append("và đâu là tín hiệu rủi ro thật; tránh khuyến nghị từ chối chỉ vì điểm thấp khi nguyên nhân là thiếu thông tin.\n");
+            }
         }
 
         if (docAnalyses != null && !docAnalyses.isEmpty()) {
@@ -355,6 +366,23 @@ public class CreditScoringService {
     private CreditScoreResponse toResponse(CreditScore e, List<CreditScoreDetail> details,
                                            List<String> missingData, List<String> riskFlags,
                                            List<DocumentAnalysis> docAnalyses) {
+        List<CreditScoreResponse.ScoreDetailItem> items = details.stream()
+                .map(d -> CreditScoreResponse.ScoreDetailItem.builder()
+                        .criteriaCode(d.getCriteriaCode())
+                        .criteriaName(d.getCriteriaName())
+                        .component(d.getComponent())
+                        .rawValue(d.getRawValue())
+                        .points(d.getPoints())
+                        .maxPoints(d.getMaxPoints())
+                        .build())
+                .toList();
+
+        // Diễn giải nguyên nhân — deterministic, luôn có kể cả khi AI advisory null
+        CreditScoreResponse.ScoreExplanation explanation = scoreExplainer.explain(
+                e.getScore(), e.getGrade(),
+                e.getMaxPoints() != null ? e.getMaxPoints() : 0,
+                items, docAnalyses, appProperties.getAi().isEnabled());
+
         return CreditScoreResponse.builder()
                 .id(e.getId())
                 .userId(e.getUserId())
@@ -367,18 +395,12 @@ public class CreditScoringService {
                 .modelVersion(e.getModelVersion())
                 .status(e.getStatus())
                 .missingData(missingData)
-                .details(details.stream().map(d -> CreditScoreResponse.ScoreDetailItem.builder()
-                        .criteriaCode(d.getCriteriaCode())
-                        .criteriaName(d.getCriteriaName())
-                        .component(d.getComponent())
-                        .rawValue(d.getRawValue())
-                        .points(d.getPoints())
-                        .maxPoints(d.getMaxPoints())
-                        .build()).toList())
+                .details(items)
                 .aiSummary(e.getAiSummary())
                 .aiRiskFlags(riskFlags)
                 .aiRecommendation(e.getAiRecommendation())
                 .documentAnalyses(docAnalyses)
+                .explanation(explanation)
                 .expiresAt(e.getExpiresAt())
                 .createdAt(e.getCreatedAt())
                 .build();
