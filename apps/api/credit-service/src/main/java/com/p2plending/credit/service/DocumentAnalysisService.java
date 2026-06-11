@@ -1,6 +1,7 @@
 package com.p2plending.credit.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.p2plending.credit.client.FileManagerClient;
 import com.p2plending.credit.domain.entity.DocumentAnalysis;
 import com.p2plending.credit.domain.repository.DocumentAnalysisRepository;
 import com.p2plending.credit.dto.request.AnalyzeDocumentRequest;
@@ -10,6 +11,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Base64;
 import java.util.List;
 import java.util.Set;
 
@@ -25,14 +27,32 @@ public class DocumentAnalysisService {
 
     private final AiDocumentAnalyzer documentAnalyzer;
     private final DocumentAnalysisRepository analysisRepository;
+    private final FileManagerClient fileManagerClient;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Transactional
     public DocumentAnalysis analyze(AnalyzeDocumentRequest req) {
-        validateFile(req);
+        // Lấy nội dung file: ưu tiên fileId (fetch từ file-manager), fallback base64 trực tiếp
+        String mimeType;
+        String fileBase64;
+        if (req.getFileId() != null && !req.getFileId().isBlank()) {
+            FileManagerClient.FetchedFile file = fileManagerClient.fetch(req.getFileId());
+            mimeType = file.mimeType();
+            fileBase64 = Base64.getEncoder().encodeToString(file.bytes());
+        } else if (req.getFileBase64() != null && !req.getFileBase64().isBlank()) {
+            if (req.getMimeType() == null || req.getMimeType().isBlank()) {
+                throw new IllegalArgumentException("Cần mimeType khi gửi fileBase64");
+            }
+            mimeType = req.getMimeType();
+            fileBase64 = req.getFileBase64();
+        } else {
+            throw new IllegalArgumentException("Cần truyền fileId hoặc fileBase64");
+        }
+
+        validateFile(mimeType, fileBase64);
 
         AiDocumentAnalyzer.DocumentCheckResult result =
-                documentAnalyzer.analyze(req.getMimeType(), req.getFileBase64(), buildContext(req));
+                documentAnalyzer.analyze(mimeType, fileBase64, buildContext(req));
 
         if (result == null) {
             throw new IllegalStateException(
@@ -44,6 +64,7 @@ public class DocumentAnalysisService {
                 .loanRequestId(req.getLoanRequestId())
                 .docType(req.getDocType())
                 .fileName(req.getFileName())
+                .fileId(req.getFileId())
                 .verdict(result.verdict() != null ? result.verdict() : "UNREADABLE")
                 .trustScore(result.trustScore())
                 .extractedData(toJson(result))
@@ -67,16 +88,16 @@ public class DocumentAnalysisService {
         return analysisRepository.findByLoanRequestIdAndIsDeletedFalseOrderByCreatedAtDesc(loanRequestId);
     }
 
-    private void validateFile(AnalyzeDocumentRequest req) {
-        String mime = req.getMimeType().toLowerCase();
+    private void validateFile(String mimeType, String fileBase64) {
+        String mime = mimeType.toLowerCase();
         boolean isPdf = "application/pdf".equals(mime);
         if (!isPdf && !IMAGE_MIME_TYPES.contains(mime)) {
             throw new IllegalArgumentException(
-                    "mimeType không hỗ trợ: " + req.getMimeType() + " (chỉ nhận jpeg/png/webp/gif/pdf)");
+                    "mimeType không hỗ trợ: " + mimeType + " (chỉ nhận jpeg/png/webp/gif/pdf)");
         }
 
         // Ước lượng dung lượng từ độ dài base64
-        long approxBytes = req.getFileBase64().length() * 3L / 4;
+        long approxBytes = fileBase64.length() * 3L / 4;
         if (isPdf && approxBytes > MAX_PDF_BYTES) {
             throw new IllegalArgumentException("File PDF quá lớn (tối đa 30MB)");
         }

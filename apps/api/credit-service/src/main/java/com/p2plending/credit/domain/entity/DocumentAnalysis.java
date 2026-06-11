@@ -37,6 +37,10 @@ public class DocumentAnalysis {
     @Column(name = "file_name", length = 255)
     private String fileName;
 
+    /** ID file gốc trên file-manager — admin xem lại qua GET /file-manager/v2/file/{fileId} */
+    @Column(name = "file_id", length = 100)
+    private String fileId;
+
     /** CONSISTENT | SUSPICIOUS | HIGH_RISK | UNREADABLE */
     @Column(name = "verdict", nullable = false, length = 20)
     private String verdict;

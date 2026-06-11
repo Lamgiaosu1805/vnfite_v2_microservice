@@ -1,0 +1,21 @@
+package com.p2plending.credit.config;
+
+import org.springframework.boot.web.client.RestTemplateBuilder;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.web.client.RestTemplate;
+
+import java.time.Duration;
+
+@Configuration
+public class RestClientConfig {
+
+    @Bean
+    public RestTemplate restTemplate(RestTemplateBuilder builder) {
+        // Tải file chứng từ có thể lớn (PDF sao kê) → timeout rộng tay
+        return builder
+                .setConnectTimeout(Duration.ofSeconds(10))
+                .setReadTimeout(Duration.ofSeconds(30))
+                .build();
+    }
+}

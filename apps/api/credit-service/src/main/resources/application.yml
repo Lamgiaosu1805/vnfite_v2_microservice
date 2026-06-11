@@ -50,6 +50,10 @@ app:
     api-key: ${ANTHROPIC_API_KEY:}
     model: ${APP_AI_MODEL:claude-opus-4-8}
 
+# File-manager dùng chung của VNFITE — nơi lưu file chứng từ gốc
+file-manager:
+  base-url: ${FILE_MANAGER_URL:https://service.vnfite.com.vn/file-manager/v2}
+
 management:
   endpoints:
     web:
