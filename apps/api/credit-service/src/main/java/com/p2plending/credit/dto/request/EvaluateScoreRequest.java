@@ -6,6 +6,7 @@ import lombok.Data;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * Yêu cầu chấm điểm — CMS (hoặc loan-service) gọi khi thẩm định khoản gọi vốn.
@@ -45,4 +46,22 @@ public class EvaluateScoreRequest {
     private BigDecimal monthlyIncome;
     private String occupation;
     private BigDecimal existingMonthlyDebt;
+
+    // ── Thông tin khai báo để AI đối chiếu chứng từ ──
+    private String declaredFullName;
+    private String declaredWorkplace;
+
+    /**
+     * Danh sách chứng từ của khoản gọi vốn (caller lấy từ loan-service).
+     * Khi AI bật, credit-service tự phân tích toàn bộ trước khi đưa vào advisory —
+     * chứng từ đã phân tích trước đó (cùng loanRequestId + fileId) được tái sử dụng.
+     */
+    private List<DocumentRef> documents;
+
+    @Data
+    public static class DocumentRef {
+        private String docType;
+        private String fileId;
+        private String fileName;
+    }
 }

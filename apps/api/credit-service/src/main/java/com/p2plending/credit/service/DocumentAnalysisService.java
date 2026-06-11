@@ -2,15 +2,18 @@ package com.p2plending.credit.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.p2plending.credit.client.FileManagerClient;
+import com.p2plending.credit.config.AppProperties;
 import com.p2plending.credit.domain.entity.DocumentAnalysis;
 import com.p2plending.credit.domain.repository.DocumentAnalysisRepository;
 import com.p2plending.credit.dto.request.AnalyzeDocumentRequest;
+import com.p2plending.credit.dto.request.EvaluateScoreRequest;
 import com.p2plending.credit.service.ai.AiDocumentAnalyzer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
 import java.util.Set;
@@ -28,6 +31,7 @@ public class DocumentAnalysisService {
     private final AiDocumentAnalyzer documentAnalyzer;
     private final DocumentAnalysisRepository analysisRepository;
     private final FileManagerClient fileManagerClient;
+    private final AppProperties appProperties;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Transactional
@@ -76,6 +80,64 @@ public class DocumentAnalysisService {
                 req.getUserId(), req.getLoanRequestId(), req.getDocType(),
                 entity.getVerdict(), entity.getTrustScore());
         return entity;
+    }
+
+    /**
+     * Phân tích toàn bộ chứng từ của khoản gọi vốn khi chấm điểm tín dụng.
+     * Chứng từ đã phân tích trước đó (cùng loanRequestId + fileId) được tái sử dụng,
+     * không tốn thêm lượt gọi AI. Mỗi file lỗi riêng lẻ không chặn việc chấm điểm —
+     * trả về bản ghi transient verdict=ERROR để admin biết file nào chưa phân tích được.
+     * AI tắt → trả danh sách rỗng.
+     */
+    @Transactional
+    public List<DocumentAnalysis> analyzeForScoring(EvaluateScoreRequest req) {
+        if (req.getDocuments() == null || req.getDocuments().isEmpty()
+                || !appProperties.getAi().isEnabled()) {
+            return List.of();
+        }
+
+        List<DocumentAnalysis> results = new ArrayList<>();
+        for (EvaluateScoreRequest.DocumentRef doc : req.getDocuments()) {
+            if (doc.getFileId() == null || doc.getFileId().isBlank()) continue;
+
+            if (req.getLoanRequestId() != null) {
+                var existing = analysisRepository
+                        .findFirstByLoanRequestIdAndFileIdAndIsDeletedFalseOrderByCreatedAtDesc(
+                                req.getLoanRequestId(), doc.getFileId());
+                if (existing.isPresent()) {
+                    results.add(existing.get());
+                    continue;
+                }
+            }
+
+            AnalyzeDocumentRequest analyzeReq = new AnalyzeDocumentRequest();
+            analyzeReq.setUserId(req.getUserId());
+            analyzeReq.setLoanRequestId(req.getLoanRequestId());
+            analyzeReq.setDocType(doc.getDocType() != null ? doc.getDocType() : "OTHER");
+            analyzeReq.setFileId(doc.getFileId());
+            analyzeReq.setFileName(doc.getFileName());
+            analyzeReq.setDeclaredFullName(req.getDeclaredFullName());
+            analyzeReq.setDeclaredMonthlyIncome(req.getMonthlyIncome());
+            analyzeReq.setDeclaredOccupation(req.getOccupation());
+            analyzeReq.setDeclaredWorkplace(req.getDeclaredWorkplace());
+
+            try {
+                results.add(analyze(analyzeReq));
+            } catch (Exception e) {
+                log.error("Phân tích chứng từ thất bại khi chấm điểm: fileId={} fileName={}: {}",
+                        doc.getFileId(), doc.getFileName(), e.getMessage());
+                results.add(DocumentAnalysis.builder()
+                        .userId(req.getUserId())
+                        .loanRequestId(req.getLoanRequestId())
+                        .docType(doc.getDocType() != null ? doc.getDocType() : "OTHER")
+                        .fileName(doc.getFileName())
+                        .fileId(doc.getFileId())
+                        .verdict("ERROR")
+                        .summary("Không phân tích được chứng từ này — vui lòng kiểm tra thủ công hoặc thử lại.")
+                        .build());
+            }
+        }
+        return results;
     }
 
     @Transactional(readOnly = true)

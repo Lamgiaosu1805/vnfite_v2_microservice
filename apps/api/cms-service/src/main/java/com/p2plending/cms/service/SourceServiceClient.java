@@ -8,8 +8,8 @@ import com.p2plending.cms.dto.response.LoanSummaryResponse;
 import com.p2plending.cms.dto.response.PagedResponse;
 import com.p2plending.cms.dto.response.UserSummaryResponse;
 import com.p2plending.cms.exception.SourceServiceException;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
@@ -28,7 +28,6 @@ import java.util.List;
 import java.util.Optional;
 
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class SourceServiceClient {
 
@@ -46,7 +45,16 @@ public class SourceServiceClient {
             .toFormatter();
 
     private final RestTemplate restTemplate;
+    private final RestTemplate aiRestTemplate;
     private final ObjectMapper objectMapper;
+
+    public SourceServiceClient(RestTemplate restTemplate,
+                               @Qualifier("aiRestTemplate") RestTemplate aiRestTemplate,
+                               ObjectMapper objectMapper) {
+        this.restTemplate = restTemplate;
+        this.aiRestTemplate = aiRestTemplate;
+        this.objectMapper = objectMapper;
+    }
 
     @Value("${cms.sources.auth-url:http://auth-service:8081}")
     private String authServiceUrl;
@@ -156,7 +164,11 @@ public class SourceServiceClient {
         return exchangeForJson(url, HttpMethod.GET, null);
     }
 
-    /** Chấm điểm tín dụng tham khảo cho khoản gọi vốn, gom dữ liệu từ loan-service + auth-service. */
+    /**
+     * Chấm điểm tín dụng tham khảo cho khoản gọi vốn, gom dữ liệu từ loan-service + auth-service.
+     * Gửi kèm toàn bộ chứng từ của khoản → credit-service AI phân tích hết rồi gộp vào advisory,
+     * vì vậy dùng aiRestTemplate timeout dài.
+     */
     public JsonNode evaluateCreditScore(String loanId) {
         LoanSummaryResponse loan = getLoanById(loanId);
         UserSummaryResponse borrower = loan.getBorrowerId() != null ? safeGetUser(loan.getBorrowerId()) : null;
@@ -174,11 +186,27 @@ public class SourceServiceClient {
             body.put("kycStatus", borrower.getKycStatus());
             body.put("accountCreatedAt", borrower.getCreatedAt());
         }
+        body.put("declaredFullName", loan.getBorrowerName());
+        body.put("declaredWorkplace", loan.getWorkplace());
+
+        var documents = new ArrayList<java.util.Map<String, Object>>();
+        try {
+            for (JsonNode document : getLoanDocuments(loanId)) {
+                var doc = new java.util.LinkedHashMap<String, Object>();
+                doc.put("docType", text(document, "docType"));
+                doc.put("fileId", text(document, "fileId"));
+                doc.put("fileName", text(document, "fileName"));
+                documents.add(doc);
+            }
+        } catch (Exception ex) {
+            log.warn("Could not fetch documents of loan {} for credit scoring: {}", loanId, ex.getMessage());
+        }
+        body.put("documents", documents);
 
         String url = UriComponentsBuilder.fromHttpUrl(creditServiceUrl)
                 .path("/internal/credit/scores/evaluate")
                 .toUriString();
-        return exchangeForJson(url, HttpMethod.POST, body);
+        return exchangeForJson(url, HttpMethod.POST, body, aiRestTemplate);
     }
 
     /** AI phân tích một chứng từ của khoản gọi vốn, kết quả chỉ phục vụ thẩm định tham khảo. */
@@ -200,7 +228,7 @@ public class SourceServiceClient {
         String url = UriComponentsBuilder.fromHttpUrl(creditServiceUrl)
                 .path("/internal/credit/documents/analyze")
                 .toUriString();
-        return exchangeForJson(url, HttpMethod.POST, body);
+        return exchangeForJson(url, HttpMethod.POST, body, aiRestTemplate);
     }
 
     /** Giải ngân vốn cho người gọi vốn (OPS bấm trên CMS). */
@@ -288,12 +316,16 @@ public class SourceServiceClient {
     }
 
     private JsonNode exchangeForJson(String url, HttpMethod method, Object body) {
+        return exchangeForJson(url, method, body, restTemplate);
+    }
+
+    private JsonNode exchangeForJson(String url, HttpMethod method, Object body, RestTemplate template) {
         HttpHeaders headers = new HttpHeaders();
         headers.set(INTERNAL_SECRET_HEADER, internalSecret);
         headers.setContentType(MediaType.APPLICATION_JSON);
         HttpEntity<Object> entity = new HttpEntity<>(body, headers);
 
-        return exchangeAndParse(url, () -> restTemplate.exchange(url, method, entity, String.class));
+        return exchangeAndParse(url, () -> template.exchange(url, method, entity, String.class));
     }
 
     private JsonNode exchangeForJson(URI uri, HttpMethod method, Object body) {

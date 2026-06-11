@@ -33,6 +33,7 @@ public class CreditScoringService {
     private final FeatureSnapshotRepository snapshotRepository;
     private final ScoringEngine scoringEngine;
     private final AiRiskAssessor aiRiskAssessor;
+    private final DocumentAnalysisService documentAnalysisService;
     private final AppProperties appProperties;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -113,10 +114,19 @@ public class CreditScoringService {
         int score = normalize(engine.getTotalPoints(), engine.getMaxPoints());
         String grade = gradeOf(score);
 
+        // AI phân tích toàn bộ chứng từ trước — kết quả đưa vào advisory để đánh giá tổng thể.
+        // Fail từng file không chặn chấm điểm.
+        List<DocumentAnalysis> docAnalyses = List.of();
+        try {
+            docAnalyses = documentAnalysisService.analyzeForScoring(req);
+        } catch (Exception e) {
+            log.error("AI document analysis error (bỏ qua): {}", e.getMessage());
+        }
+
         // AI advisory — fail thì bỏ qua, không chặn chấm điểm
         AiRiskAssessor.AiRiskAssessment ai = null;
         try {
-            ai = aiRiskAssessor.assess(buildAiContext(req, profile, engine, score, grade));
+            ai = aiRiskAssessor.assess(buildAiContext(req, profile, engine, score, grade, docAnalyses));
         } catch (Exception e) {
             log.error("AI risk assessment error (bỏ qua): {}", e.getMessage());
         }
@@ -175,7 +185,7 @@ public class CreditScoringService {
                 engine.getTotalPoints(), engine.getMaxPoints(), engine.getMissingData());
 
         return toResponse(entity, details, engine.getMissingData(),
-                ai != null ? ai.riskFlags() : null);
+                ai != null ? ai.riskFlags() : null, docAnalyses);
     }
 
     @Transactional(readOnly = true)
@@ -185,7 +195,10 @@ public class CreditScoringService {
                 .orElseThrow(() -> new IllegalArgumentException("User " + userId + " chưa được chấm điểm"));
 
         List<CreditScoreDetail> details = detailRepository.findByCreditScoreIdAndIsDeletedFalse(entity.getId());
-        return toResponse(entity, details, null, fromJsonList(entity.getAiRiskFlags()));
+        List<DocumentAnalysis> docAnalyses = entity.getLoanRequestId() != null
+                ? documentAnalysisService.listByLoan(entity.getLoanRequestId())
+                : List.of();
+        return toResponse(entity, details, null, fromJsonList(entity.getAiRiskFlags()), docAnalyses);
     }
 
     /** loan-service gọi khi khoản vay kết thúc → điền label cho training data */
@@ -282,7 +295,8 @@ public class CreditScoringService {
     }
 
     private String buildAiContext(EvaluateScoreRequest req, BorrowerProfile profile,
-                                  ScoringEngine.EngineResult engine, int score, String grade) {
+                                  ScoringEngine.EngineResult engine, int score, String grade,
+                                  List<DocumentAnalysis> docAnalyses) {
         StringBuilder sb = new StringBuilder();
         sb.append("HỒ SƠ THẨM ĐỊNH KHOẢN GỌI VỐN\n\n");
 
@@ -313,11 +327,34 @@ public class CreditScoringService {
         if (!engine.getMissingData().isEmpty()) {
             sb.append("Tiêu chí thiếu dữ liệu: ").append(String.join(", ", engine.getMissingData())).append("\n");
         }
+
+        if (docAnalyses != null && !docAnalyses.isEmpty()) {
+            sb.append("\nKẾT QUẢ AI PHÂN TÍCH CHỨNG TỪ ĐÍNH KÈM (").append(docAnalyses.size()).append(" file):\n");
+            for (DocumentAnalysis d : docAnalyses) {
+                sb.append("- ").append(d.getFileName() != null ? d.getFileName() : d.getFileId())
+                        .append(" [").append(d.getDocType()).append("]: verdict=").append(d.getVerdict());
+                if (d.getTrustScore() != null) {
+                    sb.append(", độ tin cậy ").append(d.getTrustScore()).append("/100");
+                }
+                if (d.getSummary() != null && !d.getSummary().isBlank()) {
+                    sb.append(" — ").append(d.getSummary());
+                }
+                sb.append("\n");
+            }
+            sb.append("Hãy đối chiếu kết quả chứng từ với thông tin tự khai (thu nhập, nghề nghiệp, nơi làm việc) ")
+              .append("và đưa cảnh báo nếu chứng từ không nhất quán hoặc không chứng minh được thu nhập khai báo.\n");
+        } else if (req.getDocuments() != null && !req.getDocuments().isEmpty()) {
+            sb.append("\nLƯU Ý: Khoản gọi vốn có ").append(req.getDocuments().size())
+              .append(" chứng từ đính kèm nhưng chưa phân tích được (AI tắt hoặc lỗi).\n");
+        } else {
+            sb.append("\nLƯU Ý: Người gọi vốn KHÔNG đính kèm chứng từ thu nhập nào — cân nhắc rủi ro khai báo không kiểm chứng.\n");
+        }
         return sb.toString();
     }
 
     private CreditScoreResponse toResponse(CreditScore e, List<CreditScoreDetail> details,
-                                           List<String> missingData, List<String> riskFlags) {
+                                           List<String> missingData, List<String> riskFlags,
+                                           List<DocumentAnalysis> docAnalyses) {
         return CreditScoreResponse.builder()
                 .id(e.getId())
                 .userId(e.getUserId())
@@ -341,6 +378,7 @@ public class CreditScoringService {
                 .aiSummary(e.getAiSummary())
                 .aiRiskFlags(riskFlags)
                 .aiRecommendation(e.getAiRecommendation())
+                .documentAnalyses(docAnalyses)
                 .expiresAt(e.getExpiresAt())
                 .createdAt(e.getCreatedAt())
                 .build();

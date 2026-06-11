@@ -1,5 +1,6 @@
 package com.p2plending.credit.dto.response;
 
+import com.p2plending.credit.domain.entity.DocumentAnalysis;
 import lombok.Builder;
 import lombok.Data;
 
@@ -37,6 +38,9 @@ public class CreditScoreResponse {
     private String aiSummary;
     private List<String> aiRiskFlags;
     private String aiRecommendation;
+
+    /** Kết quả AI phân tích từng chứng từ của khoản gọi vốn (rỗng nếu AI tắt hoặc không có chứng từ) */
+    private List<DocumentAnalysis> documentAnalyses;
 
     private LocalDateTime expiresAt;
     private LocalDateTime createdAt;
