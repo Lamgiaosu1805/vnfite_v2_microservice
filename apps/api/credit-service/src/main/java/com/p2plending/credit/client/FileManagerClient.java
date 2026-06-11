@@ -13,8 +13,8 @@ import org.springframework.web.client.RestTemplate;
  *
  *   GET /file/{fileId}  → trả về bytes của file
  *
- * App mobile upload chứng từ thẳng lên file-manager (POST /upload) lấy fileId,
- * credit-service chỉ cần fetch lại theo fileId để đưa cho AI phân tích.
+ * App mobile upload chứng từ qua VNFITE API proxy, backend nhận fileId từ
+ * file-manager; credit-service chỉ cần fetch lại theo fileId để đưa cho AI phân tích.
  */
 @Component
 @RequiredArgsConstructor

@@ -70,6 +70,9 @@ server:
 jwt:
   public-key: ${RSA_PUBLIC_KEY:}
 
+file-manager:
+  base-url: ${FILE_MANAGER_URL:https://service.vnfite.com.vn/file-manager/v2}
+
 app:
   otp:
     mock: ${APP_OTP_MOCK:true}

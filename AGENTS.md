@@ -41,6 +41,7 @@ Current important internal flows:
 - `cms-service` gets customer data from `auth-service` internal user APIs.
 - `cms-service` gets loan data and sends loan review actions to `loan-service` internal loan APIs.
 - `notification-service` calls `GET /internal/users/{userId}/fcm-token` on `auth-service` to retrieve the FCM push token before sending push notifications.
+- Mobile apps must not call `service.vnfite.com.vn/file-manager` directly. Upload supporting documents through VNFITE API proxy endpoints, currently `POST /api/loans/documents/upload`, so app/network whitelisting only needs VNFITE API domains.
 - Internal APIs must be protected with `INTERNAL_API_SECRET` / `X-Internal-Secret`.
 - Prefer source-of-truth service APIs over copying tables between databases.
 - Use service DNS names inside Docker, e.g. `http://auth-service:8081` and `http://loan-service:8082`, unless nginx/internal proxy config says otherwise.

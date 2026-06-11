@@ -9,6 +9,7 @@ import com.p2plending.loan.dto.request.LoanOfferCreateRequest;
 import com.p2plending.loan.dto.request.LoanOtpVerifyRequest;
 import com.p2plending.loan.dto.response.CashflowResponse;
 import com.p2plending.loan.dto.response.LoanDocumentResponse;
+import com.p2plending.loan.dto.response.LoanDocumentUploadResponse;
 import com.p2plending.loan.dto.response.LoanOtpInitResponse;
 import com.p2plending.loan.dto.response.LoanResponse;
 import com.p2plending.loan.dto.response.OfferCreateResponse;
@@ -16,16 +17,19 @@ import com.p2plending.loan.dto.response.PagedResponse;
 import com.p2plending.loan.dto.response.RepaymentScheduleResponse;
 import com.p2plending.loan.security.AuthenticatedUser;
 import com.p2plending.loan.service.CashflowService;
+import com.p2plending.loan.service.FileManagerUploadService;
 import com.p2plending.loan.service.LoanOtpService;
 import com.p2plending.loan.service.LoanService;
 import com.p2plending.loan.service.RepaymentService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.MediaType;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -38,6 +42,7 @@ public class LoanController {
     private final LoanOtpService loanOtpService;
     private final RepaymentService repaymentService;
     private final CashflowService cashflowService;
+    private final FileManagerUploadService fileManagerUploadService;
 
     /**
      * POST /api/loans/request/init
@@ -84,6 +89,20 @@ public class LoanController {
         return ResponseEntity
                 .status(HttpStatus.CREATED)
                 .body(loanService.createLoan(request, principal.userId()));
+    }
+
+    /**
+     * POST /api/loans/documents/upload
+     * Mobile app uploads loan supporting documents through VNFITE API, not
+     * directly to file-manager, so mobile only needs VNFITE API whitelisting.
+     */
+    @PostMapping(value = "/documents/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<LoanDocumentUploadResponse> uploadDocument(
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(required = false) String label
+    ) {
+        return ResponseEntity.ok(fileManagerUploadService.uploadLoanDocument(file, label));
     }
 
     /**
