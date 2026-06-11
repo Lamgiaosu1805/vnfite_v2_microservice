@@ -170,8 +170,11 @@ public class DocumentAnalysisService {
 
     private String buildContext(AnalyzeDocumentRequest req) {
         StringBuilder sb = new StringBuilder();
-        sb.append("Loại chứng từ người vay khai: ").append(req.getDocType()).append("\n\n");
-        sb.append("THÔNG TIN NGƯỜI VAY KHAI BÁO (để đối chiếu):\n");
+        sb.append("Loại chứng từ người gọi vốn khai: ").append(req.getDocType()).append("\n\n");
+        sb.append("Chấp nhận nhiều nhóm chứng từ chứng minh tài chính: sao kê lương, sao kê ngân hàng, ")
+                .append("hợp đồng lao động, bảng lương, giấy phép kinh doanh, hóa đơn, sổ bán hàng, ")
+                .append("sao kê POS/ví điện tử/nền tảng bán hàng, chứng từ thuế hoặc chứng từ thu nhập khác.\n\n");
+        sb.append("THÔNG TIN NGƯỜI GỌI VỐN KHAI BÁO (để đối chiếu):\n");
         sb.append("- Họ tên: ").append(orUnknown(req.getDeclaredFullName())).append("\n");
         sb.append("- Thu nhập hàng tháng: ")
                 .append(req.getDeclaredMonthlyIncome() != null ? req.getDeclaredMonthlyIncome() + " VND" : "(không khai)")

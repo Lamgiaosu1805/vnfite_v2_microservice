@@ -74,7 +74,7 @@ public class CreditScoringService {
             "A", "Rủi ro thấp — đề xuất duyệt nhanh, lãi suất ưu đãi",
             "B", "Rủi ro khá thấp — đề xuất duyệt, điều kiện chuẩn",
             "C", "Rủi ro trung bình — thẩm định kỹ, cân nhắc giảm hạn mức",
-            "D", "Rủi ro cao — yêu cầu bổ sung hồ sơ/chứng từ thu nhập, giảm hạn mức",
+            "D", "Rủi ro cao — yêu cầu bổ sung hồ sơ/chứng từ tài chính, giảm hạn mức",
             "E", "Rủi ro rất cao — đề xuất từ chối"
     );
 
@@ -358,7 +358,7 @@ public class CreditScoringService {
             sb.append("\nLƯU Ý: Khoản gọi vốn có ").append(req.getDocuments().size())
               .append(" chứng từ đính kèm nhưng chưa phân tích được (AI tắt hoặc lỗi).\n");
         } else {
-            sb.append("\nLƯU Ý: Người gọi vốn KHÔNG đính kèm chứng từ thu nhập nào — cân nhắc rủi ro khai báo không kiểm chứng.\n");
+            sb.append("\nLƯU Ý: Người gọi vốn KHÔNG đính kèm chứng từ tài chính/thu nhập nào — cân nhắc rủi ro khai báo không kiểm chứng.\n");
         }
         return sb.toString();
     }

@@ -34,7 +34,7 @@ public class ClaudeAiRiskAssessor implements AiRiskAssessor {
             - riskFlags: liệt kê các điểm bất thường hoặc đáng lưu ý (mâu thuẫn giữa nghề nghiệp và \
             thu nhập khai báo, mục đích vay mơ hồ, tỷ lệ nợ cao, hồ sơ thiếu dữ liệu...). \
             Không có gì đáng ngại thì trả mảng rỗng.
-            - recommendation: 1-2 câu gợi ý cho admin (vd "nên yêu cầu bổ sung sao kê lương")
+            - recommendation: 1-2 câu gợi ý cho admin (vd "nên yêu cầu bổ sung chứng từ tài chính phù hợp")
 
             Tuyệt đối không tự quyết định duyệt hay từ chối — chỉ phân tích và tư vấn. \
             Quyết định cuối cùng thuộc về admin thẩm định.""";

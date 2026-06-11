@@ -215,16 +215,19 @@ public class SourceServiceClient {
 
         var documents = new ArrayList<java.util.Map<String, Object>>();
         try {
-            for (JsonNode document : getLoanDocuments(loanId)) {
+            for (JsonNode document : extractArray(getLoanDocuments(loanId))) {
                 var doc = new java.util.LinkedHashMap<String, Object>();
                 doc.put("docType", text(document, "docType"));
                 doc.put("fileId", text(document, "fileId"));
                 doc.put("fileName", text(document, "fileName"));
-                documents.add(doc);
+                if (text(document, "fileId") != null && !text(document, "fileId").isBlank()) {
+                    documents.add(doc);
+                }
             }
         } catch (Exception ex) {
             log.warn("Could not fetch documents of loan {} for credit scoring: {}", loanId, ex.getMessage());
         }
+        log.info("Credit scoring loan {} includes {} supporting document(s)", loanId, documents.size());
         body.put("documents", documents);
 
         String url = UriComponentsBuilder.fromHttpUrl(creditServiceUrl)
@@ -253,6 +256,22 @@ public class SourceServiceClient {
                 .path("/internal/credit/documents/analyze")
                 .toUriString();
         return exchangeForJson(url, HttpMethod.POST, body, aiRestTemplate);
+    }
+
+    private Iterable<JsonNode> extractArray(JsonNode root) {
+        if (root == null || root.isNull()) {
+            return List.of();
+        }
+        if (root.isArray()) {
+            return root;
+        }
+        for (String key : List.of("data", "content", "items", "documents")) {
+            JsonNode child = root.path(key);
+            if (child.isArray()) {
+                return child;
+            }
+        }
+        return List.of();
     }
 
     /** Giải ngân vốn cho người gọi vốn (OPS bấm trên CMS). */

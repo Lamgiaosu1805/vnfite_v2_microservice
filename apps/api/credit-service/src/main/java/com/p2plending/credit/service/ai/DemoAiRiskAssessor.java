@@ -124,14 +124,14 @@ public class DemoAiRiskAssessor implements AiRiskAssessor {
         if ("A".equals(grade) || "B".equals(grade)) {
             return noProfile
                     ? "Yêu cầu bổ sung hồ sơ tài chính tự khai để hoàn thiện hồ sơ trước khi duyệt."
-                    : "Có thể xem xét phê duyệt; nên xác minh nhanh thu nhập qua sao kê 3 tháng gần nhất.";
+                    : "Có thể xem xét phê duyệt; nên xác minh nhanh nguồn thu qua chứng từ tài chính gần nhất.";
         }
         if ("C".equals(grade)) {
-            return "Yêu cầu bổ sung sao kê lương hoặc sao kê ngân hàng 3 tháng gần nhất. "
+            return "Yêu cầu bổ sung chứng từ tài chính phù hợp với nguồn thu, ví dụ sao kê ngân hàng, hóa đơn hoặc sổ bán hàng. "
                     + (missing.isEmpty() ? "Xem xét kỹ mục đích sử dụng vốn." :
                             "Cần điền đủ thông tin còn thiếu trước khi thẩm định tiếp.");
         }
-        return "Cần thẩm định trực tiếp; yêu cầu đầy đủ chứng từ thu nhập, hợp đồng lao động, "
-                + "và xác minh nơi làm việc trước khi xem xét duyệt.";
+        return "Cần thẩm định trực tiếp; yêu cầu đầy đủ chứng từ tài chính/thu nhập "
+                + "và xác minh nguồn thu trước khi xem xét duyệt.";
     }
 }

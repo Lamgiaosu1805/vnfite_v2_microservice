@@ -80,10 +80,10 @@ public class InternalCreditController {
         return ResponseEntity.ok(resp);
     }
 
-    // ─── Phân tích chứng từ thu nhập (AI) ────────────────────────────────────
+    // ─── Phân tích chứng từ tài chính/thu nhập (AI) ─────────────────────────
 
     /**
-     * AI đọc chứng từ (sao kê lương, HĐLĐ, ĐKKD...): trích xuất dữ liệu,
+     * AI đọc chứng từ (sao kê lương, sao kê ngân hàng, hóa đơn, sổ bán hàng, HĐLĐ, ĐKKD...): trích xuất dữ liệu,
      * kiểm tra nhất quán nội tại, đối chiếu khai báo.
      * Yêu cầu APP_AI_ENABLED=true. Kết quả chỉ là CẢNH BÁO cho admin — không phải phán quyết.
      */

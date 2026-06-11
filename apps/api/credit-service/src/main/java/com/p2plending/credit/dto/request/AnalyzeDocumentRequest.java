@@ -6,7 +6,7 @@ import lombok.Data;
 import java.math.BigDecimal;
 
 /**
- * Yêu cầu AI phân tích một chứng từ thu nhập.
+ * Yêu cầu AI phân tích một chứng từ tài chính/thu nhập.
  *
  * Hai cách truyền file (chọn 1):
  *  1. fileId — đã upload lên file-manager (service.vnfite.com.vn), credit-service tự fetch. ƯU TIÊN.

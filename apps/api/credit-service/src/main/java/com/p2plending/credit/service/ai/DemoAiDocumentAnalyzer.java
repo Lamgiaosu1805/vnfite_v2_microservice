@@ -63,9 +63,13 @@ public class DemoAiDocumentAnalyzer implements AiDocumentAnalyzer {
         if (context.contains("SALARY_STATEMENT") || context.contains("sao kê lương")) return "Sao kê lương";
         if (context.contains("BANK_STATEMENT"))   return "Sao kê ngân hàng";
         if (context.contains("BUSINESS_LICENSE")) return "Giấy phép kinh doanh";
-        if (context.contains("TAX_RETURN"))       return "Tờ khai thuế";
-        if (context.contains("EMPLOYMENT_CONTRACT")) return "Hợp đồng lao động";
-        return "Chứng từ thu nhập";
+        if (context.contains("SALES_LEDGER"))     return "Sổ bán hàng";
+        if (context.contains("INVOICE"))          return "Hóa đơn / chứng từ bán hàng";
+        if (context.contains("POS_STATEMENT"))    return "Sao kê POS / ví điện tử";
+        if (context.contains("PLATFORM_SALES_REPORT")) return "Báo cáo doanh thu nền tảng";
+        if (context.contains("TAX_DOCUMENT") || context.contains("TAX_RETURN")) return "Chứng từ thuế";
+        if (context.contains("EMPLOYMENT_CONTRACT") || context.contains("LABOR_CONTRACT")) return "Hợp đồng lao động";
+        return "Chứng từ tài chính";
     }
 
     private String extractDeclaredName(String context) {

@@ -8,7 +8,7 @@ import org.hibernate.annotations.UpdateTimestamp;
 import java.time.LocalDateTime;
 
 /**
- * Kết quả AI phân tích một chứng từ thu nhập của người gọi vốn.
+ * Kết quả AI phân tích một chứng từ tài chính/thu nhập của người gọi vốn.
  * verdict chỉ là cảnh báo mức độ tin cậy — không phải phán quyết giả mạo.
  */
 @Entity

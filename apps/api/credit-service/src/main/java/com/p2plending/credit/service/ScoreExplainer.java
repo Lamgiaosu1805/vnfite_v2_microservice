@@ -35,7 +35,7 @@ public class ScoreExplainer {
     /** Hướng dẫn thu thập dữ liệu còn thiếu theo từng tiêu chí. */
     private static final Map<String, String> HOW_TO_OBTAIN = Map.ofEntries(
             Map.entry("AGE", "Trích ngày sinh từ eKYC/CCCD đã duyệt"),
-            Map.entry("MONTHLY_INCOME", "Yêu cầu khai thu nhập và nộp sao kê lương 3 tháng"),
+            Map.entry("MONTHLY_INCOME", "Yêu cầu khai thu nhập và nộp chứng từ tài chính phù hợp: sao kê lương, sao kê ngân hàng, hóa đơn/sổ bán hàng hoặc giấy tờ kinh doanh"),
             Map.entry("OCCUPATION_TYPE", "Yêu cầu khai nghề nghiệp trong hồ sơ tài chính"),
             Map.entry("EMPLOYMENT_YEARS", "Yêu cầu khai thâm niên làm việc"),
             Map.entry("MARITAL_STATUS", "Yêu cầu cập nhật tình trạng hôn nhân"),
@@ -168,7 +168,7 @@ public class ScoreExplainer {
                 sb.append("Chứng từ AI đánh giá nhất quán — vẫn nên đối chiếu nhanh bản gốc. ");
             }
         } else {
-            sb.append("Chưa có chứng từ thu nhập — yêu cầu người gọi vốn nộp sao kê/bảng lương để chứng minh. ");
+            sb.append("Chưa có chứng từ tài chính — yêu cầu người gọi vốn nộp chứng từ phù hợp với nguồn thu nhập để đối chiếu. ");
         }
         if ("A".equals(grade) || "B".equals(grade)) {
             sb.append("Nếu chứng từ khớp, có thể đề xuất duyệt theo điều kiện chuẩn.");
@@ -228,7 +228,7 @@ public class ScoreExplainer {
         if (!aiEnabled) {
             summary = "AI thẩm định chứng từ đang tắt — cần đối chiếu chứng từ thủ công.";
         } else if (total == 0) {
-            summary = "Người gọi vốn chưa đính kèm chứng từ thu nhập nào.";
+            summary = "Người gọi vốn chưa đính kèm chứng từ tài chính/thu nhập nào.";
         } else {
             int flagged = suspicious + highRisk;
             summary = total + " chứng từ · " + consistent + " nhất quán"

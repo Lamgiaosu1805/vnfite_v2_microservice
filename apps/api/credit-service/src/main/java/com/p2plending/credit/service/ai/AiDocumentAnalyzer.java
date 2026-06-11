@@ -5,7 +5,8 @@ import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 import java.util.List;
 
 /**
- * AI phân tích chứng từ thu nhập (sao kê lương, HĐLĐ, ĐKKD...).
+ * AI phân tích chứng từ tài chính/thu nhập (sao kê lương, sao kê ngân hàng,
+ * hóa đơn, sổ bán hàng, HĐLĐ, ĐKKD...).
  *
  * GIỚI HẠN QUAN TRỌNG: AI không thể khẳng định 100% một chứng từ là giả mạo —
  * chỉnh sửa tinh vi vẫn có thể qua mặt. Kết quả là CẢNH BÁO mức độ tin cậy

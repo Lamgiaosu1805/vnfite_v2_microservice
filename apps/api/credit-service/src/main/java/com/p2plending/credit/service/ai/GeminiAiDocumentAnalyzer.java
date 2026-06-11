@@ -15,7 +15,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Dùng Gemini Flash Vision để phân tích chứng từ thu nhập (ảnh + PDF).
+ * Dùng Gemini Flash Vision để phân tích chứng từ tài chính/thu nhập (ảnh + PDF).
  * Bật bằng: APP_AI_ENABLED=true + APP_AI_MODE=gemini
  *
  * Kết quả là CẢNH BÁO mức độ tin cậy để hỗ trợ admin — không phải phán quyết.
@@ -30,7 +30,7 @@ public class GeminiAiDocumentAnalyzer implements AiDocumentAnalyzer {
     private static final String SCHEMA = """
             Trả về JSON với cấu trúc sau (không có text nào ngoài JSON):
             {
-              "docTypeDetected": "loại chứng từ AI nhận diện được (vd: Sao kê lương MB Bank, Hợp đồng lao động)",
+              "docTypeDetected": "loại chứng từ AI nhận diện được (vd: Sao kê lương MB Bank, Hợp đồng lao động, Sổ bán hàng, Hóa đơn, Sao kê ví/POS)",
               "verdict": "CONSISTENT hoặc SUSPICIOUS hoặc HIGH_RISK hoặc UNREADABLE",
               "trustScore": <số nguyên 0-100, 100 = hoàn toàn nhất quán>,
               "ownerName": "tên chủ tài khoản/người lao động trích xuất, hoặc null",
@@ -50,9 +50,11 @@ public class GeminiAiDocumentAnalyzer implements AiDocumentAnalyzer {
     private static final String SYSTEM_INSTRUCTION = """
             Bạn là chuyên gia thẩm định chứng từ tài chính của nền tảng cho vay ngang hàng VNFITE tại Việt Nam.
             Đây là quy trình phòng chống gian lận hợp pháp: người gọi vốn tự nguyện nộp chứng từ để chứng minh thu nhập.
+            Người gọi vốn có thể là người hưởng lương cố định, hộ kinh doanh, tiểu thương, lao động tự do hoặc chủ doanh nghiệp nhỏ.
+            Không mặc định mọi hồ sơ phải có sao kê lương; hãy đánh giá chứng từ theo loại nguồn thu phù hợp.
 
             Quy trình phân tích 4 bước:
-            1. TRÍCH XUẤT: loại chứng từ, tên người/tổ chức, thu nhập/số dư
+            1. TRÍCH XUẤT: loại chứng từ, tên người/tổ chức, thu nhập/doanh thu/số dư
             2. KIỂM TRA NỘI TẠI: số dư chạy có khớp không, định dạng ngày/số, font chữ đồng nhất
             3. ĐỐI CHIẾU: thông tin trích xuất có khớp với thông tin khai báo không
             4. ĐÁNH GIÁ: mức độ tin cậy tổng thể
