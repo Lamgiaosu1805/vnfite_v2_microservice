@@ -14,7 +14,7 @@ import java.util.List;
  * Bật bằng: APP_AI_ENABLED=true + APP_AI_MODE=demo
  */
 @Service
-@ConditionalOnExpression("'${app.ai.enabled:false}'.equals('true') and '${app.ai.mode:claude}'.equals('demo')")
+@ConditionalOnExpression("'${APP_AI_ENABLED:false}'.equals('true') and '${APP_AI_MODE:claude}'.equals('demo')")
 @Slf4j
 public class DemoAiDocumentAnalyzer implements AiDocumentAnalyzer {
 

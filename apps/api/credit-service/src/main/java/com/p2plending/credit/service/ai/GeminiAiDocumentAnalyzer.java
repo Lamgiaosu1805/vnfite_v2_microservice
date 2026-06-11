@@ -19,7 +19,7 @@ import java.util.List;
  * AI không thể khẳng định 100% chứng từ là giả.
  */
 @Service
-@ConditionalOnExpression("'${app.ai.enabled:false}'.equals('true') and '${app.ai.mode:claude}'.equals('gemini')")
+@ConditionalOnExpression("'${APP_AI_ENABLED:false}'.equals('true') and '${APP_AI_MODE:claude}'.equals('gemini')")
 @Slf4j
 public class GeminiAiDocumentAnalyzer implements AiDocumentAnalyzer {
 

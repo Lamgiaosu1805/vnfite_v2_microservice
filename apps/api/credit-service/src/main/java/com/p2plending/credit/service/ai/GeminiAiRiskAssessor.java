@@ -18,7 +18,7 @@ import java.util.List;
  * Kết quả chỉ mang tính TƯ VẤN — không tự quyết định duyệt/từ chối.
  */
 @Service
-@ConditionalOnExpression("'${app.ai.enabled:false}'.equals('true') and '${app.ai.mode:claude}'.equals('gemini')")
+@ConditionalOnExpression("'${APP_AI_ENABLED:false}'.equals('true') and '${APP_AI_MODE:claude}'.equals('gemini')")
 @Slf4j
 public class GeminiAiRiskAssessor implements AiRiskAssessor {
 

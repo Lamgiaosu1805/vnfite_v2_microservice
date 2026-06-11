@@ -16,7 +16,7 @@ import java.util.List;
  * tính nhất quán nội tại và đối chiếu với thông tin khai báo.
  */
 @Service
-@ConditionalOnExpression("'${app.ai.enabled:false}'.equals('true') and '${app.ai.mode:claude}'.equals('claude')")
+@ConditionalOnExpression("'${APP_AI_ENABLED:false}'.equals('true') and '${APP_AI_MODE:claude}'.equals('claude')")
 @Slf4j
 public class ClaudeAiDocumentAnalyzer implements AiDocumentAnalyzer {
 

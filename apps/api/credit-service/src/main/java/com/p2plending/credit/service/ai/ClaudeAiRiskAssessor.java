@@ -18,7 +18,7 @@ import org.springframework.stereotype.Service;
  * AI là lớp tư vấn bổ sung, không bao giờ chặn luồng chấm điểm.
  */
 @Service
-@ConditionalOnExpression("'${app.ai.enabled:false}'.equals('true') and '${app.ai.mode:claude}'.equals('claude')")
+@ConditionalOnExpression("'${APP_AI_ENABLED:false}'.equals('true') and '${APP_AI_MODE:claude}'.equals('claude')")
 @Slf4j
 public class ClaudeAiRiskAssessor implements AiRiskAssessor {
 
