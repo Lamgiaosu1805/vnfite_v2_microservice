@@ -17,6 +17,7 @@
         <module>apps/api/cms-service</module>
         <module>apps/api/notification-service</module>
         <module>apps/api/payment-service</module>
+        <module>apps/api/credit-service</module>
     </modules>
 
     <properties>

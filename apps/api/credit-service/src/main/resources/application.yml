@@ -1,0 +1,64 @@
+spring:
+  application:
+    name: credit-service
+
+  datasource:
+    url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/${CREDIT_DB:credit_db}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Ho_Chi_Minh&characterEncoding=UTF-8
+    username: ${DB_USERNAME:p2p_user}
+    password: ${DB_PASSWORD:p2p_pass}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      connection-timeout: 30000
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect
+        jdbc:
+          time_zone: Asia/Ho_Chi_Minh
+
+server:
+  port: 8087
+  servlet:
+    encoding:
+      charset: UTF-8
+      force-response: true
+      enabled: true
+
+app:
+  internal:
+    secret: ${INTERNAL_API_SECRET:dev-internal-secret}
+  scoring:
+    # Phiên bản model chấm điểm — lưu kèm mỗi credit_score để trace
+    model-version: scorecard-v1.0
+    # Điểm có hiệu lực bao nhiêu ngày trước khi phải chấm lại
+    score-ttl-days: 90
+  ai:
+    # AI risk assessment (Claude) — chỉ mang tính tư vấn cho admin thẩm định,
+    # không bao giờ tự quyết định duyệt/từ chối. Tắt mặc định.
+    enabled: ${APP_AI_ENABLED:false}
+    api-key: ${ANTHROPIC_API_KEY:}
+    model: ${APP_AI_MODEL:claude-opus-4-8}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  level:
+    com.p2plending.credit: DEBUG

@@ -10,6 +10,7 @@ CREATE DATABASE IF NOT EXISTS cms_db          CHARACTER SET utf8mb4 COLLATE utf8
 CREATE DATABASE IF NOT EXISTS matching_db     CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 CREATE DATABASE IF NOT EXISTS payment_db      CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 CREATE DATABASE IF NOT EXISTS notification_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE DATABASE IF NOT EXISTS credit_db       CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 GRANT ALL PRIVILEGES ON auth_db.*         TO 'p2p_user'@'%';
 GRANT ALL PRIVILEGES ON loan_db.*         TO 'p2p_user'@'%';
@@ -17,4 +18,5 @@ GRANT ALL PRIVILEGES ON cms_db.*          TO 'p2p_user'@'%';
 GRANT ALL PRIVILEGES ON matching_db.*     TO 'p2p_user'@'%';
 GRANT ALL PRIVILEGES ON payment_db.*      TO 'p2p_user'@'%';
 GRANT ALL PRIVILEGES ON notification_db.* TO 'p2p_user'@'%';
+GRANT ALL PRIVILEGES ON credit_db.*       TO 'p2p_user'@'%';
 FLUSH PRIVILEGES;
