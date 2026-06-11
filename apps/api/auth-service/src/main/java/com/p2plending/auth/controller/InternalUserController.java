@@ -1,11 +1,14 @@
 package com.p2plending.auth.controller;
 
 import com.p2plending.auth.domain.enums.KycStatus;
+import com.p2plending.auth.dto.request.KycDecisionInternalRequest;
 import com.p2plending.auth.dto.response.InternalUserStatsResponse;
 import com.p2plending.auth.dto.response.InternalUserSummaryResponse;
 import com.p2plending.auth.dto.response.PagedResponse;
 import com.p2plending.auth.service.FcmTokenService;
 import com.p2plending.auth.service.InternalUserQueryService;
+import com.p2plending.auth.service.KycDecisionService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -27,6 +30,7 @@ public class InternalUserController {
 
     private final InternalUserQueryService userQueryService;
     private final FcmTokenService          fcmTokenService;
+    private final KycDecisionService       kycDecisionService;
 
     @Value("${app.internal.secret:dev-internal-secret}")
     private String internalSecret;
@@ -86,6 +90,22 @@ public class InternalUserController {
         requireInternalSecret(secret);
         List<String> tokens = fcmTokenService.getAllTokens();
         return ResponseEntity.ok(Map.of("tokens", tokens, "count", tokens.size()));
+    }
+
+    /**
+     * PUT /internal/users/{userId}/kyc-decision
+     * CMS admin duyệt hoặc từ chối KYC.
+     * Khi duyệt: publish kyc.approved → payment-service tạo ví + VNF account.
+     * Khi từ chối: user.kyc_status reset về NONE để có thể nộp lại.
+     */
+    @PostMapping("/{userId}/kyc-decision")
+    public ResponseEntity<Void> kycDecision(
+            @RequestHeader(INTERNAL_SECRET_HEADER) String secret,
+            @PathVariable String userId,
+            @Valid @RequestBody KycDecisionInternalRequest request) {
+        requireInternalSecret(secret);
+        kycDecisionService.decide(userId, request.isApproved(), request.getReason());
+        return ResponseEntity.noContent().build();
     }
 
     private void requireInternalSecret(String secret) {

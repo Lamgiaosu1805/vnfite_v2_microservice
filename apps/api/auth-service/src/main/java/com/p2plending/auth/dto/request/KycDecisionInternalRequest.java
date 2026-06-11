@@ -4,12 +4,16 @@ import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
 /**
- * Request body cho internal endpoint PUT /internal/users/{id}/kyc-decision.
+ * Request body cho internal endpoint POST /internal/users/{id}/kyc-decision.
  * Chỉ CMS service gọi (bảo vệ bằng X-Internal-Secret header).
  */
 @Data
 public class KycDecisionInternalRequest {
-    @NotNull(message = "approved là bắt buộc")
-    private boolean approved;
+    @NotNull(message = "decision là bắt buộc (APPROVED hoặc REJECTED)")
+    private String decision;
     private String reason;
+
+    public boolean isApproved() {
+        return "APPROVED".equalsIgnoreCase(decision);
+    }
 }
