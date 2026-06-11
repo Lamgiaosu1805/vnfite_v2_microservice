@@ -175,7 +175,8 @@ public class AppraisalSuggestionService {
                 .autoWarnings(warnings)
                 .disclaimer("Gợi ý mang tính hỗ trợ (expert-prior, Phase 0). Lãi suất & phí lấy từ biểu QĐ-LSGV "
                         + "theo nhóm sản phẩm × hạng tín nhiệm. Mọi chỉ tiêu tài chính là tự khai, phải xác minh "
-                        + "theo checklist trước khi trình ban lãnh đạo. Quyết định cuối thuộc thẩm định viên & ban lãnh đạo.")
+                        + "theo checklist và đối chiếu Điểm tín dụng tham khảo (300–850) cùng kết quả AI thẩm định chứng từ "
+                        + "trước khi trình ban lãnh đạo. Quyết định cuối thuộc thẩm định viên & ban lãnh đạo.")
                 .build();
     }
 
@@ -209,12 +210,12 @@ public class AppraisalSuggestionService {
             double r = ratio(requested, annualIncome).doubleValue();
             int pts;
             String impact, detail;
-            if (r <= 0.5)      { pts = 10;  impact = "POSITIVE"; detail = "Khoản vay ≤ 50% thu nhập năm."; }
-            else if (r <= 1.0) { pts = 3;   impact = "NEUTRAL";  detail = "Khoản vay 0.5–1× thu nhập năm."; }
-            else if (r <= 2.0) { pts = -5;  impact = "NEGATIVE"; detail = "Khoản vay 1–2× thu nhập năm."; }
-            else               { pts = -12; impact = "NEGATIVE"; detail = "Khoản vay > 2× thu nhập năm."; }
+            if (r <= 0.5)      { pts = 10;  impact = "POSITIVE"; detail = "Khoản gọi vốn ≤ 50% thu nhập năm."; }
+            else if (r <= 1.0) { pts = 3;   impact = "NEUTRAL";  detail = "Khoản gọi vốn 0.5–1× thu nhập năm."; }
+            else if (r <= 2.0) { pts = -5;  impact = "NEGATIVE"; detail = "Khoản gọi vốn 1–2× thu nhập năm."; }
+            else               { pts = -12; impact = "NEGATIVE"; detail = "Khoản gọi vốn > 2× thu nhập năm."; }
             score += pts;
-            factors.add(factor("AMOUNT_INCOME", "Khoản vay / thu nhập năm", impact, pts, detail));
+            factors.add(factor("AMOUNT_INCOME", "Khoản gọi vốn / thu nhập năm", impact, pts, detail));
         }
 
         // (3) Kỳ hạn
@@ -225,7 +226,7 @@ public class AppraisalSuggestionService {
         else if (term <= 24) { termPts = 0;  termImpact = "NEUTRAL";  termDetail = "Kỳ hạn 13–24 tháng."; }
         else                 { termPts = -5; termImpact = "NEGATIVE"; termDetail = "Kỳ hạn dài (> 24 tháng)."; }
         score += termPts;
-        factors.add(factor("TERM", "Kỳ hạn vay", termImpact, termPts, termDetail));
+        factors.add(factor("TERM", "Kỳ hạn gọi vốn", termImpact, termPts, termDetail));
 
         // (4) Người tham chiếu
         int refCount = 0;
@@ -381,7 +382,8 @@ public class AppraisalSuggestionService {
                 true));
 
         items.add(item("VERIFY_INCOME", "INCOME", "Xác minh thu nhập",
-                "Yêu cầu sao kê lương/bảng lương 3 tháng gần nhất hoặc giấy phép kinh doanh. Đối chiếu với mức khai: "
+                "Đối chiếu chứng từ thu nhập đã tải lên và kết quả AI thẩm định chứng từ (khối Điểm tín dụng tham khảo). "
+                        + "Nếu chưa có chứng từ, yêu cầu sao kê lương/bảng lương 3 tháng gần nhất hoặc giấy phép kinh doanh. Mức tự khai: "
                         + (loan.getMonthlyIncome() != null ? plain(loan.getMonthlyIncome()) + " VND/tháng." : "CHƯA KHAI."),
                 true));
 
@@ -411,13 +413,14 @@ public class AppraisalSuggestionService {
                     false));
         }
 
-        items.add(item("ASSESS_PURPOSE", "PURPOSE", "Đánh giá mục đích vay",
+        items.add(item("ASSESS_PURPOSE", "PURPOSE", "Đánh giá mục đích gọi vốn",
                 "Mục đích: \"" + orDash(loan.getPurpose()) + "\". Đánh giá tính hợp lý so với số tiền "
                         + plain(loan.getAmount()) + " VND và tính hợp pháp.",
                 true));
 
         items.add(item("REVIEW_DOCS", "DOCUMENT", "Đối chiếu chứng từ bổ sung",
-                "Soát các chứng từ khách cung cấp (cư trú, thu nhập, KD...), phát hiện dấu hiệu chỉnh sửa/giả mạo.",
+                "AI đã tự phân tích từng chứng từ khi chấm điểm tín dụng — đối chiếu verdict và cảnh báo của AI, "
+                        + "mở file gốc soát dấu hiệu chỉnh sửa/giả mạo trước khi kết luận, đặc biệt các file AI đánh dấu cần kiểm tra.",
                 true));
 
         items.add(item("FRAUD_CHECK", "FRAUD", "Rà soát dấu hiệu gian lận",
