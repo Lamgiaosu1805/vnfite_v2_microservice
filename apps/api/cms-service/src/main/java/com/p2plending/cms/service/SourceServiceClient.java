@@ -211,6 +211,18 @@ public class SourceServiceClient {
         body.put("purpose", loan.getPurpose());
         body.put("monthlyIncome", loan.getMonthlyIncome());
         body.put("occupation", loan.getOccupation());
+        body.put("workplace", loan.getWorkplace());
+        body.put("currentAddress", loan.getCurrentAddress());
+        body.put("commune", loan.getCommune());
+        body.put("province", loan.getProvince());
+        body.put("ref1FullName", loan.getRef1FullName());
+        body.put("ref1Relationship", loan.getRef1Relationship());
+        body.put("ref1Phone", loan.getRef1Phone());
+        body.put("ref1Address", loan.getRef1Address());
+        body.put("ref2FullName", loan.getRef2FullName());
+        body.put("ref2Relationship", loan.getRef2Relationship());
+        body.put("ref2Phone", loan.getRef2Phone());
+        body.put("ref2Address", loan.getRef2Address());
         body.put("hasReferrer", loan.getReferredBy() != null && !loan.getReferredBy().isBlank());
         body.put("completedLoanCount", (int) completedCount);
         if (borrower != null) {
@@ -524,6 +536,14 @@ public class SourceServiceClient {
                 .appraisalNote(text(node, "appraisalNote"))
                 .termMonths(node.hasNonNull("termMonths") ? node.get("termMonths").asInt() : null)
                 .purpose(text(node, "purpose"))
+                .ref1FullName(text(node, "ref1FullName"))
+                .ref1Relationship(text(node, "ref1Relationship"))
+                .ref1Phone(text(node, "ref1Phone"))
+                .ref1Address(text(node, "ref1Address"))
+                .ref2FullName(text(node, "ref2FullName"))
+                .ref2Relationship(text(node, "ref2Relationship"))
+                .ref2Phone(text(node, "ref2Phone"))
+                .ref2Address(text(node, "ref2Address"))
                 .occupation(text(node, "occupation"))
                 .workplace(text(node, "workplace"))
                 .monthlyIncome(decimal(node, "monthlyIncome"))

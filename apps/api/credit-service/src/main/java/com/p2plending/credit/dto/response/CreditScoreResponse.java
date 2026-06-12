@@ -39,6 +39,9 @@ public class CreditScoreResponse {
     private List<String> aiRiskFlags;
     private String aiRecommendation;
 
+    /** AI/rule advisory về thông tin khách hàng tự khai — chỉ hỗ trợ xác minh, không tự từ chối. */
+    private ProfileAdvisory profileAdvisory;
+
     /** Kết quả AI phân tích từng chứng từ của khoản gọi vốn (rỗng nếu AI tắt hoặc không có chứng từ) */
     private List<DocumentAnalysis> documentAnalyses;
 
@@ -134,5 +137,25 @@ public class CreditScoreResponse {
         private List<String> alerts;
         /** 1 dòng trạng thái cho thẩm định viên. */
         private String summary;
+    }
+
+    @Data
+    @Builder
+    public static class ProfileAdvisory {
+        /** LOW | MEDIUM | HIGH — chỉ là mức cần xác minh thêm. */
+        private String riskLevel;
+        private String summary;
+        private List<ProfileSignal> signals;
+        private List<String> questionsForAppraiser;
+        private boolean aiIncluded;
+    }
+
+    @Data
+    @Builder
+    public static class ProfileSignal {
+        private String code;
+        private String severity;
+        private String source;
+        private String message;
     }
 }

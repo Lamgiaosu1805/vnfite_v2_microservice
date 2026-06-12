@@ -176,6 +176,7 @@ public class CreditScoringService {
         } catch (Exception e) {
             log.error("AI risk assessment error (bỏ qua): {}", e.getMessage());
         }
+        CreditScoreResponse.ProfileAdvisory profileAdvisory = buildProfileAdvisory(req, ai);
 
         // Score cũ của user → SUPERSEDED
         List<CreditScore> oldScores = scoreRepository.findByUserIdAndStatusAndIsDeletedFalse(req.getUserId(), "VALID");
@@ -231,7 +232,7 @@ public class CreditScoringService {
                 engine.getTotalPoints(), engine.getMaxPoints(), engine.getMissingData());
 
         return toResponse(entity, details, engine.getMissingData(),
-                ai != null ? ai.riskFlags() : null, docAnalyses);
+                ai != null ? ai.riskFlags() : null, docAnalyses, profileAdvisory);
     }
 
     @Transactional(readOnly = true)
@@ -244,7 +245,7 @@ public class CreditScoringService {
         List<DocumentAnalysis> docAnalyses = entity.getLoanRequestId() != null
                 ? documentAnalysisService.listByLoan(entity.getLoanRequestId())
                 : List.of();
-        return toResponse(entity, details, null, fromJsonList(entity.getAiRiskFlags()), docAnalyses);
+        return toResponse(entity, details, null, fromJsonList(entity.getAiRiskFlags()), docAnalyses, null);
     }
 
     /** loan-service gọi khi khoản vay kết thúc → điền label cho training data */
@@ -487,6 +488,16 @@ public class CreditScoringService {
         sb.append("số tiền ").append(req.getLoanAmount() != null ? req.getLoanAmount() + " VND" : "(chưa rõ)");
         sb.append(", kỳ hạn ").append(req.getTermMonths() != null ? req.getTermMonths() + " tháng" : "(chưa rõ)");
         sb.append("\nMục đích vay: ").append(req.getPurpose() != null ? req.getPurpose() : "(không khai)").append("\n\n");
+        sb.append("THÔNG TIN KHÁCH HÀNG TỰ KHAI CẦN SOÁT TÍNH HỢP LÝ:\n")
+                .append("- Họ tên: ").append(orDash(req.getDeclaredFullName())).append("\n")
+                .append("- Nghề nghiệp: ").append(orDash(req.getOccupation())).append("\n")
+                .append("- Nơi làm việc: ").append(orDash(req.getDeclaredWorkplace() != null ? req.getDeclaredWorkplace() : req.getWorkplace())).append("\n")
+                .append("- Thu nhập bình quân/tháng: ").append(req.getMonthlyIncome() != null ? req.getMonthlyIncome() + " VND" : "(không khai)").append("\n")
+                .append("- Địa chỉ hiện tại: ").append(fullAddress(req)).append("\n")
+                .append("- Người tham chiếu 1: ").append(referenceLine(req.getRef1FullName(), req.getRef1Relationship(), req.getRef1Phone(), req.getRef1Address())).append("\n")
+                .append("- Người tham chiếu 2: ").append(referenceLine(req.getRef2FullName(), req.getRef2Relationship(), req.getRef2Phone(), req.getRef2Address())).append("\n")
+                .append("Hãy cảnh báo nếu thông tin có dấu hiệu nhập cho có, quá mơ hồ, tên người tham chiếu không giống họ tên thật, quan hệ không hợp lý, nơi làm việc/địa chỉ khó xác minh, hoặc mục đích gọi vốn quá chung chung. ")
+                .append("Chỉ dùng từ 'cần xác minh', không kết luận gian lận.\n\n");
 
         if (profile != null) {
             sb.append("Hồ sơ tự khai: nghề nghiệp=").append(profile.getOccupationType())
@@ -548,7 +559,8 @@ public class CreditScoringService {
 
     private CreditScoreResponse toResponse(CreditScore e, List<CreditScoreDetail> details,
                                            List<String> missingData, List<String> riskFlags,
-                                           List<DocumentAnalysis> docAnalyses) {
+                                           List<DocumentAnalysis> docAnalyses,
+                                           CreditScoreResponse.ProfileAdvisory profileAdvisory) {
         List<CreditScoreResponse.ScoreDetailItem> items = details.stream()
                 .map(d -> CreditScoreResponse.ScoreDetailItem.builder()
                         .criteriaCode(d.getCriteriaCode())
@@ -584,6 +596,7 @@ public class CreditScoringService {
                 .aiSummary(e.getAiSummary())
                 .aiRiskFlags(riskFlags)
                 .aiRecommendation(e.getAiRecommendation())
+                .profileAdvisory(profileAdvisory)
                 .documentAnalyses(docAnalyses)
                 .explanation(explanation)
                 .reviewDirective(gate.directive())
@@ -591,6 +604,160 @@ public class CreditScoringService {
                 .expiresAt(e.getExpiresAt())
                 .createdAt(e.getCreatedAt())
                 .build();
+    }
+
+    private CreditScoreResponse.ProfileAdvisory buildProfileAdvisory(
+            EvaluateScoreRequest req,
+            AiRiskAssessor.AiRiskAssessment ai
+    ) {
+        List<CreditScoreResponse.ProfileSignal> signals = new ArrayList<>();
+        List<String> questions = new ArrayList<>();
+
+        addSignalIf(signals, questions, suspiciousPersonName(req.getRef1FullName()),
+                "REFERENCE_NAME_SUSPICIOUS", "MEDIUM", "RULE",
+                "Tên người tham chiếu 1 có dấu hiệu không phải họ tên thật hoặc nhập cho có.",
+                "Yêu cầu người gọi vốn cung cấp họ tên đầy đủ của người tham chiếu 1 và gọi xác minh.");
+        addSignalIf(signals, questions, suspiciousPersonName(req.getRef2FullName()),
+                "REFERENCE_NAME_SUSPICIOUS", "MEDIUM", "RULE",
+                "Tên người tham chiếu 2 có dấu hiệu không phải họ tên thật hoặc nhập cho có.",
+                "Yêu cầu người gọi vốn cung cấp họ tên đầy đủ của người tham chiếu 2 và gọi xác minh.");
+        addSignalIf(signals, questions, sameNonBlank(req.getRef1Phone(), req.getRef2Phone()),
+                "REFERENCE_PHONE_DUPLICATE", "HIGH", "RULE",
+                "Hai người tham chiếu đang dùng cùng một số điện thoại.",
+                "Yêu cầu bổ sung hai người tham chiếu độc lập trước khi trình hồ sơ.");
+        addSignalIf(signals, questions, sameNonBlank(req.getRef1FullName(), req.getRef2FullName()),
+                "REFERENCE_NAME_DUPLICATE", "MEDIUM", "RULE",
+                "Tên hai người tham chiếu đang trùng nhau.",
+                "Xác minh lại người tham chiếu 1 và 2 có phải hai người khác nhau không.");
+        addSignalIf(signals, questions, suspiciousRelationship(req.getRef1Relationship()),
+                "REFERENCE_RELATIONSHIP_UNCLEAR", "MEDIUM", "RULE",
+                "Quan hệ người tham chiếu 1 chưa rõ hoặc có dấu hiệu nhập không hợp lệ.",
+                "Làm rõ quan hệ của người tham chiếu 1 với người gọi vốn.");
+        addSignalIf(signals, questions, suspiciousRelationship(req.getRef2Relationship()),
+                "REFERENCE_RELATIONSHIP_UNCLEAR", "MEDIUM", "RULE",
+                "Quan hệ người tham chiếu 2 chưa rõ hoặc có dấu hiệu nhập không hợp lệ.",
+                "Làm rõ quan hệ của người tham chiếu 2 với người gọi vốn.");
+        addSignalIf(signals, questions, vagueText(req.getCurrentAddress(), 10) && vagueText(req.getCommune(), 4),
+                "ADDRESS_TOO_VAGUE", "MEDIUM", "RULE",
+                "Địa chỉ hiện tại quá ngắn hoặc thiếu chi tiết để xác minh.",
+                "Yêu cầu bổ sung địa chỉ có thôn/xóm/số nhà/đường, phường/xã và tỉnh/thành.");
+        addSignalIf(signals, questions, vagueText(firstNonBlank(req.getDeclaredWorkplace(), req.getWorkplace()), 6),
+                "WORKPLACE_UNCLEAR", "MEDIUM", "RULE",
+                "Nơi làm việc/nơi kinh doanh đang quá mơ hồ.",
+                "Yêu cầu cung cấp tên đơn vị/nơi kinh doanh cụ thể hoặc chứng từ chứng minh nguồn thu.");
+        addSignalIf(signals, questions, vagueText(req.getPurpose(), 12),
+                "PURPOSE_TOO_GENERIC", "LOW", "RULE",
+                "Mục đích gọi vốn còn chung chung, cần làm rõ thêm.",
+                "Yêu cầu người gọi vốn mô tả cụ thể mục đích sử dụng vốn và khoản chi dự kiến.");
+
+        if (ai != null && ai.riskFlags() != null) {
+            for (String flag : ai.riskFlags()) {
+                if (flag != null && !flag.isBlank()) {
+                    signals.add(CreditScoreResponse.ProfileSignal.builder()
+                            .code("AI_PROFILE_REVIEW")
+                            .severity("MEDIUM")
+                            .source("AI")
+                            .message(flag)
+                            .build());
+                }
+            }
+        }
+        if (ai != null && ai.recommendation() != null && !ai.recommendation().isBlank()) {
+            questions.add(ai.recommendation());
+        }
+
+        String riskLevel = profileRiskLevel(signals);
+        String summary = switch (riskLevel) {
+            case "HIGH" -> "Thông tin khách hàng có cảnh báo quan trọng, cần xác minh trước khi trình ban lãnh đạo.";
+            case "MEDIUM" -> "Thông tin khách hàng có một số điểm cần xác minh thêm.";
+            default -> "Chưa phát hiện dấu hiệu bất thường rõ ràng trong thông tin tự khai.";
+        };
+
+        return CreditScoreResponse.ProfileAdvisory.builder()
+                .riskLevel(riskLevel)
+                .summary(summary)
+                .signals(signals)
+                .questionsForAppraiser(questions.stream().filter(Objects::nonNull).distinct().toList())
+                .aiIncluded(ai != null)
+                .build();
+    }
+
+    private void addSignalIf(List<CreditScoreResponse.ProfileSignal> signals, List<String> questions,
+                             boolean condition, String code, String severity, String source,
+                             String message, String question) {
+        if (!condition) return;
+        signals.add(CreditScoreResponse.ProfileSignal.builder()
+                .code(code)
+                .severity(severity)
+                .source(source)
+                .message(message)
+                .build());
+        if (question != null && !question.isBlank()) {
+            questions.add(question);
+        }
+    }
+
+    private String profileRiskLevel(List<CreditScoreResponse.ProfileSignal> signals) {
+        if (signals == null || signals.isEmpty()) return "LOW";
+        if (signals.stream().anyMatch(s -> "HIGH".equals(s.getSeverity()))) return "HIGH";
+        if (signals.stream().anyMatch(s -> "MEDIUM".equals(s.getSeverity()))) return "MEDIUM";
+        return "LOW";
+    }
+
+    private boolean suspiciousPersonName(String name) {
+        if (vagueText(name, 5)) return true;
+        String normalized = normalizedOccupationLabel(name);
+        if (normalized.matches(".*\\d.*")) return true;
+        if (normalized.matches("^[A-Z]{1,4}$")) return true;
+        if (Set.of("TEST", "ABC", "ASDF", "QWERTY", "KHACH HANG", "NGUOI THAN", "BAN BE", "DONG NGHIEP")
+                .contains(normalized)) return true;
+        long vowels = normalized.chars().filter(c -> "AEIOUY".indexOf(c) >= 0).count();
+        long letters = normalized.chars().filter(Character::isLetter).count();
+        return letters >= 8 && vowels == 0;
+    }
+
+    private boolean suspiciousRelationship(String relationship) {
+        if (vagueText(relationship, 2)) return true;
+        String normalized = normalizedOccupationLabel(relationship);
+        return !Set.of(
+                "NGUOI THAN", "DONG NGHIEP", "BAN BE", "HANG XOM", "SEP QUAN LY",
+                "BO", "ME", "ANH", "CHI", "EM", "VO", "CHONG", "CON", "BAN", "SEP"
+        ).contains(normalized);
+    }
+
+    private boolean vagueText(String value, int minLength) {
+        if (value == null || value.isBlank()) return true;
+        String normalized = normalizedOccupationLabel(value);
+        if (normalized.length() < minLength) return true;
+        return Set.of("TEST", "ABC", "ASDF", "QWERTY", "KHONG", "KHONG CO", "NA", "N A", "NONE", "NULL", "123")
+                .contains(normalized);
+    }
+
+    private boolean sameNonBlank(String a, String b) {
+        if (a == null || b == null || a.isBlank() || b.isBlank()) return false;
+        return normalizedOccupationLabel(a).equals(normalizedOccupationLabel(b));
+    }
+
+    private String firstNonBlank(String a, String b) {
+        return a != null && !a.isBlank() ? a : b;
+    }
+
+    private String orDash(String value) {
+        return value != null && !value.isBlank() ? value : "(không khai)";
+    }
+
+    private String fullAddress(EvaluateScoreRequest req) {
+        return List.of(req.getCurrentAddress(), req.getCommune(), req.getProvince()).stream()
+                .filter(v -> v != null && !v.isBlank())
+                .reduce((a, b) -> a + ", " + b)
+                .orElse("(không khai)");
+    }
+
+    private String referenceLine(String name, String relationship, String phone, String address) {
+        return "tên=" + orDash(name)
+                + ", quan hệ=" + orDash(relationship)
+                + ", SĐT=" + orDash(phone)
+                + ", địa chỉ=" + orDash(address);
     }
 
     /**

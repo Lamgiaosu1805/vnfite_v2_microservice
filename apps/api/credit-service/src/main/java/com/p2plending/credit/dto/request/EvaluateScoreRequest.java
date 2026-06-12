@@ -58,6 +58,18 @@ public class EvaluateScoreRequest {
     private BigDecimal monthlyIncome;
     private String occupation;
     private BigDecimal existingMonthlyDebt;
+    private String workplace;
+    private String currentAddress;
+    private String commune;
+    private String province;
+    private String ref1FullName;
+    private String ref1Relationship;
+    private String ref1Phone;
+    private String ref1Address;
+    private String ref2FullName;
+    private String ref2Relationship;
+    private String ref2Phone;
+    private String ref2Address;
 
     // ── Thông tin khai báo để AI đối chiếu chứng từ ──
     private String declaredFullName;
