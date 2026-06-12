@@ -38,7 +38,22 @@ public class AppraisalSuggestionResponse {
     /** Cảnh báo tự động từ kiểm tra nhất quán/đầy đủ dữ liệu. */
     private List<String> autoWarnings;
 
+    /** Cảnh báo gian lận tự động (velocity & trùng chéo đa đầu mối) — chỉ tư vấn. */
+    private List<FraudCheck> fraudChecks;
+
     private String disclaimer;
+
+    // ── Cảnh báo gian lận ──────────────────────────────────────────
+    @Getter
+    @Builder
+    public static class FraudCheck {
+        /** VELOCITY_OPEN_LOANS | SHARED_REFERENCE | SAME_REF_PHONE */
+        private String code;
+        /** HIGH | MEDIUM | INFO */
+        private String severity;
+        private String title;
+        private String detail;
+    }
 
     // ── Năng lực trả nợ ────────────────────────────────────────────
     @Getter

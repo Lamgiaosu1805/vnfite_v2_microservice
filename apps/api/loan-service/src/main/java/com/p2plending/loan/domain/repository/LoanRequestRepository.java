@@ -34,6 +34,20 @@ public interface LoanRequestRepository
     @Query("UPDATE LoanRequest l SET l.status = :status WHERE l.id = :id")
     int updateStatus(@Param("id") String id, @Param("status") LoanStatus status);
 
+    // ─── Fraud signals (velocity & trùng chéo đa đầu mối) ─────────────────────
+
+    /** Số khoản đang MỞ khác của cùng borrower (loại trừ khoản hiện tại) — phát hiện vay chồng. */
+    @Query("SELECT COUNT(l) FROM LoanRequest l WHERE l.isDeleted = false " +
+           "AND l.borrowerId = :borrowerId AND l.id <> :excludeLoanId AND l.status IN :statuses")
+    long countOpenLoansByBorrowerExcluding(@Param("borrowerId") String borrowerId,
+                                           @Param("excludeLoanId") String excludeLoanId,
+                                           @Param("statuses") Collection<LoanStatus> statuses);
+
+    /** Các borrower đã dùng SĐT này làm người tham chiếu (ref1 hoặc ref2) — phát hiện ring/tham chiếu dùng lại. */
+    @Query("SELECT DISTINCT l.borrowerId FROM LoanRequest l WHERE l.isDeleted = false " +
+           "AND (l.ref1Phone = :phone OR l.ref2Phone = :phone)")
+    List<String> findDistinctBorrowersUsingReferencePhone(@Param("phone") String phone);
+
     // ─── Stats queries ────────────────────────────────────────────────────────
 
     @Query("SELECT COUNT(l) FROM LoanRequest l WHERE l.isDeleted = false")

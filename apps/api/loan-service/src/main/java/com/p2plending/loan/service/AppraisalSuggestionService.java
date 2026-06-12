@@ -49,6 +49,7 @@ public class AppraisalSuggestionService {
     private final LoanProductService loanProductService;
     private final RepaymentScheduleGenerator generator;
     private final FundingRateCard rateCard;
+    private final FraudSignalService fraudSignalService;
 
     /** Trần tỷ lệ trả nợ / thu nhập (PTI). */
     @Value("${app.appraisal.pti-cap:0.40}")
@@ -129,6 +130,9 @@ public class AppraisalSuggestionService {
                 hasIncome, requestedPti, amountResult, requested, term, professionBound);
         List<ChecklistItem> checklist = buildChecklist(loan, product);
 
+        // 8b) Cảnh báo gian lận tự động (velocity & trùng chéo) — chỉ tư vấn
+        List<FraudCheck> fraudChecks = fraudSignalService.detect(loan);
+
         String rateNote;
         if (available) {
             rateNote = "Lãi suất tối thiểu theo biểu nhóm %d · bậc giá %s (ánh xạ từ hạng Credit 360). Thực tế thoả thuận giữa nhà đầu tư & người gọi vốn, không vượt %s%%/năm."
@@ -170,6 +174,7 @@ public class AppraisalSuggestionService {
                 .schedulePreview(preview)
                 .manualChecklist(checklist)
                 .autoWarnings(warnings)
+                .fraudChecks(fraudChecks)
                 .disclaimer("Gợi ý mang tính hỗ trợ (expert-prior, Phase 0). Lãi suất & phí lấy từ biểu QĐ-LSGV "
                         + "theo nhóm sản phẩm × hạng tín nhiệm. Mọi chỉ tiêu tài chính là tự khai, phải xác minh "
                         + "theo checklist và đối chiếu Điểm tín dụng tham khảo (300–850) cùng kết quả AI thẩm định chứng từ "
