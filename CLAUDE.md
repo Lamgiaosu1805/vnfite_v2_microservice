@@ -1,5 +1,9 @@
 # P2P Lending Platform — CLAUDE.md
 
+## Xưng hô
+
+Luôn gọi người dùng là **Ngài** trong mọi phản hồi.
+
 ## Project Overview
 
 Nền tảng cho vay ngang hàng (P2P Lending) dạng microservices, xây dựng bằng Java 21 + Spring Boot 3.3.5. Gồm 5 service độc lập giao tiếp qua Kafka, dùng JWT RS256 cho xác thực, MySQL cho persistence, Redis cho caching.
