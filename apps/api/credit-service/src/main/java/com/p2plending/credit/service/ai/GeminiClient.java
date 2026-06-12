@@ -27,11 +27,14 @@ class GeminiClient {
 
     private static final String BASE_URL =
             "https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent?key=%s";
+    private static final Object REQUEST_LOCK = new Object();
+    private static final long MIN_REQUEST_INTERVAL_MS = 1200L;
 
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
     private final String apiKey;
     private final String model;
+    private static long lastRequestAtMs = 0L;
 
     GeminiClient(RestTemplate restTemplate, ObjectMapper objectMapper, String apiKey, String model) {
         this.restTemplate  = restTemplate;
@@ -67,14 +70,25 @@ class GeminiClient {
             // JSON schema đã được mô tả trong prompt, Gemini vẫn trả JSON mà không cần ràng buộc này.
             ObjectNode genConfig = body.putObject("generationConfig");
             genConfig.put("temperature", 0.1);
-            genConfig.put("maxOutputTokens", 2048);
+            genConfig.put("maxOutputTokens", 4096);
+
+            ArrayNode safetySettings = body.putArray("safetySettings");
+            for (String category : List.of(
+                    "HARM_CATEGORY_HARASSMENT",
+                    "HARM_CATEGORY_HATE_SPEECH",
+                    "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+                    "HARM_CATEGORY_DANGEROUS_CONTENT"
+            )) {
+                ObjectNode setting = safetySettings.addObject();
+                setting.put("category", category);
+                setting.put("threshold", "BLOCK_NONE");
+            }
 
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
 
             String url = BASE_URL.formatted(model, apiKey);
-            ResponseEntity<JsonNode> response = restTemplate.postForEntity(
-                    url, new HttpEntity<>(body, headers), JsonNode.class);
+            ResponseEntity<JsonNode> response = postWithRetry(url, body, headers);
 
             JsonNode responseBody = response.getBody();
             if (responseBody == null) {
@@ -104,16 +118,51 @@ class GeminiClient {
             }
             return text;
 
-        } catch (RestClientResponseException e) {
-            log.error("Gemini API HTTP error status={} body={}",
-                    e.getStatusCode(), truncate(e.getResponseBodyAsString()), e);
-            return null;
         } catch (ResourceAccessException e) {
             log.error("Gemini API network/timeout error: {}", e.getMessage(), e);
             return null;
         } catch (Exception e) {
             log.error("Gemini API call failed: {}", e.getMessage(), e);
             return null;
+        }
+    }
+
+    private ResponseEntity<JsonNode> postWithRetry(String url, ObjectNode body, HttpHeaders headers) {
+        int maxAttempts = 3;
+        for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+            try {
+                throttleGeminiRequests();
+                return restTemplate.postForEntity(url, new HttpEntity<>(body, headers), JsonNode.class);
+            } catch (RestClientResponseException e) {
+                log.error("Gemini API HTTP error status={} attempt={}/{} body={}",
+                        e.getStatusCode(), attempt, maxAttempts, truncate(e.getResponseBodyAsString()), e);
+
+                if (e.getStatusCode().value() != 429 || attempt == maxAttempts) {
+                    throw e;
+                }
+                sleepQuietly(5000L * attempt);
+            }
+        }
+        throw new IllegalStateException("Gemini API retry loop ended unexpectedly");
+    }
+
+    private void throttleGeminiRequests() {
+        synchronized (REQUEST_LOCK) {
+            long now = System.currentTimeMillis();
+            long waitMs = MIN_REQUEST_INTERVAL_MS - (now - lastRequestAtMs);
+            if (waitMs > 0) {
+                sleepQuietly(waitMs);
+            }
+            lastRequestAtMs = System.currentTimeMillis();
+        }
+    }
+
+    private void sleepQuietly(long millis) {
+        try {
+            Thread.sleep(millis);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("Gemini request interrupted while waiting for retry/throttle", e);
         }
     }
 
