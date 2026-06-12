@@ -6,7 +6,7 @@ Luôn gọi người dùng là **Ngài** trong mọi phản hồi.
 
 ## Project Overview
 
-Nền tảng cho vay ngang hàng (P2P Lending) dạng microservices, xây dựng bằng Java 21 + Spring Boot 3.3.5. Gồm 5 service độc lập giao tiếp qua Kafka, dùng JWT RS256 cho xác thực, MySQL cho persistence, Redis cho caching.
+Nền tảng cho vay ngang hàng (P2P Lending) dạng microservices, xây dựng bằng Java 21 + Spring Boot 3.3.5. Gồm các service độc lập giao tiếp qua Kafka/internal HTTP, dùng JWT RS256 cho xác thực, MySQL cho persistence, Redis cho caching.
 
 **Tên thương hiệu:** Luôn viết là **VNFITE** (toàn bộ chữ hoa) — không dùng "VnFite", "Vnfite", hay bất kỳ cách viết khác. Áp dụng cho mọi nơi: UI, tài liệu, commit message, comment code.
 
@@ -36,6 +36,17 @@ Nền tảng cho vay ngang hàng (P2P Lending) dạng microservices, xây dựng
 
 **Luồng duyệt khoản gọi vốn:** Ban lãnh đạo phê duyệt xong **không được đưa khoản gọi vốn lên sàn ngay**. Backend phải chuyển khoản sang `AWAITING_BORROWER_APPROVAL` và thông báo cho người gọi vốn số tiền được phê duyệt, lãi suất, kỳ hạn. Chỉ khi người gọi vốn xác nhận điều kiện qua `POST /api/loans/{id}/confirm`, khoản mới chuyển `ACTIVE` và hiển thị trên sàn cho nhà đầu tư. Không đổi CMS approval thành active trực tiếp trừ khi người dùng yêu cầu đổi nghiệp vụ rõ ràng.
 
+**Credit Score 360:** Chuẩn chấm điểm duy nhất của VNFITE là **Credit Score 360**. Grade gồm `A+`, `A`, `B`, `C`, `D`, `E`, quy đổi về thang 300-850. Engine QĐ-LSGV/rate-card chỉ dùng cho **pricing/tra lãi suất**, không tự chấm điểm hoặc tự quyết định phê duyệt. Mapping pricing: `A+ -> A1`, `A -> A2`, `B -> B1`, `C -> B3`, `D -> C1`, `E -> C3`, sau đó tra `FundingRateCard`.
+
+**CIC và AI thẩm định:** CIC do thẩm định viên nhập thủ công trên CMS, feed vào Group B scoring và exclusion gate. Debt group `>= 3` phải ra `HARD_REJECT`; thiếu CIC hoặc chứng từ AI verdict `HIGH_RISK` thì `MANUAL_REVIEW`. AI thẩm định chứng từ chỉ là tham khảo, không được auto-approve hoặc auto-reject khoản gọi vốn. AI analyzer hiện dùng `GeminiAiDocumentAnalyzer` khi `APP_AI_MODE=gemini`, hoặc `ClaudeAiDocumentAnalyzer` khi `APP_AI_MODE=claude`; verdict chuẩn gồm `CONSISTENT`, `SUSPICIOUS`, `HIGH_RISK`, `UNREADABLE`.
+
+**Fraud signals:** `FraudSignalService` nằm trong `loan-service`, trả về `appraisal-suggestion.fraudChecks`. Các signal hiện có: `VELOCITY_OPEN_LOANS` (người gọi vốn có từ 2 khoản mở trở lên → `HIGH`), `SHARED_REFERENCE` (một số tham chiếu dùng bởi từ 3 người gọi vốn trở lên → `HIGH`), `SAME_REF_PHONE` (`ref1 == ref2` → `MEDIUM`).
+
+**UAT Gemini PDF analysis:** Bản fix gần nhất đã bỏ `response_mime_type: application/json` khỏi Gemini generation config vì JSON mode + inline PDF có thể làm Gemini trả empty candidates cho PDF sao kê. Đồng thời thêm `maxOutputTokens: 2048` và log `blockReason`. Sau deploy cần verify trên CMS bằng cách mở khoản `PENDING_REVIEW` và bấm `Phân tích AI tất cả`. Nếu còn lỗi, kiểm tra:
+```bash
+docker compose logs credit-service --tail=200 | grep -E "Gemini|blockReason|finishReason|ERROR"
+```
+
 ## Architecture
 
 ```
@@ -52,10 +63,11 @@ Admin → cms.p2plending.local → cms-service (8090)
 | Service | Host Port | Container Port | Database | Mô tả |
 |---------|-----------|----------------|----------|-------|
 | auth-service | 8084      | 8081 | auth_db | Đăng ký/đăng nhập bằng SĐT, OTP, JWT RS256, KYC |
-| loan-service | 8082      | 8082 | loan_db | Tạo khoản vay, quản lý offer, vòng đời khoản vay |
-| matching-service | 8083      | 8083 | matching_db | Thuật toán ghép vay, lịch chạy 30 phút/lần |
-| cms-service | 8090      | 8090 | cms_db | CMS admin/auth service |
+| loan-service | 8082      | 8082 | loan_db | Tạo khoản gọi vốn, quản lý offer, vòng đời khoản gọi vốn, fraud signals |
+| matching-service | 8083      | 8083 | matching_db | Thuật toán ghép nhà đầu tư, lịch chạy 30 phút/lần |
+| cms-service | 8090      | 8090 | cms_db | CMS admin/auth service, gọi source APIs để thẩm định |
 | notification-service | 8085      | 8084 | notification_db | Gửi email/SMS qua Kafka consumer + push notification qua service.vnfite.com.vn |
+| credit-service | 8087      | 8087 | credit_db/configured DB | Credit Score 360, CIC/manual appraisal inputs, AI document analysis |
 
 ### Infrastructure
 
@@ -124,6 +136,7 @@ Không có tài khoản user mẫu — đăng ký qua app.
 GitHub Actions (`.github/workflows/deploy-test.yml`):
 - Trigger: push lên `main` → phát hiện service nào thay đổi qua `git diff`, chỉ deploy service đó
 - Deploy thủ công toàn bộ: **Actions → Run workflow → force_all ✅**
+- `credit-service` đã nằm trong pipeline deploy test; thay đổi trong `apps/api/credit-service/` phải trigger build/deploy credit-service.
 - Mỗi deploy: `git pull` → `docker compose build <svc>` → `docker compose up -d <svc>` → `docker image prune`
 - Nginx config thay đổi: `docker compose restart nginx`
 - `.env` luôn được sync từ GitHub Secret `ENV_FILE_TEST` trước mỗi deploy
@@ -490,6 +503,59 @@ Không có REST endpoint — chỉ nhận event từ Kafka.
 2. Push: `POST https://service.vnfite.com.vn/push-notification/v2/notification/pushNotification` với `{ alias, token, title, body, data }`
 
 Consumer Group IDs: `{service-name}-group` (vd: `loan-service-group`)
+
+## Credit Scoring And AI Appraisal
+
+### Credit Score 360
+
+Credit Score 360 là chuẩn đánh giá tín dụng duy nhất của VNFITE. Không dùng engine nào khác để tự tính quyết định phê duyệt.
+
+| Grade | Normalized score | Pricing band |
+|-------|------------------|--------------|
+| A+ | 300-850 scale | A1 |
+| A | 300-850 scale | A2 |
+| B | 300-850 scale | B1 |
+| C | 300-850 scale | B3 |
+| D | 300-850 scale | C1 |
+| E | 300-850 scale | C3 |
+
+QĐ-LSGV/rate-card chỉ được dùng sau khi đã có Credit Score 360 grade để tra lãi suất/kỳ hạn theo `FundingRateCard`.
+
+### CIC, exclusion gate, and appraisal suggestion
+
+- Thẩm định viên nhập CIC thủ công trên CMS.
+- CIC feed vào Group B scoring và điều kiện loại trừ.
+- Debt group `>= 3` → `reviewDirective = HARD_REJECT`.
+- Thiếu CIC hoặc chứng từ có verdict `HIGH_RISK` → `reviewDirective = MANUAL_REVIEW`.
+- `loan-service` nhận `creditGrade` từ CMS khi tạo appraisal suggestion, map Credit360 grade sang pricing band, rồi tra rate.
+- AI và fraud signal chỉ là thông tin tham khảo cho thẩm định, không được tự động đưa khoản gọi vốn lên sàn.
+
+### AI document analysis
+
+- `APP_AI_MODE=gemini` → dùng `GeminiAiDocumentAnalyzer`.
+- `APP_AI_MODE=claude` → dùng `ClaudeAiDocumentAnalyzer`.
+- Gemini default trên test có thể set bằng `GEMINI_MODEL`; hiện ưu tiên model flash/lite theo `.env`/CI.
+- AI đọc PDF/image chứng từ như sao kê lương, sao kê doanh thu, hóa đơn, hợp đồng, chứng từ kinh doanh.
+- Verdict chuẩn: `CONSISTENT`, `SUSPICIOUS`, `HIGH_RISK`, `UNREADABLE`.
+- Với người gọi vốn buôn bán/không có lương cố định, UI và backend phải cho upload nhiều loại chứng từ chứng minh dòng tiền, không hard-code chỉ "sao kê lương".
+
+### Fraud signals
+
+`FraudSignalService` trong `loan-service` trả về `fraudChecks[]` trong appraisal suggestion:
+
+| Signal | Điều kiện | Severity |
+|--------|-----------|----------|
+| `VELOCITY_OPEN_LOANS` | Người gọi vốn có từ 2 khoản đang mở trở lên | HIGH |
+| `SHARED_REFERENCE` | Cùng một số điện thoại tham chiếu xuất hiện ở từ 3 người gọi vốn trở lên | HIGH |
+| `SAME_REF_PHONE` | SĐT tham chiếu 1 trùng SĐT tham chiếu 2 | MEDIUM |
+
+### Recent UAT verification
+
+Gemini PDF analysis đã được sửa bằng cách bỏ `response_mime_type: application/json` khỏi generation config, thêm `maxOutputTokens: 2048`, và log `blockReason`. Nếu CMS vẫn báo chưa phân tích được chứng từ sau deploy, kiểm tra log:
+
+```bash
+docker compose logs credit-service --tail=200 | grep -E "Gemini|blockReason|finishReason|ERROR"
+```
 
 ## Security
 

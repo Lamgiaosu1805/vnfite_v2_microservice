@@ -15,6 +15,7 @@ Services:
 - `matching-service`: investor preference matching
 - `cms-service`: CMS admin/auth service
 - `notification-service`: Kafka-driven notification worker + push notification via `service.vnfite.com.vn`
+- `credit-service`: Credit Score 360, CIC/manual appraisal inputs, AI document analysis, and advisory risk scoring
 
 Infrastructure:
 
@@ -42,6 +43,7 @@ Current important internal flows:
 - `cms-service` gets loan data and sends loan review actions to `loan-service` internal loan APIs.
 - `notification-service` calls `GET /internal/users/{userId}/fcm-token` on `auth-service` to retrieve the FCM push token before sending push notifications.
 - Mobile apps must not call `service.vnfite.com.vn/file-manager` directly. Upload supporting documents through VNFITE API proxy endpoints, currently `POST /api/loans/documents/upload`, so app/network whitelisting only needs VNFITE API domains.
+- `cms-service` calls `credit-service` for Credit Score 360 and AI document appraisal where configured.
 - Internal APIs must be protected with `INTERNAL_API_SECRET` / `X-Internal-Secret`.
 - Prefer source-of-truth service APIs over copying tables between databases.
 - Use service DNS names inside Docker, e.g. `http://auth-service:8081` and `http://loan-service:8082`, unless nginx/internal proxy config says otherwise.
@@ -146,6 +148,37 @@ P2P lending loans must not go live immediately after CMS leadership approval:
 
 Never change CMS approval to directly publish a loan to the marketplace unless the user explicitly changes the business flow.
 
+## Credit Score 360 And Appraisal Rules
+
+Credit evaluation standard:
+
+- The only appraisal score standard is `Credit Score 360`.
+- Credit Score 360 grades are `A+`, `A`, `B`, `C`, `D`, `E`, normalized to the 300-850 scale.
+- The QD-LSGV/rate-card engine is used only for pricing/rate lookup, not for self-scoring or evaluation.
+- Pricing grade mapping: `A+ -> A1`, `A -> A2`, `B -> B1`, `C -> B3`, `D -> C1`, `E -> C3`, then lookup in `FundingRateCard`.
+- CIC data is entered manually by the CMS appraiser and feeds Group B scoring plus exclusion gates.
+- Exclusion gate rules: debt group `>= 3` means `HARD_REJECT`; missing CIC or `HIGH_RISK` document verdict means `MANUAL_REVIEW`.
+- AI document appraisal is advisory only. It must never auto-approve or auto-reject a loan.
+- AI document analyzers: `GeminiAiDocumentAnalyzer` when `APP_AI_MODE=gemini`, or `ClaudeAiDocumentAnalyzer` when `APP_AI_MODE=claude`.
+- AI analyzes PDF/image financial evidence such as bank statements, salary documents, or business-income proof and returns `CONSISTENT`, `SUSPICIOUS`, `HIGH_RISK`, or `UNREADABLE`.
+
+Fraud signals currently live in `loan-service`:
+
+- `VELOCITY_OPEN_LOANS`: two or more open loans for the same người gọi vốn is `HIGH`.
+- `SHARED_REFERENCE`: same reference phone used across three or more người gọi vốn is `HIGH`.
+- `SAME_REF_PHONE`: reference phone 1 equals reference phone 2 is `MEDIUM`.
+- Fraud checks are returned in `appraisal-suggestion.fraudChecks`.
+
+Current UAT note:
+
+- Gemini PDF analysis was fixed by removing `response_mime_type: application/json` from Gemini generation config, adding `maxOutputTokens: 2048`, and logging Gemini `blockReason`.
+- After deploy, verify in CMS by opening a `PENDING_REVIEW` loan and clicking `Phân tích AI tất cả`.
+- If it still fails on test, inspect logs with:
+
+```bash
+docker compose logs credit-service --tail=200 | grep -E "Gemini|blockReason|finishReason|ERROR"
+```
+
 ## Mobile OTP UI Rules
 
 All OTP screens in the VNFITE mobile app must use the same OTP entry pattern:
@@ -212,6 +245,7 @@ Seed users in dev/test use password `Test@1234`; see `CLAUDE.md` for the full li
 - Loans: `/api/loans`
 - Matches: `/api/matches`
 - CMS admin/auth: `/cms`
+- Credit: internal/CMS credit appraisal APIs in `credit-service`
 
 ## Timezone
 
