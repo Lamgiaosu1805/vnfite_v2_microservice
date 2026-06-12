@@ -332,7 +332,7 @@ services:
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       APP_AI_MODEL: ${APP_AI_MODEL:-claude-opus-4-8}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
-      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.0-flash}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.1-flash-lite}
       FILE_MANAGER_URL: ${FILE_MANAGER_URL:-https://service.vnfite.com.vn/file-manager/v2}
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
     extra_hosts:
