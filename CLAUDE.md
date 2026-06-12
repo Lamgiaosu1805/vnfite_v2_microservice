@@ -127,6 +127,7 @@ GitHub Actions (`.github/workflows/deploy-test.yml`):
 - Mỗi deploy: `git pull` → `docker compose build <svc>` → `docker compose up -d <svc>` → `docker image prune`
 - Nginx config thay đổi: `docker compose restart nginx`
 - `.env` luôn được sync từ GitHub Secret `ENV_FILE_TEST` trước mỗi deploy
+- **⚠️ GitHub không cho sửa từng dòng trong Secret** — muốn cập nhật `ENV_FILE_TEST` phải copy toàn bộ nội dung `.env` hiện tại, sửa rồi paste lại toàn bộ vào ô Secret (GitHub thay thế hết, không append). Không có cách sửa một biến đơn lẻ qua UI.
 
 **Test server:** `42.113.122.119`, API qua `http://42.113.122.119:7080`
 
