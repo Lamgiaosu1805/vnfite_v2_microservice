@@ -181,6 +181,10 @@ public class SourceServiceClient {
      * vì vậy dùng aiRestTemplate timeout dài.
      */
     public JsonNode evaluateCreditScore(String loanId) {
+        return evaluateCreditScore(loanId, null);
+    }
+
+    public JsonNode evaluateCreditScore(String loanId, com.p2plending.cms.domain.entity.CicManualLookup cic) {
         LoanSummaryResponse loan = getLoanById(loanId);
         UserSummaryResponse borrower = loan.getBorrowerId() != null ? safeGetUser(loan.getBorrowerId()) : null;
 
@@ -213,6 +217,16 @@ public class SourceServiceClient {
         }
         body.put("declaredFullName", loan.getBorrowerName());
         body.put("declaredWorkplace", loan.getWorkplace());
+
+        // CIC nhập tay (chờ API NĐ94) → chấm nhóm B. Null thì nhóm B báo thiếu để nhắc tra cứu.
+        if (cic != null) {
+            body.put("cicDebtGroup", cic.getDebtGroup());
+            body.put("cicMaxDpd", cic.getMaxDpd());
+            body.put("cicActiveLenders", cic.getActiveLenders());
+            if (cic.getCheckedAt() != null) {
+                body.put("cicCheckedAt", cic.getCheckedAt().toString());
+            }
+        }
 
         var documents = new ArrayList<java.util.Map<String, Object>>();
         try {

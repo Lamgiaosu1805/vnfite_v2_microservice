@@ -27,6 +27,9 @@ Engine đọc bảng `scoring_criteria` (đổi trọng số không cần deploy
 |---|---|---|---|---|
 | **A** KYC & định danh | Định danh eKYC | `KYC_STATUS` | 20 | `auth_db.users.kyc_status` |
 | **B** Lịch sử tín dụng | Lịch sử trả nợ nội bộ VNFITE *(proxy cho CIC)* | `COMPLETED_LOANS` | 50 | `loan_db` — số khoản COMPLETED |
+| **B** | Nhóm nợ CIC | `CIC_DEBT_GROUP` | 60 | **CIC nhập tay** (chờ API NĐ94) |
+| **B** | DPD cao nhất 12 tháng | `CIC_MAX_DPD` | 45 | **CIC nhập tay** |
+| **B** | Số TCTD đang vay | `CIC_ACTIVE_LENDERS` | 35 | **CIC nhập tay** |
 | **C** Khả năng trả nợ | Mức xác minh thu nhập | `INCOME_VERIFICATION` | 45 | Thu nhập khai báo + **AI đọc chứng từ thu nhập** |
 | **C** | PTI — trả nợ kỳ/thu nhập | `PTI_RATIO` | 45 | EMI (amount, rate, term) / thu nhập |
 | **C** | DTI — tổng nợ/thu nhập | `DTI_RATIO` | 35 | `borrower_profiles.existing_monthly_debt` / thu nhập |
@@ -38,8 +41,27 @@ Engine đọc bảng `scoring_criteria` (đổi trọng số không cần deploy
 | **F** | Quan hệ với VNFITE | `ACCOUNT_AGE_MONTHS` | 15 | Tuổi tài khoản |
 | **H** Gian lận & bất thường | Toàn vẹn chứng từ | `DOCUMENT_INTEGRITY` | 15 | **AI verdict** trên toàn bộ file đính kèm |
 
-**Tổng tối đa khả dụng ≈ 320 điểm thô → chuẩn hóa 300–850.**
+**Tổng tối đa khả dụng ≈ 460 điểm thô → chuẩn hóa 300–850.**
 Hạng: **A+** ≥ 800 · A ≥ 750 · B ≥ 680 · C ≥ 620 · D ≥ 550 · E < 550.
+
+### CIC nhập tay — cầu nối chờ API NĐ94 (đã triển khai)
+
+Trong khi chờ CIC sandbox NĐ94 go-live, thẩm định viên **tra CIC bên ngoài rồi nhập tay** kết
+quả vào CMS (`POST /cms/loans/{id}/cic`). Bản ghi lưu ở `cms_db.cic_manual_lookups` kèm audit
+(người nhập, ngày tra, consent NĐ13). Khi chấm điểm, CMS gửi kèm các trường này → credit-service
+chấm **nhóm B thật** (B1/B2/B4, +140đ). Kết quả CIC có **hiệu lực 30 ngày** — quá hạn CMS cảnh báo
+tra lại. **Khi API go-live chỉ thay nguồn nhập (API thay nhập tay), scorecard giữ nguyên.**
+
+### Cổng loại trừ theo rule (docx §7) — chỉ tư vấn
+
+`credit-service` trả thêm `reviewDirective` + `reviewReasons` (không tự quyết định):
+
+- **HARD_REJECT** — nợ xấu CIC (nhóm ≥ 3): chính sách phải từ chối / rà soát đặc biệt.
+- **MANUAL_REVIEW** — chứng từ AI đánh dấu *HIGH_RISK*, hoặc **chưa tra CIC**.
+- **AUTO** — không có cờ chặn.
+
+CMS hiển thị banner đỏ/hổ phách ở khối điểm tín dụng và trong "Căn cứ" trình ban lãnh đạo. Quyết
+định cuối vẫn thuộc thẩm định viên/ban lãnh đạo (hai cấp).
 
 ### File chứng từ AI nuôi 3 tín hiệu
 
@@ -87,7 +109,7 @@ tương ứng trong `CreditScoringService.buildFeatures()`. Trọng số docx gh
 
 | Nhóm docx | Cần thêm gì | Ghi chú |
 |---|---|---|
-| **B** CIC & lịch sử tín dụng (**250**) | Kết nối **CIC/PCB** theo Thông tư 15/2023/TT-NHNN, có consent + lưu vết tra cứu | Uplift đơn lẻ lớn nhất; cần hợp đồng/pháp lý. Khi có, thay `COMPLETED_LOANS` proxy bằng B1–B8 đầy đủ |
+| **B** CIC & lịch sử tín dụng (**250**) | Nối **API CIC/PCB** (Thông tư 15/2023) thay cho nhập tay — tự điền B1/B2/B4 + bổ sung B5–B8 | **Hiện đã có cầu nối nhập tay** (xem mục 2). API go-live chỉ thay nguồn nhập, không sửa scorecard |
 | **C1/C5** Thu nhập xác minh & ổn định 3–6 tháng | Open Banking / payroll API (chuỗi thời gian thu nhập) | Nâng C1 từ "chứng từ tĩnh" lên "dòng thu thực" |
 | **A2/A6** Face match·liveness / AML đầy đủ (30) | Vendor eKYC + sàng lọc PEP/sanctions | Đã lưu ảnh chân dung/CCCD, cần điểm liveness từ vendor |
 
@@ -115,14 +137,14 @@ tương ứng trong `CreditScoringService.buildFeatures()`. Trọng số docx gh
 | Nhóm | Điểm mục tiêu (docx) | Khả dụng hiện tại | % phủ |
 |---|---|---|---|
 | A · KYC | 90 | 20 | ~22% |
-| B · CIC/lịch sử | 250 | 50 (proxy nội bộ) | ~20% |
+| B · CIC/lịch sử | 250 | 190 (50 nội bộ + 140 CIC nhập tay) | ~76% |
 | C · Affordability | 200 | 125 | ~63% |
 | D · Dòng tiền | 150 | 0 (roadmap) | 0% |
 | E · Nghề nghiệp | 110 | 65 | ~59% |
 | F · Khoản vay | 70 | 45 | ~64% |
 | G · Device | 70 | 0 (roadmap) | 0% |
 | H · Fraud | 60 | 15 | ~25% |
-| **Tổng** | **1.000** | **~320** | **~32%** |
+| **Tổng** | **1.000** | **~460** | **~46%** |
 
-Ưu tiên uplift cao nhất theo thứ tự khả thi: **D (sao kê ngân hàng AI)** → **B (CIC)** →
-**G (device/app)**.
+Ưu tiên uplift cao nhất còn lại theo thứ tự khả thi: **D (sao kê ngân hàng AI)** →
+**API CIC (thay nhập tay)** → **G (device/app)**.

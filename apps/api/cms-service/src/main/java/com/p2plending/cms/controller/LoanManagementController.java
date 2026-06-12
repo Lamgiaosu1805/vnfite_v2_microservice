@@ -1,8 +1,10 @@
 package com.p2plending.cms.controller;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.p2plending.cms.dto.request.CicLookupRequest;
 import com.p2plending.cms.dto.request.LoanActionRequest;
 import com.p2plending.cms.dto.request.LoanProposeRequest;
+import com.p2plending.cms.dto.response.CicLookupResponse;
 import com.p2plending.cms.dto.response.LoanSummaryResponse;
 import com.p2plending.cms.dto.response.PagedResponse;
 import com.p2plending.cms.security.CmsPrincipal;
@@ -68,6 +70,24 @@ public class LoanManagementController {
     @PostMapping("/{loanId}/credit-score")
     public ResponseEntity<JsonNode> evaluateCreditScore(@PathVariable String loanId) {
         return ResponseEntity.ok(loanService.evaluateCreditScore(loanId));
+    }
+
+    /** GET /cms/loans/{loanId}/cic — kết quả tra CIC nhập tay mới nhất (null nếu chưa nhập). */
+    @GetMapping("/{loanId}/cic")
+    public ResponseEntity<CicLookupResponse> getCicLookup(@PathVariable String loanId) {
+        return ResponseEntity.ok(loanService.getCicLookup(loanId));
+    }
+
+    /**
+     * POST /cms/loans/{loanId}/cic — thẩm định viên nhập kết quả tra CIC bên ngoài.
+     * Chờ API CIC sandbox NĐ94: nhập tay để chấm nhóm B + lưu audit. Cho phép cả OPS.
+     */
+    @PostMapping("/{loanId}/cic")
+    public ResponseEntity<CicLookupResponse> saveCicLookup(
+            @PathVariable String loanId,
+            @Valid @RequestBody CicLookupRequest req,
+            @AuthenticationPrincipal CmsPrincipal operator) {
+        return ResponseEntity.ok(loanService.saveCicLookup(loanId, req, operator));
     }
 
     /** POST /cms/loans/{loanId}/documents/{documentId}/analyze — AI phân tích chứng từ. */

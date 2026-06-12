@@ -44,7 +44,10 @@ public class ScoreExplainer {
             Map.entry("DOCUMENT_INTEGRITY", "Cần bật AI thẩm định và có chứng từ để kiểm tra tính toàn vẹn"),
             Map.entry("COMPLETED_LOANS", "Lịch sử vay trên VNFITE — tích lũy theo thời gian"),
             Map.entry("ACCOUNT_AGE_MONTHS", "Tài khoản còn mới — cải thiện theo thời gian sử dụng"),
-            Map.entry("KYC_STATUS", "Hoàn tất định danh eKYC")
+            Map.entry("KYC_STATUS", "Hoàn tất định danh eKYC"),
+            Map.entry("CIC_DEBT_GROUP", "Tra cứu CIC bên ngoài và nhập nhóm nợ vào CMS (chờ API NĐ94)"),
+            Map.entry("CIC_MAX_DPD", "Tra cứu CIC bên ngoài và nhập số ngày quá hạn cao nhất"),
+            Map.entry("CIC_ACTIVE_LENDERS", "Tra cứu CIC bên ngoài và nhập số tổ chức đang có dư nợ")
     );
 
     public ScoreExplanation explain(int score, String grade, int maxPoints,

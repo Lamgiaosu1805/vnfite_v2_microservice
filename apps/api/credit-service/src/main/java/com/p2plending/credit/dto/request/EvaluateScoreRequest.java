@@ -40,6 +40,16 @@ public class EvaluateScoreRequest {
     private Integer completedLoanCount;
 
     /**
+     * Kết quả tra cứu CIC nhập tay (giai đoạn chờ API CIC sandbox NĐ94 go-live).
+     * Thẩm định viên tra CIC ngoài rồi nhập vào CMS — credit-service chấm nhóm B từ đây.
+     * Null = chưa tra CIC → nhóm B báo thiếu dữ liệu để nhắc tra cứu.
+     */
+    private Integer cicDebtGroup;        // 1-5: nhóm nợ cao nhất hiện tại (B1)
+    private Integer cicMaxDpd;           // số ngày quá hạn cao nhất 12 tháng (B2)
+    private Integer cicActiveLenders;    // số tổ chức tín dụng đang có dư nợ (B4)
+    private java.time.LocalDate cicCheckedAt;  // ngày tra cứu — phục vụ kiểm tra hiệu lực
+
+    /**
      * Thu nhập + nghề nghiệp lấy từ chính đơn gọi vốn (loan_requests.monthly_income / occupation).
      * Ưu tiên hơn borrower_profiles nếu cả hai cùng có.
      * occupation nhận OccupationCategory của loan-service (CIVIL_SERVANT, OFFICE_STAFF...)

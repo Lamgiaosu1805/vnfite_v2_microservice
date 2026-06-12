@@ -253,8 +253,13 @@ public class CreditScoringService {
         // ── A · KYC & định danh ──
         f.put("KYC_STATUS", req.getKycStatus());
 
-        // ── B · Lịch sử trả nợ nội bộ VNFITE (proxy cho CIC) ──
+        // ── B · Lịch sử tín dụng ──
+        // Proxy nội bộ VNFITE (luôn có)
         f.put("COMPLETED_LOANS", req.getCompletedLoanCount());
+        // CIC nhập tay (chờ API NĐ94) — null thì nhóm B báo thiếu để nhắc tra cứu
+        f.put("CIC_DEBT_GROUP", req.getCicDebtGroup());
+        f.put("CIC_MAX_DPD", req.getCicMaxDpd());
+        f.put("CIC_ACTIVE_LENDERS", req.getCicActiveLenders());
 
         // ── C · Khả năng trả nợ ──
         // C1 — mức xác minh thu nhập (khai báo + kết quả AI đọc chứng từ thu nhập)
@@ -510,6 +515,8 @@ public class CreditScoringService {
                 e.getMaxPoints() != null ? e.getMaxPoints() : 0,
                 items, docAnalyses, appProperties.getAi().isEnabled());
 
+        ReviewGate gate = computeReviewGate(items, docAnalyses);
+
         return CreditScoreResponse.builder()
                 .id(e.getId())
                 .userId(e.getUserId())
@@ -528,10 +535,63 @@ public class CreditScoringService {
                 .aiRecommendation(e.getAiRecommendation())
                 .documentAnalyses(docAnalyses)
                 .explanation(explanation)
+                .reviewDirective(gate.directive())
+                .reviewReasons(gate.reasons())
                 .expiresAt(e.getExpiresAt())
                 .createdAt(e.getCreatedAt())
                 .build();
     }
+
+    /**
+     * Cổng loại trừ theo rule (docx §7) — chỉ tư vấn, không tự quyết định.
+     * HARD_REJECT khi nợ xấu CIC (nhóm ≥3). MANUAL_REVIEW khi chứng từ rủi ro cao
+     * hoặc chưa có kết quả CIC. Quyết định cuối vẫn là con người.
+     */
+    private ReviewGate computeReviewGate(List<CreditScoreResponse.ScoreDetailItem> items,
+                                         List<DocumentAnalysis> docAnalyses) {
+        List<String> reasons = new ArrayList<>();
+        String directive = "AUTO";
+
+        // CIC — nợ xấu hoặc chưa tra
+        CreditScoreResponse.ScoreDetailItem cic = items.stream()
+                .filter(i -> "CIC_DEBT_GROUP".equals(i.getCriteriaCode()))
+                .findFirst().orElse(null);
+        if (cic != null) {
+            Integer group = parseLeadingInt(cic.getRawValue());
+            if (group == null) {
+                directive = escalate(directive, "MANUAL_REVIEW");
+                reasons.add("Chưa có kết quả CIC — cần tra cứu CIC bên ngoài và nhập trước khi quyết định.");
+            } else if (group >= 3) {
+                directive = escalate(directive, "HARD_REJECT");
+                reasons.add("Nợ xấu CIC nhóm " + group + " — theo chính sách phải từ chối hoặc đưa rà soát đặc biệt.");
+            }
+        }
+
+        // Chứng từ rủi ro cao
+        boolean docHighRisk = docAnalyses != null && docAnalyses.stream()
+                .anyMatch(d -> "HIGH_RISK".equals(d.getVerdict()));
+        if (docHighRisk) {
+            directive = escalate(directive, "MANUAL_REVIEW");
+            reasons.add("Có chứng từ AI đánh dấu rủi ro cao — phải kiểm tra thủ công bản gốc.");
+        }
+
+        return new ReviewGate(directive, reasons);
+    }
+
+    /** Lấy số nguyên đứng đầu chuỗi rawValue (vd "3" hoặc "Nhóm 3..."); null nếu thiếu dữ liệu. */
+    private Integer parseLeadingInt(String raw) {
+        if (raw == null || raw.contains("thiếu dữ liệu")) return null;
+        var m = java.util.regex.Pattern.compile("\\d+").matcher(raw);
+        return m.find() ? Integer.parseInt(m.group()) : null;
+    }
+
+    private static final List<String> GATE_SEVERITY = List.of("AUTO", "MANUAL_REVIEW", "HARD_REJECT");
+
+    private String escalate(String current, String candidate) {
+        return GATE_SEVERITY.indexOf(candidate) > GATE_SEVERITY.indexOf(current) ? candidate : current;
+    }
+
+    private record ReviewGate(String directive, List<String> reasons) {}
 
     private String toJson(Object value) {
         try {

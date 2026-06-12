@@ -48,6 +48,15 @@ public class CreditScoreResponse {
      */
     private ScoreExplanation explanation;
 
+    /**
+     * Cổng loại trừ theo rule (docx §7) — CHỈ TƯ VẤN, không tự quyết định.
+     * AUTO = không có cờ chặn | MANUAL_REVIEW = buộc rà soát | HARD_REJECT = chính sách phải từ chối.
+     * Quyết định cuối vẫn thuộc thẩm định viên/ban lãnh đạo.
+     */
+    private String reviewDirective;
+    /** Lý do gắn cờ loại trừ/rà soát (nợ xấu CIC, chứng từ rủi ro cao, chưa tra CIC...). */
+    private List<String> reviewReasons;
+
     private LocalDateTime expiresAt;
     private LocalDateTime createdAt;
 

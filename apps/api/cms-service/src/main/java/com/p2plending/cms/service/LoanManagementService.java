@@ -1,15 +1,20 @@
 package com.p2plending.cms.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.p2plending.cms.domain.entity.CicManualLookup;
+import com.p2plending.cms.domain.repository.CicManualLookupRepository;
+import com.p2plending.cms.dto.request.CicLookupRequest;
 import com.p2plending.cms.dto.request.LoanActionRequest;
 import com.p2plending.cms.dto.request.LoanProposeRequest;
 import com.p2plending.cms.dto.response.AuditLogResponse;
+import com.p2plending.cms.dto.response.CicLookupResponse;
 import com.p2plending.cms.dto.response.LoanSummaryResponse;
 import com.p2plending.cms.dto.response.PagedResponse;
 import com.p2plending.cms.security.CmsPrincipal;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
@@ -18,6 +23,7 @@ public class LoanManagementService {
 
     private final SourceServiceClient sourceServiceClient;
     private final LoanDecisionAuditLogService auditService;
+    private final CicManualLookupRepository cicRepository;
 
     public PagedResponse<LoanSummaryResponse> getLoans(String status, String borrowerId,
                                                        String province, String search, int page, int size) {
@@ -41,11 +47,54 @@ public class LoanManagementService {
     }
 
     public JsonNode evaluateCreditScore(String loanId) {
-        return sourceServiceClient.evaluateCreditScore(loanId);
+        CicManualLookup cic = cicRepository
+                .findFirstByLoanIdAndIsDeletedFalseOrderByCheckedAtDescCreatedAtDesc(loanId)
+                .orElse(null);
+        return sourceServiceClient.evaluateCreditScore(loanId, cic);
     }
 
     public JsonNode analyzeDocument(String loanId, String documentId) {
         return sourceServiceClient.analyzeLoanDocument(loanId, documentId);
+    }
+
+    // ─── CIC nhập tay (chờ API CIC sandbox NĐ94) ────────────────────────────────────
+
+    /** Lấy kết quả tra CIC mới nhất của khoản (null nếu chưa nhập). */
+    @Transactional(readOnly = true)
+    public CicLookupResponse getCicLookup(String loanId) {
+        return cicRepository.findFirstByLoanIdAndIsDeletedFalseOrderByCheckedAtDescCreatedAtDesc(loanId)
+                .map(CicLookupResponse::from)
+                .orElse(null);
+    }
+
+    /** Thẩm định viên nhập kết quả tra CIC ngoài → lưu kèm audit (ai/khi nào). */
+    @Transactional
+    public CicLookupResponse saveCicLookup(String loanId, CicLookupRequest req, CmsPrincipal operator) {
+        String borrowerId = null;
+        try {
+            borrowerId = safeGetLoan(loanId).getBorrowerId();
+        } catch (Exception e) {
+            log.warn("Could not resolve borrowerId for CIC lookup of loan {}: {}", loanId, e.getMessage());
+        }
+
+        CicManualLookup entity = CicManualLookup.builder()
+                .loanId(loanId)
+                .borrowerId(borrowerId)
+                .debtGroup(req.getDebtGroup())
+                .maxDpd(req.getMaxDpd())
+                .activeLenders(req.getActiveLenders())
+                .totalOutstanding(req.getTotalOutstanding())
+                .inquiriesRecent(req.getInquiriesRecent())
+                .checkedAt(req.getCheckedAt())
+                .attachmentFileId(req.getAttachmentFileId())
+                .note(req.getNote())
+                .consentConfirmed(req.isConsentConfirmed())
+                .enteredBy(operator != null ? operator.username() : "unknown")
+                .build();
+        entity = cicRepository.save(entity);
+        log.info("CIC lookup saved: loanId={} debtGroup={} checkedAt={} by={}",
+                loanId, entity.getDebtGroup(), entity.getCheckedAt(), entity.getEnteredBy());
+        return CicLookupResponse.from(entity);
     }
 
     /**
