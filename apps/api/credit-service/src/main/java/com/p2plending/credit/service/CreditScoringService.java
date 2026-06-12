@@ -16,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.text.Normalizer;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
@@ -44,6 +45,7 @@ public class CreditScoringService {
             Map.entry("CIVIL_SERVANT", "GOV_EMPLOYEE"),
             Map.entry("ARMED_FORCES", "GOV_EMPLOYEE"),
             Map.entry("TEACHER", "GOV_EMPLOYEE"),
+            Map.entry("TEACHER_LECTURER", "GOV_EMPLOYEE"),
             Map.entry("HEALTHCARE", "GOV_EMPLOYEE"),
             Map.entry("OFFICE_STAFF", "SALARIED"),
             Map.entry("FACTORY_WORKER", "SALARIED"),
@@ -63,6 +65,37 @@ public class CreditScoringService {
             Map.entry("RETIRED", "OTHER"),
             Map.entry("STUDENT", "OTHER"),
             Map.entry("OTHER", "OTHER")
+    );
+
+    /**
+     * Mobile từng gửi label tiếng Việt thay vì enum code, ví dụ "Giáo viên, giảng viên".
+     * Credit-service phải nhận cả code lẫn label để không chấm nhầm về OTHER cho dữ liệu đã tạo.
+     */
+    private static final Map<String, String> OCCUPATION_LABEL_MAP = Map.ofEntries(
+            Map.entry("CAN BO CONG CHUC VIEN CHUC NHA NUOC", "GOV_EMPLOYEE"),
+            Map.entry("QUAN DOI CONG AN LUC LUONG VU TRANG", "GOV_EMPLOYEE"),
+            Map.entry("GIAO VIEN GIANG VIEN", "GOV_EMPLOYEE"),
+            Map.entry("Y BAC SI NHAN VIEN Y TE", "GOV_EMPLOYEE"),
+            Map.entry("NHAN VIEN VAN PHONG", "SALARIED"),
+            Map.entry("CONG NHAN", "SALARIED"),
+            Map.entry("LANH DAO QUAN LY", "SALARIED"),
+            Map.entry("NHAN VIEN KINH DOANH BAN HANG", "SALARIED"),
+            Map.entry("KY SU KY THUAT VIEN", "SALARIED"),
+            Map.entry("NGHE CHUYEN MON LUAT SU KE TOAN KIEM TOAN", "SALARIED"),
+            Map.entry("NGHE CHUYEN MON LUAT SU KE TOAN", "SALARIED"),
+            Map.entry("LAO DONG NGANH DICH VU NHA HANG KHACH SAN BAN LE", "SALARIED"),
+            Map.entry("LAO DONG NGANH DICH VU", "SALARIED"),
+            Map.entry("TAI XE", "SALARIED"),
+            Map.entry("CHU DOANH NGHIEP", "BUSINESS_OWNER"),
+            Map.entry("HO KINH DOANH TIEU THUONG", "BUSINESS_OWNER"),
+            Map.entry("KINH DOANH TU DO BUON BAN NHO", "FREELANCER"),
+            Map.entry("LAO DONG TU DO", "FREELANCER"),
+            Map.entry("LAO DONG PHO THONG", "FREELANCER"),
+            Map.entry("NONG LAM NGU NGHIEP", "FREELANCER"),
+            Map.entry("NOI TRO", "OTHER"),
+            Map.entry("HUU TRI", "OTHER"),
+            Map.entry("SINH VIEN HOC SINH", "OTHER"),
+            Map.entry("KHAC", "OTHER")
     );
 
     private static final Set<String> SCORECARD_OCCUPATIONS =
@@ -408,12 +441,25 @@ public class CreditScoringService {
         return purpose.trim().length() >= 15 ? "CLEAR" : "VAGUE";
     }
 
-    /** OccupationCategory loan-service → nhóm scorecard; không nhận diện được → OTHER (conservative) */
+    /** OccupationCategory/label tiếng Việt từ loan-service/mobile → nhóm scorecard. */
     private String mapOccupation(String occupation) {
         if (occupation == null || occupation.isBlank()) return null;
         String key = occupation.trim().toUpperCase();
         if (SCORECARD_OCCUPATIONS.contains(key)) return key;
-        return OCCUPATION_MAP.getOrDefault(key, "OTHER");
+        String mappedByCode = OCCUPATION_MAP.get(key);
+        if (mappedByCode != null) return mappedByCode;
+        return OCCUPATION_LABEL_MAP.getOrDefault(normalizedOccupationLabel(occupation), "OTHER");
+    }
+
+    private String normalizedOccupationLabel(String occupation) {
+        String noAccent = Normalizer.normalize(occupation, Normalizer.Form.NFD)
+                .replaceAll("\\p{M}", "")
+                .replace('Đ', 'D')
+                .replace('đ', 'd');
+        return noAccent.toUpperCase(Locale.ROOT)
+                .replaceAll("[^A-Z0-9]+", " ")
+                .trim()
+                .replaceAll("\\s+", " ");
     }
 
     /** raw 0..max → 300-850 */
