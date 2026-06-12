@@ -16,8 +16,12 @@ import java.util.*;
  * Engine chấm điểm rule-based theo scorecard trong bảng scoring_criteria.
  *
  * Nguyên tắc:
- *  - Tiêu chí thiếu dữ liệu → 0 điểm (conservative) và được flag vào missingData
- *  - maxPoints của mỗi tiêu chí = band có điểm cao nhất
+ *  - Tiêu chí thiếu dữ liệu → nhận ĐIỂM SÀN (band điểm thấp nhất của tiêu chí),
+ *    KHÔNG phải 0 cứng. Lý do: hồ sơ chưa có dữ liệu (vd khách mới chưa có lịch sử,
+ *    chưa khai DTI) không nên bị phạt về đáy như tín hiệu xấu thật. Vẫn flag vào
+ *    missingData để nhắc thẩm định viên thu thập (bổ sung có thể nâng lên tới band cao).
+ *  - maxPoints của mỗi tiêu chí = band có điểm cao nhất; mẫu số luôn tính đủ maxPoints
+ *    nên không vống điểm khi hồ sơ mỏng.
  *  - Tổng maxPoints tính từ DB → đổi scorecard không cần sửa code
  */
 @Service
@@ -46,23 +50,24 @@ public class ScoringEngine {
             String code = entry.getKey();
             List<ScoringCriteria> bands = entry.getValue();
             int maxPoints = bands.stream().mapToInt(ScoringCriteria::getPoints).max().orElse(0);
+            int minPoints = bands.stream().mapToInt(ScoringCriteria::getPoints).min().orElse(0);
             maxTotal += maxPoints;
 
             ScoringCriteria first = bands.get(0);
             Object value = features.get(code);
 
-            int points = 0;
+            int points;
             String rawValue;
 
             if (value == null) {
+                // Thiếu dữ liệu → điểm sàn của tiêu chí (không phạt về 0 như tín hiệu xấu thật)
+                points = minPoints;
                 rawValue = "(thiếu dữ liệu)";
                 missing.add(code);
             } else {
                 rawValue = String.valueOf(value);
                 ScoringCriteria matched = matchBand(bands, value);
-                if (matched != null) {
-                    points = matched.getPoints();
-                }
+                points = matched != null ? matched.getPoints() : 0;
             }
 
             total += points;

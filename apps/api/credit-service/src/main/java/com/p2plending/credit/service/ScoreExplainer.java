@@ -70,10 +70,12 @@ public class ScoreExplainer {
                 if (max <= 0) continue;
 
                 if (isMissing(d)) {
-                    lostToMissing += max;
+                    // Ô thiếu đã nhận điểm sàn (min band); phần còn có thể nâng = max - sàn
+                    int upliftable = Math.max(0, max - pts);
+                    lostToMissing += upliftable;
                     missing.add(MissingItem.builder()
                             .criteriaName(d.getCriteriaName())
-                            .potentialPoints(max)
+                            .potentialPoints(upliftable)
                             .howToObtain(HOW_TO_OBTAIN.getOrDefault(d.getCriteriaCode(),
                                     "Bổ sung dữ liệu tiêu chí này trong hồ sơ"))
                             .build());
@@ -282,8 +284,8 @@ public class ScoreExplainer {
     // ── utils ───────────────────────────────────────────────────────────────────
 
     private boolean isMissing(ScoreDetailItem d) {
-        return (d.getPoints() == null || d.getPoints() == 0)
-                && d.getRawValue() != null && d.getRawValue().contains(MISSING_MARK);
+        // rawValue "(thiếu dữ liệu)" là dấu hiệu chuẩn — ô thiếu giờ vẫn có điểm sàn (>0) nên không xét points
+        return d.getRawValue() != null && d.getRawValue().contains(MISSING_MARK);
     }
 
     private void trim(List<Driver> list) {

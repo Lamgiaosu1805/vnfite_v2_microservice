@@ -236,6 +236,10 @@ public class CreditScoringService {
      * Chỉ phát các tín hiệu lấy được từ hệ thống + file chứng từ AI; KHÔNG chấm
      * biến nhân khẩu học nhạy cảm (tuổi/hôn nhân/người phụ thuộc/học vấn) theo
      * nguyên tắc chống phân biệt đối xử của mô hình.
+     *
+     * Feature null (không lấy được) sẽ bị loại khỏi map → engine coi là "thiếu dữ liệu"
+     * và gán ĐIỂM SÀN cho tiêu chí đó (không phạt về 0). Nhờ vậy khách mới chưa đủ
+     * dữ liệu không bị kéo tụt hạng oan, nhưng vẫn được nhắc bổ sung để nâng điểm.
      */
     private Map<String, Object> buildFeatures(EvaluateScoreRequest req, BorrowerProfile profile,
                                               List<DocumentAnalysis> docAnalyses) {
@@ -458,9 +462,10 @@ public class CreditScoringService {
                     .append(" → ").append(r.getPoints()).append("/").append(r.getMaxPoints()).append("\n");
         }
         if (!engine.getMissingData().isEmpty()) {
+            // Ô thiếu đã nhận điểm sàn → phần còn có thể nâng = maxPoints - points
             int lostToMissing = engine.getDetails().stream()
                     .filter(r -> r.getRawValue() != null && r.getRawValue().contains("thiếu dữ liệu"))
-                    .mapToInt(ScoringEngine.CriteriaResult::getMaxPoints).sum();
+                    .mapToInt(r -> Math.max(0, r.getMaxPoints() - r.getPoints())).sum();
             sb.append("Tiêu chí thiếu dữ liệu: ").append(String.join(", ", engine.getMissingData()))
                     .append(" (mất ").append(lostToMissing).append("/").append(engine.getMaxPoints())
                     .append(" điểm thô do CHƯA CÓ dữ liệu, không phải tín hiệu xấu)\n");
