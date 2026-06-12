@@ -4,7 +4,6 @@ import com.p2plending.loan.domain.entity.LoanProduct;
 import com.p2plending.loan.domain.entity.LoanRequest;
 import com.p2plending.loan.domain.entity.RepaymentSchedule;
 import com.p2plending.loan.domain.enums.CreditBand;
-import com.p2plending.loan.domain.enums.RecommendedDecision;
 import com.p2plending.loan.domain.enums.RepaymentMethod;
 import com.p2plending.loan.domain.repository.LoanRequestRepository;
 import com.p2plending.loan.dto.response.AppraisalSuggestionResponse;
@@ -44,7 +43,6 @@ public class AppraisalSuggestionService {
     private static final ZoneId TZ = ZoneId.of("Asia/Ho_Chi_Minh");
     /** Làm tròn số tiền đề xuất xuống bội số gần nhất (100.000 VND). */
     private static final BigDecimal AMOUNT_UNIT = new BigDecimal("100000");
-    private static final BigDecimal MONTHS_PER_YEAR = BigDecimal.valueOf(12);
     private static final BigDecimal HUNDRED = BigDecimal.valueOf(100);
 
     private final LoanRequestRepository loanRequestRepository;
@@ -69,7 +67,7 @@ public class AppraisalSuggestionService {
     private BigDecimal legalMaxRate;
 
     @Transactional(readOnly = true)
-    public AppraisalSuggestionResponse suggest(String loanId, boolean discouragedSector) {
+    public AppraisalSuggestionResponse suggest(String loanId, boolean discouragedSector, String creditGrade) {
         LoanRequest loan = loanRequestRepository.findById(loanId)
                 .orElseThrow(() -> new LoanNotFoundException(loanId));
 
@@ -84,28 +82,25 @@ public class AppraisalSuggestionService {
         BigDecimal income = loan.getMonthlyIncome();
         boolean hasIncome = income != null && income.signum() > 0;
 
-        // 1) Burden phục vụ CHẤM ĐIỂM theo lãi tham chiếu (độc lập với hạng → tránh vòng lặp)
-        BigDecimal scoringInstallment = annuityInstallment(requested, referenceRate, term);
-        BigDecimal scoringPti = hasIncome ? ratio(scoringInstallment, income) : null;
+        // 1) Bậc giá lấy từ HẠNG CREDIT SCORE 360 (chuẩn đánh giá duy nhất), KHÔNG tự chấm.
+        //    null = chưa chấm điểm Credit 360 → chưa định giá được.
+        CreditBand band = mapCredit360ToBand(creditGrade);
 
-        // 2) Chấm điểm expert-prior → hạng tín nhiệm A1..C3
-        List<ScoreFactor> factors = new ArrayList<>();
-        int score = computeScore(loan, requested, term, income, hasIncome, scoringPti, professionBound, factors);
-        CreditBand band = bandOf(score);
-
-        // 3) Tra biểu lãi suất & phí theo (nhóm × hạng)
-        RateCell cell = rateCard.lookup(group, band);
-        boolean available = cell.available();
-
+        // 2) Tra biểu lãi suất & phí theo (nhóm × bậc giá)
+        boolean available = false;
         BigDecimal suggestedRate = null;
         BigDecimal feePercent = null;
-        if (available) {
-            suggestedRate = cell.annualRate();
-            if (discouragedSector) suggestedRate = suggestedRate.add(discouragedSurcharge);
-            suggestedRate = suggestedRate.min(legalMaxRate).setScale(2, RoundingMode.HALF_UP);
-            feePercent = cell.feePercent();
+        if (band != null) {
+            RateCell cell = rateCard.lookup(group, band);
+            available = cell.available();
+            if (available) {
+                suggestedRate = cell.annualRate();
+                if (discouragedSector) suggestedRate = suggestedRate.add(discouragedSurcharge);
+                suggestedRate = suggestedRate.min(legalMaxRate).setScale(2, RoundingMode.HALF_UP);
+                feePercent = cell.feePercent();
+            }
         }
-        // Lãi dùng cho tính toán năng lực trả nợ (fallback lãi tham chiếu nếu không cấp)
+        // Lãi dùng cho tính toán năng lực trả nợ (fallback lãi tham chiếu nếu chưa cấp)
         BigDecimal calcRate = available ? suggestedRate : referenceRate;
 
         // 4) Năng lực trả nợ
@@ -129,16 +124,20 @@ public class AppraisalSuggestionService {
         SchedulePreview preview = (available && amountResult.amount.signum() > 0)
                 ? buildPreview(amountResult.amount, suggestedRate, term, method) : null;
 
-        // 8) Khuyến nghị + cảnh báo + checklist
-        RecommendedDecision decision = decide(band, available, hasIncome, requestedPti, amountResult.amount);
+        // 8) Cảnh báo + checklist (không còn khuyến nghị engine — Credit 360 là chuẩn duy nhất)
         List<String> warnings = buildWarnings(loan, group, band, available, discouragedSector,
                 hasIncome, requestedPti, amountResult, requested, term, professionBound);
         List<ChecklistItem> checklist = buildChecklist(loan, product);
 
-        String rateNote = available
-                ? "Lãi suất tối thiểu theo biểu nhóm %d · hạng %s. Thực tế thoả thuận giữa nhà đầu tư & người gọi vốn, không vượt %s%%/năm."
-                        .formatted(group, band, plain(legalMaxRate))
-                : "Hạng %s — không cấp dịch vụ gọi vốn cho nhóm sản phẩm %d theo biểu QĐ-LSGV.".formatted(band, group);
+        String rateNote;
+        if (available) {
+            rateNote = "Lãi suất tối thiểu theo biểu nhóm %d · bậc giá %s (ánh xạ từ hạng Credit 360). Thực tế thoả thuận giữa nhà đầu tư & người gọi vốn, không vượt %s%%/năm."
+                    .formatted(group, band, plain(legalMaxRate));
+        } else if (band == null) {
+            rateNote = "Cần chấm điểm Credit 360 trước khi đề xuất lãi suất & hạn mức.";
+        } else {
+            rateNote = "Bậc giá %s — không cấp dịch vụ gọi vốn cho nhóm sản phẩm %d theo biểu QĐ-LSGV.".formatted(band, group);
+        }
 
         return AppraisalSuggestionResponse.builder()
                 .loanId(loan.getId())
@@ -148,7 +147,6 @@ public class AppraisalSuggestionService {
                 .termMonths(term)
                 .productGroup(group)
                 .productName(product != null ? product.getName() : null)
-                .risk(RiskAssessment.builder().score(score).band(band).factors(factors).build())
                 .affordability(Affordability.builder()
                         .incomeProvided(hasIncome)
                         .monthlyIncome(income)
@@ -168,7 +166,6 @@ public class AppraisalSuggestionService {
                         .connectionFee(connectionFee)
                         .serviceAvailable(available)
                         .rateNote(rateNote)
-                        .decision(decision)
                         .build())
                 .schedulePreview(preview)
                 .manualChecklist(checklist)
@@ -180,97 +177,24 @@ public class AppraisalSuggestionService {
                 .build();
     }
 
-    // ── Chấm điểm ──────────────────────────────────────────────────
+    // ── Ánh xạ hạng Credit 360 → bậc giá QĐ-LSGV ───────────────────
 
-    private int computeScore(LoanRequest loan, BigDecimal requested, int term, BigDecimal income,
-                             boolean hasIncome, BigDecimal scoringPti, boolean professionBound,
-                             List<ScoreFactor> factors) {
-        int score = 50; // baseline trung lập
-
-        // (1) PTI — trọng số lớn nhất
-        if (!hasIncome) {
-            factors.add(factor("PTI", "Khả năng trả nợ", "NEUTRAL", 0,
-                    "Chưa khai thu nhập — không đánh giá được năng lực trả nợ."));
-        } else {
-            double pti = scoringPti.doubleValue();
-            int pts;
-            String impact, detail;
-            if (pti <= 0.30)      { pts = 20;  impact = "POSITIVE"; detail = "PTI ≤ 30% — gánh nặng trả nợ thấp."; }
-            else if (pti <= 0.40) { pts = 8;   impact = "NEUTRAL";  detail = "PTI 30–40% — chấp nhận được."; }
-            else if (pti <= 0.50) { pts = -10; impact = "NEGATIVE"; detail = "PTI 40–50% — gánh nặng cao."; }
-            else                  { pts = -25; impact = "NEGATIVE"; detail = "PTI > 50% — vượt khả năng chi trả."; }
-            score += pts;
-            factors.add(factor("PTI", "Tỷ lệ trả nợ / thu nhập", impact, pts,
-                    detail + " (PTI ≈ " + pct(scoringPti) + ")"));
-        }
-
-        // (2) Số tiền vay so với thu nhập năm
-        if (hasIncome) {
-            BigDecimal annualIncome = income.multiply(MONTHS_PER_YEAR);
-            double r = ratio(requested, annualIncome).doubleValue();
-            int pts;
-            String impact, detail;
-            if (r <= 0.5)      { pts = 10;  impact = "POSITIVE"; detail = "Khoản gọi vốn ≤ 50% thu nhập năm."; }
-            else if (r <= 1.0) { pts = 3;   impact = "NEUTRAL";  detail = "Khoản gọi vốn 0.5–1× thu nhập năm."; }
-            else if (r <= 2.0) { pts = -5;  impact = "NEGATIVE"; detail = "Khoản gọi vốn 1–2× thu nhập năm."; }
-            else               { pts = -12; impact = "NEGATIVE"; detail = "Khoản gọi vốn > 2× thu nhập năm."; }
-            score += pts;
-            factors.add(factor("AMOUNT_INCOME", "Khoản gọi vốn / thu nhập năm", impact, pts, detail));
-        }
-
-        // (3) Kỳ hạn
-        int termPts;
-        String termImpact, termDetail;
-        if (term <= 6)       { termPts = 5;  termImpact = "POSITIVE"; termDetail = "Kỳ hạn ngắn (≤ 6 tháng)."; }
-        else if (term <= 12) { termPts = 2;  termImpact = "NEUTRAL";  termDetail = "Kỳ hạn 7–12 tháng."; }
-        else if (term <= 24) { termPts = 0;  termImpact = "NEUTRAL";  termDetail = "Kỳ hạn 13–24 tháng."; }
-        else                 { termPts = -5; termImpact = "NEGATIVE"; termDetail = "Kỳ hạn dài (> 24 tháng)."; }
-        score += termPts;
-        factors.add(factor("TERM", "Kỳ hạn gọi vốn", termImpact, termPts, termDetail));
-
-        // (4) Người tham chiếu
-        int refCount = 0;
-        if (StringUtils.hasText(loan.getRef1Phone())) refCount++;
-        if (StringUtils.hasText(loan.getRef2Phone())) refCount++;
-        int refPts;
-        String refImpact, refDetail;
-        if (refCount >= 2)      { refPts = 8;  refImpact = "POSITIVE"; refDetail = "Đủ 2 người tham chiếu."; }
-        else if (refCount == 1) { refPts = 3;  refImpact = "NEUTRAL";  refDetail = "Chỉ 1 người tham chiếu."; }
-        else                    { refPts = -8; refImpact = "NEGATIVE"; refDetail = "Thiếu người tham chiếu."; }
-        score += refPts;
-        factors.add(factor("REFERENCES", "Người tham chiếu", refImpact, refPts, refDetail));
-
-        // (5) Đầy đủ hồ sơ nghề nghiệp (sản phẩm ràng buộc nghề → nghề do sản phẩm xác định)
-        boolean occupationKnown = professionBound || StringUtils.hasText(loan.getOccupation());
-        boolean profileComplete = occupationKnown && StringUtils.hasText(loan.getWorkplace());
-        int profPts = profileComplete ? 5 : -3;
-        String profDetail = profileComplete
-                ? (professionBound ? "Nghề theo sản phẩm & có nơi làm việc." : "Có nghề nghiệp & nơi làm việc.")
-                : "Thiếu nghề nghiệp hoặc nơi làm việc.";
-        factors.add(factor("PROFILE", "Hồ sơ nghề nghiệp",
-                profileComplete ? "POSITIVE" : "NEGATIVE", profPts, profDetail));
-        score += profPts;
-
-        // (6) Người giới thiệu
-        if (StringUtils.hasText(loan.getReferredBy())) {
-            score += 3;
-            factors.add(factor("REFERRAL", "Người giới thiệu", "POSITIVE", 3, "Được giới thiệu qua kênh nội bộ."));
-        }
-
-        return Math.max(0, Math.min(100, score));
-    }
-
-    /** Ánh xạ điểm 0–100 → hạng tín nhiệm 9 bậc A1..C3. */
-    private CreditBand bandOf(int score) {
-        if (score >= 90) return CreditBand.A1;
-        if (score >= 83) return CreditBand.A2;
-        if (score >= 76) return CreditBand.A3;
-        if (score >= 68) return CreditBand.B1;
-        if (score >= 60) return CreditBand.B2;
-        if (score >= 52) return CreditBand.B3;
-        if (score >= 44) return CreditBand.C1;
-        if (score >= 36) return CreditBand.C2;
-        return CreditBand.C3;
+    /**
+     * Ánh xạ hạng Credit Score 360 (A+..E, chuẩn đánh giá duy nhất) sang bậc giá
+     * trong biểu QĐ-LSGV (A1..C3) để tra lãi suất/phí. Giữ NGUYÊN biểu giá pháp lý,
+     * chỉ đổi nguồn hạng. null/không nhận diện → chưa định giá được (chưa chấm điểm).
+     */
+    private CreditBand mapCredit360ToBand(String creditGrade) {
+        if (creditGrade == null || creditGrade.isBlank()) return null;
+        return switch (creditGrade.trim().toUpperCase()) {
+            case "A+" -> CreditBand.A1;
+            case "A"  -> CreditBand.A2;
+            case "B"  -> CreditBand.B1;
+            case "C"  -> CreditBand.B3;
+            case "D"  -> CreditBand.C1;
+            case "E"  -> CreditBand.C3;
+            default   -> null;
+        };
     }
 
     // ── Số tiền đề xuất ────────────────────────────────────────────
@@ -280,8 +204,10 @@ public class AppraisalSuggestionService {
     private AmountResult computeSuggestedAmount(BigDecimal requested, CreditBand band, boolean available,
                                                LoanProduct product, BigDecimal maxPrincipalByIncome, boolean hasIncome) {
         if (!available) {
-            return new AmountResult(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP),
-                    "Không cấp dịch vụ gọi vốn (hạng " + band + ")");
+            String reason = band == null
+                    ? "Chưa chấm điểm Credit 360 — chưa đề xuất được hạn mức"
+                    : "Không cấp dịch vụ gọi vốn (bậc giá " + band + ")";
+            return new AmountResult(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP), reason);
         }
         BigDecimal amount = requested;
         String reason = "Theo số tiền yêu cầu";
@@ -294,7 +220,7 @@ public class AppraisalSuggestionService {
         BigDecimal bandCap = requested.multiply(bandCapFactor(band));
         if (bandCap.compareTo(amount) < 0) {
             amount = bandCap;
-            reason = "Giới hạn bởi hạng tín nhiệm " + band;
+            reason = "Giới hạn bởi bậc giá " + band;
         }
 
         if (product != null && product.getMaxAmount() != null && product.getMaxAmount().compareTo(amount) < 0) {
@@ -318,18 +244,6 @@ public class AppraisalSuggestionService {
         };
     }
 
-    // ── Khuyến nghị ────────────────────────────────────────────────
-
-    private RecommendedDecision decide(CreditBand band, boolean available, boolean hasIncome,
-                                       BigDecimal requestedPti, BigDecimal amount) {
-        if (!available || amount.signum() <= 0) return RecommendedDecision.REJECT;
-        if (!hasIncome) return RecommendedDecision.REVIEW;
-        if (requestedPti != null && requestedPti.compareTo(ptiCap) > 0) return RecommendedDecision.REVIEW;
-        // A1–B1 nghiêng duyệt, còn lại cần thẩm định kỹ
-        return band.ordinal() <= CreditBand.B1.ordinal()
-                ? RecommendedDecision.APPROVE : RecommendedDecision.REVIEW;
-    }
-
     // ── Cảnh báo tự động ───────────────────────────────────────────
 
     private List<String> buildWarnings(LoanRequest loan, int group, CreditBand band, boolean available,
@@ -337,8 +251,10 @@ public class AppraisalSuggestionService {
                                        AmountResult amountResult, BigDecimal requested, int term,
                                        boolean professionBound) {
         List<String> w = new ArrayList<>();
-        if (!available) {
-            w.add("Hạng tín nhiệm " + band + " không được cấp dịch vụ gọi vốn cho nhóm sản phẩm "
+        if (band == null) {
+            w.add("Chưa chấm điểm Credit 360 — chấm điểm trước để đề xuất lãi suất & hạn mức.");
+        } else if (!available) {
+            w.add("Bậc giá " + band + " không được cấp dịch vụ gọi vốn cho nhóm sản phẩm "
                     + group + " theo biểu — đề xuất từ chối.");
         }
         if (!hasIncome) {
@@ -489,9 +405,6 @@ public class AppraisalSuggestionService {
         return v.setScale(2, RoundingMode.HALF_UP);
     }
 
-    private String pct(BigDecimal ratio) {
-        return ratio.multiply(HUNDRED).setScale(1, RoundingMode.HALF_UP) + "%";
-    }
 
     private String plain(BigDecimal v) {
         return v.stripTrailingZeros().toPlainString();
@@ -502,10 +415,6 @@ public class AppraisalSuggestionService {
     }
 
     // ── Factory ────────────────────────────────────────────────────
-
-    private ScoreFactor factor(String code, String label, String impact, int points, String detail) {
-        return ScoreFactor.builder().code(code).label(label).impact(impact).points(points).detail(detail).build();
-    }
 
     private ChecklistItem item(String code, String category, String title, String instruction, boolean required) {
         return ChecklistItem.builder().code(code).category(category).title(title)

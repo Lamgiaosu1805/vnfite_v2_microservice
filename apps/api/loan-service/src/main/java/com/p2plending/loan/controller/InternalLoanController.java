@@ -79,9 +79,10 @@ public class InternalLoanController {
     public ResponseEntity<AppraisalSuggestionResponse> getAppraisalSuggestion(
             @RequestHeader(INTERNAL_SECRET_HEADER) String secret,
             @PathVariable String loanId,
-            @RequestParam(defaultValue = "false") boolean discouraged) {
+            @RequestParam(defaultValue = "false") boolean discouraged,
+            @RequestParam(required = false) String creditGrade) {
         requireInternalSecret(secret);
-        return ResponseEntity.ok(appraisalSuggestionService.suggest(loanId, discouraged));
+        return ResponseEntity.ok(appraisalSuggestionService.suggest(loanId, discouraged, creditGrade));
     }
 
     /** Cấp 1 — thẩm định viên đề xuất số tiền + lãi suất trình ban lãnh đạo. */

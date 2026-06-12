@@ -120,13 +120,18 @@ public class SourceServiceClient {
         return exchangeForJson(url, HttpMethod.GET, null);
     }
 
-    /** Gợi ý hỗ trợ thẩm định — passthrough JSON nguyên bản từ loan-service. */
-    public JsonNode getAppraisalSuggestion(String loanId, boolean discouraged) {
-        String url = UriComponentsBuilder.fromHttpUrl(loanServiceUrl)
+    /**
+     * Gợi ý hỗ trợ thẩm định — passthrough JSON nguyên bản từ loan-service.
+     * creditGrade (hạng Credit 360) dùng để định giá lãi suất/hạn mức; null = chưa chấm điểm.
+     */
+    public JsonNode getAppraisalSuggestion(String loanId, boolean discouraged, String creditGrade) {
+        UriComponentsBuilder builder = UriComponentsBuilder.fromHttpUrl(loanServiceUrl)
                 .path("/internal/loans/{loanId}/appraisal-suggestion")
-                .queryParam("discouraged", discouraged)
-                .buildAndExpand(loanId)
-                .toUriString();
+                .queryParam("discouraged", discouraged);
+        if (creditGrade != null && !creditGrade.isBlank()) {
+            builder.queryParam("creditGrade", creditGrade);
+        }
+        String url = builder.buildAndExpand(loanId).toUriString();
         return exchangeForJson(url, HttpMethod.GET, null);
     }
 

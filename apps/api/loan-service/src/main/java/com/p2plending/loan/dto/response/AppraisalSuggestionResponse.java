@@ -1,8 +1,6 @@
 package com.p2plending.loan.dto.response;
 
-import com.p2plending.loan.domain.enums.CreditBand;
 import com.p2plending.loan.domain.enums.LoanStatus;
-import com.p2plending.loan.domain.enums.RecommendedDecision;
 import com.p2plending.loan.domain.enums.RepaymentMethod;
 import lombok.Builder;
 import lombok.Getter;
@@ -30,7 +28,6 @@ public class AppraisalSuggestionResponse {
     private Integer productGroup;
     private String productName;
 
-    private RiskAssessment risk;
     private Affordability affordability;
     private Recommendation recommendation;
     private SchedulePreview schedulePreview;
@@ -42,29 +39,6 @@ public class AppraisalSuggestionResponse {
     private List<String> autoWarnings;
 
     private String disclaimer;
-
-    // ── Đánh giá rủi ro ────────────────────────────────────────────
-    @Getter
-    @Builder
-    public static class RiskAssessment {
-        /** Điểm 0–100, càng cao càng an toàn. */
-        private int score;
-        /** Hạng tín nhiệm A1–C3 (ánh xạ từ điểm) — dùng tra biểu lãi suất. */
-        private CreditBand band;
-        private List<ScoreFactor> factors;
-    }
-
-    @Getter
-    @Builder
-    public static class ScoreFactor {
-        private String code;
-        private String label;
-        /** POSITIVE | NEGATIVE | NEUTRAL */
-        private String impact;
-        /** Điểm cộng/trừ (có dấu). */
-        private int points;
-        private String detail;
-    }
 
     // ── Năng lực trả nợ ────────────────────────────────────────────
     @Getter
@@ -103,7 +77,6 @@ public class AppraisalSuggestionResponse {
         /** false khi ô biểu là "Không cấp dịch vụ" cho (nhóm × hạng) này. */
         private boolean serviceAvailable;
         private String rateNote;
-        private RecommendedDecision decision;
     }
 
     // ── Xem trước lịch trả nợ (ở số tiền & lãi đề xuất) ─────────────

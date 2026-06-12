@@ -44,8 +44,9 @@ public class LoanManagementController {
     @GetMapping("/{loanId}/appraisal-suggestion")
     public ResponseEntity<JsonNode> getAppraisalSuggestion(
             @PathVariable String loanId,
-            @RequestParam(defaultValue = "false") boolean discouraged) {
-        return ResponseEntity.ok(loanService.getAppraisalSuggestion(loanId, discouraged));
+            @RequestParam(defaultValue = "false") boolean discouraged,
+            @RequestParam(required = false) String creditGrade) {
+        return ResponseEntity.ok(loanService.getAppraisalSuggestion(loanId, discouraged, creditGrade));
     }
 
     /** GET /cms/loans/{loanId}/repayments — lịch trả nợ để theo dõi DPD. */

@@ -32,8 +32,8 @@ public class LoanManagementService {
         return sourceServiceClient.getLoans(status, borrowerId, province, search, page, size);
     }
 
-    public JsonNode getAppraisalSuggestion(String loanId, boolean discouraged) {
-        return sourceServiceClient.getAppraisalSuggestion(loanId, discouraged);
+    public JsonNode getAppraisalSuggestion(String loanId, boolean discouraged, String creditGrade) {
+        return sourceServiceClient.getAppraisalSuggestion(loanId, discouraged, creditGrade);
     }
 
     public JsonNode getRepaymentSchedule(String loanId) {
@@ -205,7 +205,7 @@ public class LoanManagementService {
 
     private JsonNode safeGetAppraisal(String loanId) {
         try {
-            return sourceServiceClient.getAppraisalSuggestion(loanId, false);
+            return sourceServiceClient.getAppraisalSuggestion(loanId, false, null);
         } catch (Exception e) {
             log.warn("Could not fetch appraisal for audit snapshot of loan {}: {}", loanId, e.getMessage());
             return null;
