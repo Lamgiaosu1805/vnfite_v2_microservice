@@ -13,8 +13,10 @@ import com.p2plending.cms.dto.response.PagedResponse;
 import com.p2plending.cms.security.CmsPrincipal;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 @Service
 @RequiredArgsConstructor
@@ -117,6 +119,11 @@ public class LoanManagementService {
     }
 
     public LoanSummaryResponse propose(String loanId, LoanProposeRequest req, CmsPrincipal proposer) {
+        // Guard: kết quả CIC phải được nhập trước khi thẩm định viên trình ban lãnh đạo.
+        cicRepository.findFirstByLoanIdAndIsDeletedFalseOrderByCheckedAtDescCreatedAtDesc(loanId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,
+                        "Cần nhập kết quả tra CIC trước khi trình ban lãnh đạo."));
+
         return sourceServiceClient.proposeLoan(loanId, req.getProposedAmount(), req.getProposedInterestRate(),
                 req.getNote(), proposer != null ? proposer.username() : null);
     }
