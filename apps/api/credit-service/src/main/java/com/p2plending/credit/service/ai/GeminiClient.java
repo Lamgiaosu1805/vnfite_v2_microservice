@@ -62,10 +62,12 @@ class GeminiClient {
                 }
             }
 
-            // Yêu cầu JSON output và giảm randomness
+            // Giảm randomness; KHÔNG đặt response_mime_type — JSON mode + inline PDF
+            // khiến Gemini trả candidates rỗng (finishReason SAFETY/OTHER) với sao kê ngân hàng.
+            // JSON schema đã được mô tả trong prompt, Gemini vẫn trả JSON mà không cần ràng buộc này.
             ObjectNode genConfig = body.putObject("generationConfig");
-            genConfig.put("response_mime_type", "application/json");
             genConfig.put("temperature", 0.1);
+            genConfig.put("maxOutputTokens", 2048);
 
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
@@ -78,6 +80,12 @@ class GeminiClient {
             if (responseBody == null) {
                 log.warn("Gemini API returned empty response body");
                 return null;
+            }
+
+            // Log blockReason nếu request bị từ chối bởi safety filter
+            JsonNode blockReason = responseBody.path("promptFeedback").path("blockReason");
+            if (!blockReason.isMissingNode() && !blockReason.isNull()) {
+                log.warn("Gemini API blocked request: blockReason={}", blockReason.asText());
             }
 
             JsonNode candidate = responseBody.path("candidates").path(0);
