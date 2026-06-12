@@ -32,21 +32,19 @@ public class ScoreExplainer {
     private static final int MAX_DRIVERS = 6;
     private static final String MISSING_MARK = "thiếu dữ liệu";
 
-    /** Hướng dẫn thu thập dữ liệu còn thiếu theo từng tiêu chí. */
+    /** Hướng dẫn thu thập dữ liệu còn thiếu theo từng tiêu chí (khung Credit Score 360). */
     private static final Map<String, String> HOW_TO_OBTAIN = Map.ofEntries(
-            Map.entry("AGE", "Trích ngày sinh từ eKYC/CCCD đã duyệt"),
-            Map.entry("MONTHLY_INCOME", "Yêu cầu khai thu nhập và nộp chứng từ tài chính phù hợp: sao kê lương, sao kê ngân hàng, hóa đơn/sổ bán hàng hoặc giấy tờ kinh doanh"),
-            Map.entry("OCCUPATION_TYPE", "Yêu cầu khai nghề nghiệp trong hồ sơ tài chính"),
-            Map.entry("EMPLOYMENT_YEARS", "Yêu cầu khai thâm niên làm việc"),
-            Map.entry("MARITAL_STATUS", "Yêu cầu cập nhật tình trạng hôn nhân"),
-            Map.entry("DEPENDENTS", "Yêu cầu khai số người phụ thuộc"),
-            Map.entry("EDUCATION_LEVEL", "Yêu cầu khai trình độ học vấn"),
-            Map.entry("DTI_RATIO", "Yêu cầu khai nợ hiện tại hàng tháng để tính tỷ lệ nợ/thu nhập"),
+            Map.entry("INCOME_VERIFICATION", "Yêu cầu khai thu nhập và nộp chứng từ: sao kê lương/ngân hàng, bảng lương, doanh thu/hóa đơn/sổ bán hàng hoặc chứng từ thu nhập khác"),
+            Map.entry("PTI_RATIO", "Cần thu nhập tự khai + số tiền & kỳ hạn khoản vay để tính tỷ lệ trả nợ kỳ/thu nhập"),
+            Map.entry("DTI_RATIO", "Yêu cầu khai thu nhập và nợ hiện tại hàng tháng để tính tổng nợ/thu nhập"),
             Map.entry("LOAN_TO_ANNUAL_INCOME", "Cần thu nhập tự khai để tính khoản vay/thu nhập năm"),
+            Map.entry("EMPLOYMENT_YEARS", "Yêu cầu khai thâm niên công tác/kinh doanh"),
+            Map.entry("OCCUPATION_TYPE", "Yêu cầu khai loại nghề nghiệp trong hồ sơ tài chính"),
+            Map.entry("OCCUPATION_DOC", "Yêu cầu nộp hợp đồng lao động hoặc giấy phép kinh doanh"),
+            Map.entry("DOCUMENT_INTEGRITY", "Cần bật AI thẩm định và có chứng từ để kiểm tra tính toàn vẹn"),
             Map.entry("COMPLETED_LOANS", "Lịch sử vay trên VNFITE — tích lũy theo thời gian"),
             Map.entry("ACCOUNT_AGE_MONTHS", "Tài khoản còn mới — cải thiện theo thời gian sử dụng"),
-            Map.entry("KYC_STATUS", "Hoàn tất định danh eKYC"),
-            Map.entry("HAS_REFERRER", "Có người giới thiệu khi đăng ký")
+            Map.entry("KYC_STATUS", "Hoàn tất định danh eKYC")
     );
 
     public ScoreExplanation explain(int score, String grade, int maxPoints,
@@ -137,7 +135,7 @@ public class ScoreExplainer {
 
     private String buildHeadline(String grade, boolean thinFile, int lostToMissing,
                                  int uplift, List<Driver> negative) {
-        if ("A".equals(grade) || "B".equals(grade)) {
+        if ("A+".equals(grade) || "A".equals(grade) || "B".equals(grade)) {
             return "Hồ sơ tốt — các chỉ tiêu chính đều đạt. Tập trung xác minh chứng từ trước khi trình.";
         }
         if (thinFile) {
@@ -170,7 +168,7 @@ public class ScoreExplainer {
         } else {
             sb.append("Chưa có chứng từ tài chính — yêu cầu người gọi vốn nộp chứng từ phù hợp với nguồn thu nhập để đối chiếu. ");
         }
-        if ("A".equals(grade) || "B".equals(grade)) {
+        if ("A+".equals(grade) || "A".equals(grade) || "B".equals(grade)) {
             sb.append("Nếu chứng từ khớp, có thể đề xuất duyệt theo điều kiện chuẩn.");
         } else if ("E".equals(grade) && thinFile) {
             sb.append("Không nên kết luận từ chối khi hồ sơ còn thiếu dữ liệu.");

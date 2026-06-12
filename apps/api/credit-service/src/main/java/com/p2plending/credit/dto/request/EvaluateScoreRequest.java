@@ -25,6 +25,8 @@ public class EvaluateScoreRequest {
     // ── Thông tin khoản gọi vốn (optional — null nếu pre-score) ──
     private String loanRequestId;
     private BigDecimal loanAmount;
+    /** Lãi suất năm (%) — dùng tính PTI (nghĩa vụ trả nợ kỳ/thu nhập). */
+    private BigDecimal interestRate;
     private Integer termMonths;
     private String purpose;
 

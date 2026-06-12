@@ -197,6 +197,7 @@ public class SourceServiceClient {
         body.put("userId", loan.getBorrowerId());
         body.put("loanRequestId", loan.getLoanId());
         body.put("loanAmount", loan.getAmount());
+        body.put("interestRate", loan.getInterestRate());
         body.put("termMonths", loan.getTermMonths());
         body.put("purpose", loan.getPurpose());
         body.put("monthlyIncome", loan.getMonthlyIncome());

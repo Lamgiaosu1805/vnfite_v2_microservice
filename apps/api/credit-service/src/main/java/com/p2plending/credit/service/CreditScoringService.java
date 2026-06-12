@@ -16,9 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.Period;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
 
@@ -71,12 +69,25 @@ public class CreditScoringService {
             Set.of("GOV_EMPLOYEE", "SALARIED", "BUSINESS_OWNER", "FREELANCER", "OTHER");
 
     private static final Map<String, String> GRADE_POLICY = Map.of(
+            "A+", "Rủi ro rất thấp — ưu tiên duyệt nhanh, điều kiện tốt nhất",
             "A", "Rủi ro thấp — đề xuất duyệt nhanh, lãi suất ưu đãi",
             "B", "Rủi ro khá thấp — đề xuất duyệt, điều kiện chuẩn",
             "C", "Rủi ro trung bình — thẩm định kỹ, cân nhắc giảm hạn mức",
             "D", "Rủi ro cao — yêu cầu bổ sung hồ sơ/chứng từ tài chính, giảm hạn mức",
             "E", "Rủi ro rất cao — đề xuất từ chối"
     );
+
+    /** Loại chứng từ chứng minh thu nhập (nuôi tín hiệu C1 — mức xác minh thu nhập). */
+    private static final Set<String> INCOME_DOC_TYPES = Set.of(
+            "SALARY_STATEMENT", "PAYSLIP", "BANK_STATEMENT", "INVOICE", "SALES_LEDGER",
+            "POS_STATEMENT", "PLATFORM_SALES_REPORT", "TAX_DOCUMENT", "OTHER_INCOME_PROOF");
+
+    /** Loại chứng từ chứng minh nghề nghiệp/kinh doanh (nuôi tín hiệu E3). */
+    private static final Set<String> OCCUPATION_DOC_TYPES = Set.of(
+            "LABOR_CONTRACT", "EMPLOYMENT_CONTRACT", "BUSINESS_LICENSE");
+
+    /** Sai lệch tối đa giữa thu nhập AI trích xuất và thu nhập khai báo để coi là "khớp". */
+    private static final double INCOME_MATCH_TOLERANCE = 0.25;
 
     // ─── Borrower profile ─────────────────────────────────────────────────────
 
@@ -109,13 +120,8 @@ public class CreditScoringService {
     public CreditScoreResponse evaluate(EvaluateScoreRequest req) {
         BorrowerProfile profile = profileRepository.findByUserIdAndIsDeletedFalse(req.getUserId()).orElse(null);
 
-        Map<String, Object> features = buildFeatures(req, profile);
-        ScoringEngine.EngineResult engine = scoringEngine.evaluate(features);
-
-        int score = normalize(engine.getTotalPoints(), engine.getMaxPoints());
-        String grade = gradeOf(score);
-
-        // AI phân tích toàn bộ chứng từ trước — kết quả đưa vào advisory để đánh giá tổng thể.
+        // AI phân tích toàn bộ chứng từ TRƯỚC — kết quả vừa nuôi tín hiệu chấm điểm
+        // (C1 xác minh thu nhập, E3 chứng từ nghề, H2 toàn vẹn chứng từ) vừa đưa vào advisory.
         // Fail từng file không chặn chấm điểm.
         List<DocumentAnalysis> docAnalyses = List.of();
         try {
@@ -123,6 +129,12 @@ public class CreditScoringService {
         } catch (Exception e) {
             log.error("AI document analysis error (bỏ qua): {}", e.getMessage());
         }
+
+        Map<String, Object> features = buildFeatures(req, profile, docAnalyses);
+        ScoringEngine.EngineResult engine = scoringEngine.evaluate(features);
+
+        int score = normalize(engine.getTotalPoints(), engine.getMaxPoints());
+        String grade = gradeOf(score);
 
         // AI advisory — fail thì bỏ qua, không chặn chấm điểm
         AiRiskAssessor.AiRiskAssessment ai = null;
@@ -219,12 +231,15 @@ public class CreditScoringService {
 
     // ─── Helpers ──────────────────────────────────────────────────────────────
 
-    private Map<String, Object> buildFeatures(EvaluateScoreRequest req, BorrowerProfile profile) {
+    /**
+     * Dựng features theo khung Credit Score 360 — giai đoạn "dữ liệu hiện có".
+     * Chỉ phát các tín hiệu lấy được từ hệ thống + file chứng từ AI; KHÔNG chấm
+     * biến nhân khẩu học nhạy cảm (tuổi/hôn nhân/người phụ thuộc/học vấn) theo
+     * nguyên tắc chống phân biệt đối xử của mô hình.
+     */
+    private Map<String, Object> buildFeatures(EvaluateScoreRequest req, BorrowerProfile profile,
+                                              List<DocumentAnalysis> docAnalyses) {
         Map<String, Object> f = new LinkedHashMap<>();
-
-        if (req.getDateOfBirth() != null) {
-            f.put("AGE", Period.between(req.getDateOfBirth(), LocalDate.now()).getYears());
-        }
 
         // Thu nhập/nghề nghiệp/nợ: ưu tiên dữ liệu từ chính đơn gọi vốn, fallback borrower_profiles
         BigDecimal monthlyIncome = req.getMonthlyIncome() != null ? req.getMonthlyIncome()
@@ -233,36 +248,48 @@ public class CreditScoringService {
                 : (profile != null ? profile.getOccupationType() : null);
         BigDecimal existingDebt = req.getExistingMonthlyDebt() != null ? req.getExistingMonthlyDebt()
                 : (profile != null ? profile.getExistingMonthlyDebt() : null);
+        BigDecimal employmentYears = profile != null ? profile.getEmploymentYears() : null;
 
-        f.put("MONTHLY_INCOME", monthlyIncome);
-        f.put("OCCUPATION_TYPE", mapOccupation(occupation));
+        // ── A · KYC & định danh ──
+        f.put("KYC_STATUS", req.getKycStatus());
 
-        if (profile != null) {
-            f.put("MARITAL_STATUS", profile.getMaritalStatus());
-            f.put("DEPENDENTS", profile.getDependentsCount());
-            f.put("EDUCATION_LEVEL", profile.getEducationLevel());
-            f.put("EMPLOYMENT_YEARS", profile.getEmploymentYears());
-        }
+        // ── B · Lịch sử trả nợ nội bộ VNFITE (proxy cho CIC) ──
+        f.put("COMPLETED_LOANS", req.getCompletedLoanCount());
 
-        if (isPositive(monthlyIncome) && existingDebt != null) {
-            f.put("DTI_RATIO", existingDebt
-                    .multiply(BigDecimal.valueOf(100))
+        // ── C · Khả năng trả nợ ──
+        // C1 — mức xác minh thu nhập (khai báo + kết quả AI đọc chứng từ thu nhập)
+        f.put("INCOME_VERIFICATION", incomeVerificationLevel(monthlyIncome, req.getDocuments(), docAnalyses));
+        // C2 — PTI: nghĩa vụ trả nợ kỳ (EMI) / thu nhập tháng
+        if (isPositive(monthlyIncome) && isPositive(req.getLoanAmount()) && req.getTermMonths() != null
+                && req.getTermMonths() > 0) {
+            BigDecimal emi = monthlyInstallment(req.getLoanAmount(), req.getInterestRate(), req.getTermMonths());
+            f.put("PTI_RATIO", emi.multiply(BigDecimal.valueOf(100))
                     .divide(monthlyIncome, 2, RoundingMode.HALF_UP));
         }
-        if (isPositive(monthlyIncome) && req.getLoanAmount() != null) {
+        // C3 — DTI: tổng nghĩa vụ nợ hiện hữu / thu nhập
+        if (isPositive(monthlyIncome) && existingDebt != null) {
+            f.put("DTI_RATIO", existingDebt.multiply(BigDecimal.valueOf(100))
+                    .divide(monthlyIncome, 2, RoundingMode.HALF_UP));
+        }
+
+        // ── E · Nghề nghiệp & ổn định thu nhập ──
+        f.put("EMPLOYMENT_YEARS", employmentYears);
+        f.put("OCCUPATION_TYPE", mapOccupation(occupation));
+        f.put("OCCUPATION_DOC", occupationDocLevel(req.getDocuments(), docAnalyses));
+
+        // ── F · Đặc điểm khoản vay & quan hệ KH ──
+        if (isPositive(monthlyIncome) && isPositive(req.getLoanAmount())) {
             BigDecimal annualIncome = monthlyIncome.multiply(BigDecimal.valueOf(12));
-            f.put("LOAN_TO_ANNUAL_INCOME", req.getLoanAmount()
-                    .multiply(BigDecimal.valueOf(100))
+            f.put("LOAN_TO_ANNUAL_INCOME", req.getLoanAmount().multiply(BigDecimal.valueOf(100))
                     .divide(annualIncome, 2, RoundingMode.HALF_UP));
         }
-        f.put("COMPLETED_LOANS", req.getCompletedLoanCount());
+        f.put("PURPOSE_CLARITY", purposeClarity(req.getPurpose()));
         if (req.getAccountCreatedAt() != null) {
             f.put("ACCOUNT_AGE_MONTHS", (int) ChronoUnit.MONTHS.between(req.getAccountCreatedAt(), LocalDateTime.now()));
         }
-        f.put("KYC_STATUS", req.getKycStatus());
-        if (req.getHasReferrer() != null) {
-            f.put("HAS_REFERRER", req.getHasReferrer() ? "YES" : "NO");
-        }
+
+        // ── H · Toàn vẹn chứng từ (chống gian lận) ──
+        f.put("DOCUMENT_INTEGRITY", documentIntegrity(docAnalyses));
 
         // Bỏ key có value null để engine flag missing thống nhất
         f.values().removeIf(Objects::isNull);
@@ -271,6 +298,105 @@ public class CreditScoringService {
 
     private boolean isPositive(BigDecimal v) {
         return v != null && v.compareTo(BigDecimal.ZERO) > 0;
+    }
+
+    /**
+     * Tính nghĩa vụ trả nợ hàng kỳ (EMI) theo dư nợ giảm dần.
+     * Lãi suất null/0 → chia đều gốc cho kỳ hạn.
+     */
+    private BigDecimal monthlyInstallment(BigDecimal amount, BigDecimal annualRatePercent, int termMonths) {
+        if (annualRatePercent == null || annualRatePercent.compareTo(BigDecimal.ZERO) <= 0) {
+            return amount.divide(BigDecimal.valueOf(termMonths), 2, RoundingMode.HALF_UP);
+        }
+        double r = annualRatePercent.doubleValue() / 12.0 / 100.0;
+        double pow = Math.pow(1 + r, termMonths);
+        double emi = amount.doubleValue() * r * pow / (pow - 1);
+        return BigDecimal.valueOf(emi).setScale(2, RoundingMode.HALF_UP);
+    }
+
+    /**
+     * C1 — mức xác minh thu nhập: kết hợp thu nhập tự khai với kết quả AI đọc chứng từ thu nhập.
+     * VERIFIED: có chứng từ thu nhập AI đánh giá nhất quán và số tiền khớp khai báo (±25%).
+     * SUPPORTED: có chứng từ thu nhập (kể cả AI tắt/chưa khớp hẳn) hoặc có khai báo + chứng từ bổ trợ.
+     * DECLARED_ONLY: chỉ tự khai thu nhập, chưa có chứng từ.
+     * null (missing): không có thu nhập lẫn chứng từ → cần thu thập.
+     */
+    private String incomeVerificationLevel(BigDecimal declaredIncome,
+                                           List<EvaluateScoreRequest.DocumentRef> documents,
+                                           List<DocumentAnalysis> docAnalyses) {
+        boolean hasIncomeDoc = documents != null && documents.stream()
+                .anyMatch(d -> d.getDocType() != null && INCOME_DOC_TYPES.contains(d.getDocType()));
+        boolean verifiedMatch = docAnalyses != null && docAnalyses.stream()
+                .filter(d -> d.getDocType() != null && INCOME_DOC_TYPES.contains(d.getDocType()))
+                .filter(d -> "CONSISTENT".equals(d.getVerdict()))
+                .anyMatch(d -> incomeMatchesDeclared(d, declaredIncome));
+
+        if (isPositive(declaredIncome)) {
+            if (verifiedMatch) return "VERIFIED";
+            if (hasIncomeDoc) return "SUPPORTED";
+            return "DECLARED_ONLY";
+        }
+        // Không khai thu nhập nhưng có nộp chứng từ thu nhập
+        return hasIncomeDoc ? "SUPPORTED" : null;
+    }
+
+    /** Thu nhập AI trích xuất từ extractedData JSON có khớp khai báo trong ngưỡng dung sai không. */
+    private boolean incomeMatchesDeclared(DocumentAnalysis d, BigDecimal declaredIncome) {
+        if (!isPositive(declaredIncome) || d.getExtractedData() == null || d.getExtractedData().isBlank()) {
+            return false;
+        }
+        try {
+            var node = objectMapper.readTree(d.getExtractedData());
+            String raw = node.path("extractedMonthlyIncome").asText(null);
+            if (raw == null || raw.isBlank() || "null".equalsIgnoreCase(raw)) return false;
+            double extracted = Double.parseDouble(raw.replaceAll("[^0-9.]", ""));
+            if (extracted <= 0) return false;
+            double declared = declaredIncome.doubleValue();
+            return Math.abs(extracted - declared) / declared <= INCOME_MATCH_TOLERANCE;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /**
+     * E3 — chứng từ nghề nghiệp/kinh doanh (HĐLĐ, ĐKKD...).
+     * CONFIRMED: AI đánh giá nhất quán; PROVIDED: đã nộp nhưng chưa xác nhận; NONE: chưa nộp.
+     */
+    private String occupationDocLevel(List<EvaluateScoreRequest.DocumentRef> documents,
+                                      List<DocumentAnalysis> docAnalyses) {
+        boolean confirmed = docAnalyses != null && docAnalyses.stream()
+                .filter(d -> d.getDocType() != null && OCCUPATION_DOC_TYPES.contains(d.getDocType()))
+                .anyMatch(d -> "CONSISTENT".equals(d.getVerdict()));
+        if (confirmed) return "CONFIRMED";
+        boolean provided = documents != null && documents.stream()
+                .anyMatch(d -> d.getDocType() != null && OCCUPATION_DOC_TYPES.contains(d.getDocType()));
+        return provided ? "PROVIDED" : "NONE";
+    }
+
+    /**
+     * H2 — toàn vẹn chứng từ từ verdict AI trên toàn bộ file đính kèm.
+     * FLAGGED nếu có HIGH_RISK; REVIEW nếu có SUSPICIOUS; CLEAN nếu tất cả ổn.
+     * null (missing) khi không có chứng từ nào được AI phân tích — không kết luận được.
+     */
+    private String documentIntegrity(List<DocumentAnalysis> docAnalyses) {
+        if (docAnalyses == null || docAnalyses.isEmpty()) return null;
+        boolean anyAnalyzed = false;
+        boolean anySuspicious = false;
+        for (DocumentAnalysis d : docAnalyses) {
+            String v = d.getVerdict();
+            if (v == null) continue;
+            if ("HIGH_RISK".equals(v)) return "FLAGGED";
+            if ("CONSISTENT".equals(v) || "SUSPICIOUS".equals(v) || "UNREADABLE".equals(v)) anyAnalyzed = true;
+            if ("SUSPICIOUS".equals(v)) anySuspicious = true;
+        }
+        if (!anyAnalyzed) return null;
+        return anySuspicious ? "REVIEW" : "CLEAN";
+    }
+
+    /** F3 — mục đích vay rõ ràng: dựa trên độ chi tiết của trường purpose. */
+    private String purposeClarity(String purpose) {
+        if (purpose == null || purpose.isBlank()) return "NONE";
+        return purpose.trim().length() >= 15 ? "CLEAR" : "VAGUE";
     }
 
     /** OccupationCategory loan-service → nhóm scorecard; không nhận diện được → OTHER (conservative) */
@@ -288,6 +414,7 @@ public class CreditScoringService {
     }
 
     private String gradeOf(int score) {
+        if (score >= 800) return "A+";
         if (score >= 750) return "A";
         if (score >= 680) return "B";
         if (score >= 620) return "C";
