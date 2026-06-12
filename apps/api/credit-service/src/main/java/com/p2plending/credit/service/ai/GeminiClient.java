@@ -134,16 +134,37 @@ class GeminiClient {
                 throttleGeminiRequests();
                 return restTemplate.postForEntity(url, new HttpEntity<>(body, headers), JsonNode.class);
             } catch (RestClientResponseException e) {
-                log.error("Gemini API HTTP error status={} attempt={}/{} body={}",
-                        e.getStatusCode(), attempt, maxAttempts, truncate(e.getResponseBodyAsString()), e);
-
                 if (e.getStatusCode().value() != 429 || attempt == maxAttempts) {
+                    log.error("Gemini API HTTP error status={} attempt={}/{} body={}",
+                            e.getStatusCode(), attempt, maxAttempts, truncate(e.getResponseBodyAsString()), e);
                     throw e;
                 }
-                sleepQuietly(5000L * attempt);
+
+                long retryDelayMs = retryDelayMs(e.getResponseBodyAsString(), attempt);
+                log.warn("Gemini API rate limited status={} attempt={}/{} retryAfterMs={} body={}",
+                        e.getStatusCode(), attempt, maxAttempts, retryDelayMs,
+                        truncate(e.getResponseBodyAsString()));
+                sleepQuietly(retryDelayMs);
             }
         }
         throw new IllegalStateException("Gemini API retry loop ended unexpectedly");
+    }
+
+    private long retryDelayMs(String responseBody, int attempt) {
+        long fallback = 5000L * attempt;
+        try {
+            JsonNode root = objectMapper.readTree(responseBody);
+            for (JsonNode detail : root.path("error").path("details")) {
+                String retryDelay = detail.path("retryDelay").asText(null);
+                if (retryDelay != null && retryDelay.endsWith("s")) {
+                    long seconds = Long.parseLong(retryDelay.substring(0, retryDelay.length() - 1));
+                    return Math.max(fallback, (seconds + 1L) * 1000L);
+                }
+            }
+        } catch (Exception ignored) {
+            // Không parse được RetryInfo thì dùng fallback.
+        }
+        return fallback;
     }
 
     private void throttleGeminiRequests() {
