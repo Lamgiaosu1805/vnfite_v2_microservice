@@ -189,6 +189,22 @@ public class SourceServiceClient {
         return evaluateCreditScore(loanId, null);
     }
 
+    /** Lấy điểm tín dụng gần nhất đã lưu theo khoản gọi vốn; null nếu chưa từng chấm. */
+    public JsonNode getLatestCreditScore(String loanId) {
+        String url = UriComponentsBuilder.fromHttpUrl(creditServiceUrl)
+                .path("/internal/credit/scores/by-loan/{loanId}")
+                .buildAndExpand(loanId)
+                .toUriString();
+        try {
+            return exchangeForJson(url, HttpMethod.GET, null, aiRestTemplate);
+        } catch (SourceServiceException ex) {
+            if (ex.getStatusCode().value() == 404 || ex.getStatusCode().value() == 400) {
+                return null;
+            }
+            throw ex;
+        }
+    }
+
     public JsonNode evaluateCreditScore(String loanId, com.p2plending.cms.domain.entity.CicManualLookup cic) {
         LoanSummaryResponse loan = getLoanById(loanId);
         UserSummaryResponse borrower = loan.getBorrowerId() != null ? safeGetUser(loan.getBorrowerId()) : null;

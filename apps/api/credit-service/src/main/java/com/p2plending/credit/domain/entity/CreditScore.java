@@ -64,6 +64,10 @@ public class CreditScore {
     @Column(name = "ai_recommendation", columnDefinition = "TEXT")
     private String aiRecommendation;
 
+    /** JSON profile advisory: rule/AI kiểm tra thông tin khách hàng tự khai */
+    @Column(name = "profile_advisory", columnDefinition = "TEXT")
+    private String profileAdvisory;
+
     @Column(name = "expires_at", nullable = false)
     private LocalDateTime expiresAt;
 

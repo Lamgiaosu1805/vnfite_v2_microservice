@@ -73,6 +73,12 @@ public class LoanManagementController {
         return ResponseEntity.ok(loanService.evaluateCreditScore(loanId));
     }
 
+    /** GET /cms/loans/{loanId}/credit-score — lấy kết quả chấm điểm gần nhất đã lưu. */
+    @GetMapping("/{loanId}/credit-score")
+    public ResponseEntity<JsonNode> getLatestCreditScore(@PathVariable String loanId) {
+        return ResponseEntity.ok(loanService.getLatestCreditScore(loanId));
+    }
+
     /** GET /cms/loans/{loanId}/cic — kết quả tra CIC nhập tay mới nhất (null nếu chưa nhập). */
     @GetMapping("/{loanId}/cic")
     public ResponseEntity<CicLookupResponse> getCicLookup(@PathVariable String loanId) {

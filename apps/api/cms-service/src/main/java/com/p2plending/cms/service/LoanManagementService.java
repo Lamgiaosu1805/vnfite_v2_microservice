@@ -55,6 +55,10 @@ public class LoanManagementService {
         return sourceServiceClient.evaluateCreditScore(loanId, cic);
     }
 
+    public JsonNode getLatestCreditScore(String loanId) {
+        return sourceServiceClient.getLatestCreditScore(loanId);
+    }
+
     public JsonNode analyzeDocument(String loanId, String documentId) {
         return sourceServiceClient.analyzeLoanDocument(loanId, documentId);
     }

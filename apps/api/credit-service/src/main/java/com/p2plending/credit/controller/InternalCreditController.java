@@ -80,6 +80,17 @@ public class InternalCreditController {
         return ResponseEntity.ok(resp);
     }
 
+    /** Lấy điểm gần nhất đã lưu theo khoản gọi vốn — CMS dùng khi mở lại màn thẩm định. */
+    @GetMapping("/scores/by-loan/{loanRequestId}")
+    public ResponseEntity<?> getLatestByLoan(
+            @RequestHeader(value = "X-Internal-Secret", required = false) String secret,
+            @PathVariable String loanRequestId) {
+
+        if (unauthorized(secret)) return ResponseEntity.status(401).body(Map.of("error", "Unauthorized"));
+        CreditScoreResponse resp = creditScoringService.getLatestByLoan(loanRequestId);
+        return ResponseEntity.ok(resp);
+    }
+
     // ─── Phân tích chứng từ tài chính/thu nhập (AI) ─────────────────────────
 
     /**

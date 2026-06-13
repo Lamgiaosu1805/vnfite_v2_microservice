@@ -195,6 +195,7 @@ public class CreditScoringService {
                 .aiSummary(ai != null ? ai.summary() : null)
                 .aiRiskFlags(ai != null ? toJson(ai.riskFlags()) : null)
                 .aiRecommendation(ai != null ? ai.recommendation() : null)
+                .profileAdvisory(toJson(profileAdvisory))
                 .expiresAt(LocalDateTime.now().plusDays(appProperties.getScoring().getScoreTtlDays()))
                 .build();
         entity = scoreRepository.save(entity);
@@ -245,6 +246,17 @@ public class CreditScoringService {
         List<DocumentAnalysis> docAnalyses = entity.getLoanRequestId() != null
                 ? documentAnalysisService.listByLoan(entity.getLoanRequestId())
                 : List.of();
+        return toResponse(entity, details, null, fromJsonList(entity.getAiRiskFlags()), docAnalyses, null);
+    }
+
+    @Transactional(readOnly = true)
+    public CreditScoreResponse getLatestByLoan(String loanRequestId) {
+        CreditScore entity = scoreRepository
+                .findFirstByLoanRequestIdAndIsDeletedFalseOrderByCreatedAtDesc(loanRequestId)
+                .orElseThrow(() -> new IllegalArgumentException("Khoản gọi vốn " + loanRequestId + " chưa được chấm điểm"));
+
+        List<CreditScoreDetail> details = detailRepository.findByCreditScoreIdAndIsDeletedFalse(entity.getId());
+        List<DocumentAnalysis> docAnalyses = documentAnalysisService.listByLoan(loanRequestId);
         return toResponse(entity, details, null, fromJsonList(entity.getAiRiskFlags()), docAnalyses, null);
     }
 
@@ -596,7 +608,7 @@ public class CreditScoringService {
                 .aiSummary(e.getAiSummary())
                 .aiRiskFlags(riskFlags)
                 .aiRecommendation(e.getAiRecommendation())
-                .profileAdvisory(profileAdvisory)
+                .profileAdvisory(profileAdvisory != null ? profileAdvisory : fromJsonProfileAdvisory(e.getProfileAdvisory()))
                 .documentAnalyses(docAnalyses)
                 .explanation(explanation)
                 .reviewDirective(gate.directive())
@@ -825,6 +837,16 @@ public class CreditScoringService {
         try {
             return objectMapper.readValue(json, new TypeReference<List<String>>() {});
         } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private CreditScoreResponse.ProfileAdvisory fromJsonProfileAdvisory(String json) {
+        if (json == null || json.isBlank()) return null;
+        try {
+            return objectMapper.readValue(json, CreditScoreResponse.ProfileAdvisory.class);
+        } catch (Exception e) {
+            log.warn("Could not parse profile advisory JSON: {}", e.getMessage());
             return null;
         }
     }
