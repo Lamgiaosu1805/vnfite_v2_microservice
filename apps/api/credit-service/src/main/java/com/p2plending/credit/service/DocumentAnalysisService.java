@@ -15,7 +15,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 @Service
@@ -147,7 +149,31 @@ public class DocumentAnalysisService {
 
     @Transactional(readOnly = true)
     public List<DocumentAnalysis> listByLoan(String loanRequestId) {
-        return analysisRepository.findByLoanRequestIdAndIsDeletedFalseOrderByCreatedAtDesc(loanRequestId);
+        return latestPerDocument(
+                analysisRepository.findByLoanRequestIdAndIsDeletedFalseOrderByCreatedAtDesc(loanRequestId));
+    }
+
+    private List<DocumentAnalysis> latestPerDocument(List<DocumentAnalysis> analyses) {
+        if (analyses == null || analyses.isEmpty()) {
+            return List.of();
+        }
+
+        Map<String, DocumentAnalysis> latest = new LinkedHashMap<>();
+        for (DocumentAnalysis analysis : analyses) {
+            String key = documentKey(analysis);
+            latest.putIfAbsent(key, analysis);
+        }
+        return new ArrayList<>(latest.values());
+    }
+
+    private String documentKey(DocumentAnalysis analysis) {
+        if (analysis.getFileId() != null && !analysis.getFileId().isBlank()) {
+            return "fileId:" + analysis.getFileId();
+        }
+        if (analysis.getFileName() != null && !analysis.getFileName().isBlank()) {
+            return "fileName:" + analysis.getFileName();
+        }
+        return "analysisId:" + analysis.getId();
     }
 
     private void validateFile(String mimeType, String fileBase64) {
