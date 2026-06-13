@@ -181,7 +181,8 @@ public class TikluyClient {
      * Tương đương với PUT /api/v2/account/{accNo} { fluctuatedAmount, isPlus: true }.
      */
     public void topUpAccount(String txnId, String accNo, BigDecimal amount) {
-        Map<String, Object> body = Map.of("fluctuatedAmount", amount, "isPlus", true);
+        // TIKLUY DTO dùng `boolean isPlus` → Lombok getter isPlus() → Jackson property "plus"
+        Map<String, Object> body = Map.of("fluctuatedAmount", amount, "plus", true);
         try {
             restTemplate.exchange(
                     props.getBaseUrl() + "/api/v2/account/" + accNo,
