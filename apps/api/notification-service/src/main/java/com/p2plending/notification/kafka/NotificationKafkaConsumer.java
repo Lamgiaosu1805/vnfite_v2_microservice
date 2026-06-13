@@ -2,6 +2,7 @@ package com.p2plending.notification.kafka;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.p2plending.notification.kafka.event.ContractReadyEvent;
+import com.p2plending.notification.kafka.event.DepositCompletedEvent;
 import com.p2plending.notification.kafka.event.LoanApprovedAwaitingBorrowerEvent;
 import com.p2plending.notification.kafka.event.LoanDisbursedEvent;
 import com.p2plending.notification.service.NotificationService;
@@ -18,6 +19,19 @@ public class NotificationKafkaConsumer {
 
     private final ObjectMapper objectMapper;
     private final NotificationService notificationService;
+
+    @KafkaListener(
+            topics = "payment.deposit_completed",
+            groupId = "${spring.kafka.consumer.group-id:notification-service-group}"
+    )
+    public void onDepositCompleted(ConsumerRecord<String, String> record) {
+        try {
+            DepositCompletedEvent event = objectMapper.readValue(record.value(), DepositCompletedEvent.class);
+            notificationService.notifyDepositCompleted(event);
+        } catch (Exception ex) {
+            log.error("Failed to process payment.deposit_completed key={}: {}", record.key(), ex.getMessage(), ex);
+        }
+    }
 
     @KafkaListener(
             topics = "loan.approved.awaiting_borrower",

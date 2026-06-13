@@ -7,6 +7,7 @@ import com.p2plending.notification.domain.repository.NotificationRepository;
 import com.p2plending.notification.dto.NotificationResponse;
 import com.p2plending.notification.dto.PagedResponse;
 import com.p2plending.notification.kafka.event.ContractReadyEvent;
+import com.p2plending.notification.kafka.event.DepositCompletedEvent;
 import com.p2plending.notification.kafka.event.LoanApprovedAwaitingBorrowerEvent;
 import com.p2plending.notification.kafka.event.LoanDisbursedEvent;
 import lombok.RequiredArgsConstructor;
@@ -177,6 +178,34 @@ public class NotificationService {
         log.info("Stored loan.disbursed notifications for loan={} borrower={} investors={}",
                 event.getLoanId(), event.getBorrowerId(),
                 investorIds != null ? investorIds.size() : 0);
+    }
+
+    @Transactional
+    public void notifyDepositCompleted(DepositCompletedEvent event) {
+        String title = "Nạp tiền thành công";
+        String message = "Ví VNFITE của bạn vừa nhận %s. Số dư hiện tại: %s."
+                .formatted(formatMoney(event.getAmount()), formatMoney(event.getBalance()));
+
+        notificationRepository.save(Notification.builder()
+                .userId(event.getUserId())
+                .title(title)
+                .message(message)
+                .type(NotificationType.IN_APP)
+                .channel("WALLET")
+                .referenceId(event.getTxnId())
+                .referenceType("DEPOSIT")
+                .sentAt(LocalDateTime.now())
+                .build());
+
+        log.info("Stored deposit notification for userId={} amount={} balance={}",
+                event.getUserId(), event.getAmount(), event.getBalance());
+
+        pushClient.pushToUser(
+                event.getUserId(),
+                title,
+                "Ví VNFITE của bạn vừa nhận %s.".formatted(formatMoney(event.getAmount())),
+                Map.of("action", "OPEN_WALLET", "txnId", event.getTxnId() != null ? event.getTxnId() : "")
+        );
     }
 
     private String formatMoney(BigDecimal value) {
