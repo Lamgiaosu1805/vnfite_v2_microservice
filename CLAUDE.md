@@ -141,6 +141,21 @@ GitHub Actions (`.github/workflows/deploy-test.yml`):
 - Nginx config thay đổi: `docker compose restart nginx`
 - `.env` luôn được sync từ GitHub Secret `ENV_FILE_TEST` trước mỗi deploy
 - **⚠️ GitHub không cho sửa từng dòng trong Secret** — muốn cập nhật `ENV_FILE_TEST` phải copy toàn bộ nội dung `.env` hiện tại, sửa rồi paste lại toàn bộ vào ô Secret (GitHub thay thế hết, không append). Không có cách sửa một biến đơn lẻ qua UI.
+- **Quy trình cập nhật ENV_FILE_TEST:** Khi cần sửa biến môi trường, luôn gen đủ 3 bước: (1) lệnh SSH lấy `.env` hiện tại từ server, (2) lệnh `sed` sửa biến, (3) lệnh in ra nội dung mới để Ngài copy paste vào ô Secret trên GitHub. Mẫu:
+  ```bash
+  # 1. Lấy .env hiện tại từ test server
+  ssh root@42.113.122.119 'cat /root/p2p-lending/.env'
+
+  # 2. Sửa cục bộ (ví dụ đổi APP_PAYMENT_MOCK và thêm dòng mới)
+  ssh root@42.113.122.119 'cat /root/p2p-lending/.env' \
+    | sed 's/^APP_PAYMENT_MOCK=.*/APP_PAYMENT_MOCK=false/' \
+    > /tmp/env_updated.txt
+  # Thêm dòng nếu chưa có:
+  grep -q 'TIKLUY_BASE_URL' /tmp/env_updated.txt || echo 'TIKLUY_BASE_URL=http://42.113.122.119:9999' >> /tmp/env_updated.txt
+
+  # 3. In ra để copy paste vào GitHub Secret ENV_FILE_TEST
+  cat /tmp/env_updated.txt
+  ```
 
 **Test server:** `42.113.122.119`, API qua `http://42.113.122.119:7080`
 
