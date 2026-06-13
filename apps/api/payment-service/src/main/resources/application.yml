@@ -76,9 +76,10 @@ app:
     mock: ${APP_PAYMENT_MOCK:true}
 
 tikluy:
-  # Live (42.113.122.155): port 8888 (IS_PROD=Y)
-  # Test (42.113.122.119): port 9999 (IS_PROD=N, không call MB thật)
-  base-url: ${TIKLUY_BASE_URL:http://42.113.122.155:8888}
+  # ⚠️ Mặc định trỏ TEST để tránh chạm tiền thật.
+  # Test (42.113.122.119): port 9999 (IS_PROD=N, MB sandbox — KHÔNG chạm tiền thật)
+  # Live (42.113.122.155): port 8888 (IS_PROD=Y, MB Bank THẬT — chỉ dùng khi go-production)
+  base-url: ${TIKLUY_BASE_URL:http://42.113.122.119:9999}
   client-id: ${TIKLUY_CLIENT_ID:VF-NSK3SDF}
   client-secret: ${TIKLUY_CLIENT_SECRET:2tzMGst67sZfXqmx68TxnQUzyriBti}
   # Nguồn tạo VA: VNFITE → prefix VNF, VNFFITE_CAPITAL → prefix VNC

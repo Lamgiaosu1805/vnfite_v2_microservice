@@ -17,7 +17,7 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
- * HTTP client gọi TIKLUY-ms002 (42.113.122.155:8888).
+ * HTTP client gọi TIKLUY-ms002 (mặc định TEST 42.113.122.119:9999; live 42.113.122.155:8888).
  * Tự động cache JWT token và refresh khi hết hạn.
  *
  * Xác thực với TIKLUY: Basic auth (clientId:clientSecret) → POST /api/v1/token-generate → JWT
