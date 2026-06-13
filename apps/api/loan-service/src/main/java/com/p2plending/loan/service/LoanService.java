@@ -1,5 +1,6 @@
 package com.p2plending.loan.service;
 
+import com.p2plending.loan.client.AuthServiceClient;
 import com.p2plending.loan.config.CacheConfig;
 import com.p2plending.loan.domain.entity.LoanContract;
 import com.p2plending.loan.domain.entity.LoanDocument;
@@ -72,6 +73,7 @@ public class LoanService {
     private final LoanProductService     loanProductService;
     private final RepaymentService       repaymentService;
     private final ContractService        contractService;
+    private final AuthServiceClient      authServiceClient;
 
     // ── Create ────────────────────────────────────────────────────
 
@@ -147,7 +149,13 @@ public class LoanService {
     @Cacheable(value = CacheConfig.CACHE_LOAN_BY_ID, key = "#id")
     public LoanResponse getLoanById(String id) {
         LoanRequest loan = findLoanOrThrow(id);
-        return buildResponse(loan, true);
+        LoanResponse response = buildResponse(loan, true);
+        authServiceClient.getUserById(loan.getBorrowerId()).ifPresent(user -> {
+            response.setBorrowerFullName(user.getFullName());
+            response.setBorrowerPhone(user.getPhone());
+            response.setBorrowerCccd(user.getCccdNumber());
+        });
+        return response;
     }
 
     // ── Offer ─────────────────────────────────────────────────────
