@@ -60,7 +60,7 @@ public class WithdrawService {
     @Transactional(readOnly = true)
     public void initiateWithdraw(String userId, WithdrawRequest req) {
         Wallet wallet = walletService.findByUser(userId);
-        BigDecimal available = wallet.getAvailableBalance();
+        BigDecimal available = walletService.computeAvailable(wallet);
 
         if (available.compareTo(req.getAmount()) < 0) {
             throw new IllegalStateException(
@@ -131,7 +131,7 @@ public class WithdrawService {
                 .orElseThrow(() -> new IllegalArgumentException("Tài khoản ngân hàng không còn hợp lệ"));
 
         // Kiểm tra lại số dư (có thể đã thay đổi trong lúc chờ OTP)
-        if (wallet.getAvailableBalance().compareTo(amount) < 0) {
+        if (walletService.computeAvailable(wallet).compareTo(amount) < 0) {
             throw new IllegalStateException("Số dư khả dụng không đủ để thực hiện rút tiền");
         }
 
@@ -203,15 +203,16 @@ public class WithdrawService {
         wallet.setLockedBalance(lockedNew.compareTo(BigDecimal.ZERO) < 0 ? BigDecimal.ZERO : lockedNew);
 
         if (success) {
-            wallet.setTotalBalance(wallet.getTotalBalance().subtract(txn.getAmount()));
+            // TIKLUY đã trừ tiền thật trong MB Bank — chỉ cần bỏ locked (đã làm ở trên)
             txn.setStatus(TransactionStatus.SUCCESS);
-            txn.setBalanceAfter(wallet.getAvailableBalance());
-            publishWithdrawEvent(wallet.getUserId(), txn.getAmount(), wallet.getTotalBalance(), txn.getId());
+            txn.setBalanceAfter(walletService.computeAvailable(wallet));
+            publishWithdrawEvent(wallet.getUserId(), txn.getAmount(),
+                    walletService.getTikluyBalance(wallet), txn.getId());
         } else {
             // Thất bại: tiền trở về, chỉ bỏ locked
             txn.setStatus(TransactionStatus.FAILED);
             txn.setDescription(txn.getDescription() + " [THẤT BẠI - tiền đã hoàn về ví]");
-            txn.setBalanceAfter(wallet.getAvailableBalance());
+            txn.setBalanceAfter(walletService.computeAvailable(wallet));
         }
 
         walletRepository.save(wallet);
@@ -222,8 +223,8 @@ public class WithdrawService {
     // ─── Helpers ──────────────────────────────────────────────────────────────
 
     private void finalizeWithdraw(Wallet wallet, BigDecimal amount, String externalRef, TransactionStatus status) {
-        wallet.setLockedBalance(wallet.getLockedBalance().subtract(amount));
-        wallet.setTotalBalance(wallet.getTotalBalance().subtract(amount));
+        BigDecimal newLocked = wallet.getLockedBalance().subtract(amount);
+        wallet.setLockedBalance(newLocked.compareTo(BigDecimal.ZERO) < 0 ? BigDecimal.ZERO : newLocked);
         walletRepository.save(wallet);
 
         transactionRepository.save(WalletTransaction.builder()
@@ -233,7 +234,7 @@ public class WithdrawService {
                 .status(status)
                 .externalRef(externalRef)
                 .description("Rút tiền ra ngân hàng")
-                .balanceAfter(wallet.getAvailableBalance())
+                .balanceAfter(walletService.computeAvailable(wallet))
                 .build());
     }
 

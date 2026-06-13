@@ -27,10 +27,6 @@ public class Wallet {
     @Column(name = "vnf_account_no", nullable = false, unique = true, length = 20)
     private String vnfAccountNo;
 
-    @Column(name = "total_balance", nullable = false, precision = 15, scale = 2)
-    @Builder.Default
-    private BigDecimal totalBalance = BigDecimal.ZERO;
-
     @Column(name = "locked_balance", nullable = false, precision = 15, scale = 2)
     @Builder.Default
     private BigDecimal lockedBalance = BigDecimal.ZERO;
@@ -47,9 +43,4 @@ public class Wallet {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
-    /** Số dư khả dụng thực tế (tổng - khóa) */
-    @Transient
-    public BigDecimal getAvailableBalance() {
-        return totalBalance.subtract(lockedBalance);
-    }
 }

@@ -33,10 +33,6 @@ public class WalletService {
 
     // ─── Wallet creation ──────────────────────────────────────────────────────
 
-    /**
-     * Tạo ví cho user sau khi KYC được duyệt.
-     * Gọi TIKLUY để tạo VA nếu không ở mock mode.
-     */
     @Transactional
     public WalletResponse createWallet(String userId, String fullName, String cccdNumber) {
         if (walletRepository.existsByUserId(userId)) {
@@ -57,7 +53,6 @@ public class WalletService {
         Wallet wallet = walletRepository.save(Wallet.builder()
                 .userId(userId)
                 .vnfAccountNo(accNo)
-                .totalBalance(BigDecimal.ZERO)
                 .lockedBalance(BigDecimal.ZERO)
                 .build());
 
@@ -66,32 +61,22 @@ public class WalletService {
 
     // ─── Migration: link tài khoản VNF cũ ────────────────────────────────────
 
-    /**
-     * Link tài khoản VNF đã tồn tại trong TIKLUY vào payment-service.
-     * Dùng khi migrate từ VNFITE cũ sang mới — không tạo account mới, chỉ ghi wallet.
-     *
-     * Idempotent: nếu wallet đã tồn tại thì trả về luôn, không báo lỗi.
-     */
     @Transactional
     public WalletResponse linkExistingAccount(String userId, String vnfAccountNo) {
-        // Idempotent: ví đã được migrate rồi thì trả về luôn
         return walletRepository.findByUserIdAndIsDeletedFalse(userId)
                 .map(this::toResponse)
                 .orElseGet(() -> {
                     String txnId = "MIGRATE-" + UUID.randomUUID();
-                    BigDecimal totalBalance = BigDecimal.ZERO;
                     BigDecimal lockedBalance = BigDecimal.ZERO;
 
                     if (!appProperties.getPayment().isMock()) {
                         try {
-                            // Lấy số dư thực từ TIKLUY
                             TikluyClient.TikluyAccountInfo info = tikluyClient.getAccount(txnId, vnfAccountNo);
-                            totalBalance  = info.getTotalMoney()  != null ? info.getTotalMoney()  : BigDecimal.ZERO;
                             lockedBalance = info.getLockedMoney() != null ? info.getLockedMoney() : BigDecimal.ZERO;
-                            log.info("txnId={} Migrate account: userId={} accNo={} balance={}",
-                                    txnId, userId, vnfAccountNo, totalBalance);
+                            log.info("txnId={} Migrate account: userId={} accNo={} locked={}",
+                                    txnId, userId, vnfAccountNo, lockedBalance);
                         } catch (Exception e) {
-                            log.warn("txnId={} Không lấy được balance từ TIKLUY, dùng 0: {}", txnId, e.getMessage());
+                            log.warn("txnId={} Không lấy được locked balance từ TIKLUY, dùng 0: {}", txnId, e.getMessage());
                         }
                     } else {
                         log.info("txnId={} [MOCK] Migrate account: userId={} accNo={}", txnId, userId, vnfAccountNo);
@@ -100,7 +85,6 @@ public class WalletService {
                     Wallet wallet = walletRepository.save(Wallet.builder()
                             .userId(userId)
                             .vnfAccountNo(vnfAccountNo)
-                            .totalBalance(totalBalance)
                             .lockedBalance(lockedBalance)
                             .build());
 
@@ -128,15 +112,13 @@ public class WalletService {
 
     /**
      * TIKLUY gọi endpoint này khi MB Bank webhook xác nhận nạp tiền thành công.
+     * Không cập nhật local balance — số dư thực luôn lấy từ TIKLUY.
      *
-     * @param txnId      requestId từ header TIKLUY
-     * @param accNo      VNF account number
-     * @param amount     Số tiền nạp (VND)
-     * @param referenceId referenceNumber từ MB Bank (dùng dedup)
+     * @param runningBalance Số dư tài khoản TIKLUY sau giao dịch (từ callback, nullable)
      */
     @Transactional
-    public void processDeposit(String txnId, String accNo, BigDecimal amount, String referenceId) {
-        // Dedup: tránh xử lý trùng webhook
+    public void processDeposit(String txnId, String accNo, BigDecimal amount, String referenceId,
+                               BigDecimal runningBalance) {
         if (referenceId != null && transactionRepository.existsByReferenceId(referenceId)) {
             log.warn("txnId={} Duplicate deposit referenceId={}, skip", txnId, referenceId);
             return;
@@ -148,8 +130,8 @@ public class WalletService {
                     return new IllegalArgumentException("Wallet không tồn tại: " + accNo);
                 });
 
-        wallet.setTotalBalance(wallet.getTotalBalance().add(amount));
-        walletRepository.save(wallet);
+        // Dùng runningBalance từ TIKLUY callback làm balanceAfter; fallback gọi TIKLUY nếu thiếu
+        BigDecimal balanceAfter = (runningBalance != null) ? runningBalance : getTikluyBalance(wallet);
 
         WalletTransaction txn = transactionRepository.save(WalletTransaction.builder()
                 .walletId(wallet.getId())
@@ -158,25 +140,21 @@ public class WalletService {
                 .status(TransactionStatus.SUCCESS)
                 .referenceId(referenceId)
                 .description("Nạp tiền vào ví VNFITE")
-                .balanceAfter(wallet.getTotalBalance())
+                .balanceAfter(balanceAfter)
                 .build());
 
-        log.info("txnId={} Deposit processed: accNo={} amount={} newBalance={}",
-                txnId, accNo, amount, wallet.getTotalBalance());
+        log.info("txnId={} Deposit processed: accNo={} amount={} balanceAfter={}",
+                txnId, accNo, amount, balanceAfter);
 
-        // Publish Kafka event để các service khác biết user đã có tiền
-        publishDepositEvent(wallet.getUserId(), amount, wallet.getTotalBalance(), txn.getId());
+        publishDepositEvent(wallet.getUserId(), amount, balanceAfter, txn.getId());
     }
 
     // ─── Balance lock/unlock (dùng khi đầu tư) ────────────────────────────────
 
-    /**
-     * Khóa số tiền khi user đặt offer đầu tư.
-     */
     @Transactional
     public void lockAmount(String userId, BigDecimal amount, String description) {
         Wallet wallet = findByUser(userId);
-        BigDecimal available = wallet.getAvailableBalance();
+        BigDecimal available = computeAvailable(wallet);
 
         if (available.compareTo(amount) < 0) {
             throw new IllegalStateException(
@@ -192,13 +170,10 @@ public class WalletService {
                 .amount(amount)
                 .status(TransactionStatus.SUCCESS)
                 .description(description != null ? description : "Khóa tiền đầu tư")
-                .balanceAfter(wallet.getAvailableBalance())
+                .balanceAfter(computeAvailable(wallet))
                 .build());
     }
 
-    /**
-     * Mở khóa số tiền khi offer bị từ chối/hủy.
-     */
     @Transactional
     public void unlockAmount(String userId, BigDecimal amount, String description) {
         Wallet wallet = findByUser(userId);
@@ -214,22 +189,21 @@ public class WalletService {
                 .amount(amount)
                 .status(TransactionStatus.SUCCESS)
                 .description(description != null ? description : "Hoàn tiền đầu tư")
-                .balanceAfter(wallet.getAvailableBalance())
+                .balanceAfter(computeAvailable(wallet))
                 .build());
     }
 
     /**
      * Trừ tiền khi khoản vay được giải ngân (tiền locked → debit thật).
+     * Chỉ giảm lockedBalance — TIKLUY đã xử lý giải ngân thực tế sang tài khoản người gọi vốn.
      */
     @Transactional
     public void debitInvestment(String userId, BigDecimal amount, String description) {
         Wallet wallet = findByUser(userId);
 
-        // Bỏ khóa và trừ tổng
         BigDecimal newLocked = wallet.getLockedBalance().subtract(amount);
         if (newLocked.compareTo(BigDecimal.ZERO) < 0) newLocked = BigDecimal.ZERO;
         wallet.setLockedBalance(newLocked);
-        wallet.setTotalBalance(wallet.getTotalBalance().subtract(amount));
         walletRepository.save(wallet);
 
         transactionRepository.save(WalletTransaction.builder()
@@ -238,18 +212,17 @@ public class WalletService {
                 .amount(amount)
                 .status(TransactionStatus.SUCCESS)
                 .description(description != null ? description : "Giải ngân khoản đầu tư")
-                .balanceAfter(wallet.getAvailableBalance())
+                .balanceAfter(computeAvailable(wallet))
                 .build());
     }
 
     /**
      * Nhận tiền hoàn trả (gốc + lãi) từ khoản cho vay.
+     * TIKLUY sẽ nhận tiền thực từ người gọi vốn trả về — không cập nhật local balance.
      */
     @Transactional
     public void creditRepayment(String userId, BigDecimal amount, String description, String externalRef) {
         Wallet wallet = findByUser(userId);
-        wallet.setTotalBalance(wallet.getTotalBalance().add(amount));
-        walletRepository.save(wallet);
 
         transactionRepository.save(WalletTransaction.builder()
                 .walletId(wallet.getId())
@@ -258,7 +231,7 @@ public class WalletService {
                 .status(TransactionStatus.SUCCESS)
                 .externalRef(externalRef)
                 .description(description != null ? description : "Nhận tiền hoàn trả")
-                .balanceAfter(wallet.getTotalBalance())
+                .balanceAfter(getTikluyBalance(wallet))
                 .build());
     }
 
@@ -268,6 +241,25 @@ public class WalletService {
         return walletRepository.findByUserIdAndIsDeletedFalse(userId)
                 .orElseThrow(() -> new IllegalStateException(
                         "Wallet chưa được tạo cho user " + userId + ". KYC cần được duyệt trước."));
+    }
+
+    /** Số dư thực từ TIKLUY (MB Bank). Mock mode trả 0. */
+    public BigDecimal getTikluyBalance(Wallet wallet) {
+        if (appProperties.getPayment().isMock()) {
+            return BigDecimal.ZERO;
+        }
+        try {
+            return tikluyClient.getAccount("BAL-" + wallet.getId().substring(0, 8), wallet.getVnfAccountNo())
+                    .getTotalMoney();
+        } catch (Exception e) {
+            log.warn("Không lấy được balance từ TIKLUY accNo={}: {}", wallet.getVnfAccountNo(), e.getMessage());
+            return BigDecimal.ZERO;
+        }
+    }
+
+    /** Số dư khả dụng = TIKLUY.totalMoney - local.lockedBalance (≥ 0). */
+    public BigDecimal computeAvailable(Wallet wallet) {
+        return getTikluyBalance(wallet).subtract(wallet.getLockedBalance()).max(BigDecimal.ZERO);
     }
 
     private void publishDepositEvent(String userId, BigDecimal amount, BigDecimal balance, String txnId) {
@@ -282,12 +274,14 @@ public class WalletService {
     }
 
     private WalletResponse toResponse(Wallet w) {
+        BigDecimal total     = getTikluyBalance(w);
+        BigDecimal available = total.subtract(w.getLockedBalance()).max(BigDecimal.ZERO);
         return WalletResponse.builder()
                 .walletId(w.getId())
                 .vnfAccountNo(w.getVnfAccountNo())
-                .totalBalance(w.getTotalBalance())
+                .totalBalance(total)
                 .lockedBalance(w.getLockedBalance())
-                .availableBalance(w.getAvailableBalance())
+                .availableBalance(available)
                 .createdAt(w.getCreatedAt())
                 .build();
     }

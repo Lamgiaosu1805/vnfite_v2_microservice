@@ -73,11 +73,17 @@ public class InternalPaymentController {
 
         try {
             BigDecimal amount = new BigDecimal(req.getAmount().replaceAll("[^0-9.]", ""));
+            BigDecimal runningBalance = null;
+            if (req.getRunningBalance() != null && !req.getRunningBalance().isBlank()) {
+                try { runningBalance = new BigDecimal(req.getRunningBalance().replaceAll("[^0-9.]", "")); }
+                catch (NumberFormatException ignored) { }
+            }
             walletService.processDeposit(
                     txnId != null ? txnId : "tikluy-" + System.currentTimeMillis(),
                     req.getAccountNo(),
                     amount,
-                    txnId // dùng transactionId của TIKLUY làm referenceId để dedup
+                    txnId, // dùng transactionId của TIKLUY làm referenceId để dedup
+                    runningBalance
             );
             return ResponseEntity.ok(Map.of("status", "OK"));
         } catch (Exception e) {
@@ -251,14 +257,12 @@ public class InternalPaymentController {
         }
 
         String txnId = "MOCK_DEP_" + System.currentTimeMillis();
-        // Lấy accNo từ wallet của user
         WalletResponse wallet = walletService.getWallet(userId);
-        walletService.processDeposit(txnId, wallet.getVnfAccountNo(), amount, txnId);
+        walletService.processDeposit(txnId, wallet.getVnfAccountNo(), amount, txnId, amount);
 
         return ResponseEntity.ok(Map.of(
                 "status", "OK",
-                "message", "Mock deposit " + amount + " VND vào ví user " + userId,
-                "newBalance", walletService.getWallet(userId).getTotalBalance()
+                "message", "Mock deposit " + amount + " VND vào ví user " + userId
         ));
     }
 }
