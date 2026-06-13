@@ -177,6 +177,24 @@ public class TikluyClient {
     }
 
     /**
+     * Cộng tiền trực tiếp vào tài khoản TIKLUY — dùng cho môi trường test khi không có giao dịch MB Bank thật.
+     * Tương đương với PUT /api/v2/account/{accNo} { fluctuatedAmount, isPlus: true }.
+     */
+    public void topUpAccount(String txnId, String accNo, BigDecimal amount) {
+        Map<String, Object> body = Map.of("fluctuatedAmount", amount, "isPlus", true);
+        try {
+            restTemplate.exchange(
+                    props.getBaseUrl() + "/api/v2/account/" + accNo,
+                    HttpMethod.PUT,
+                    new HttpEntity<>(body, authHeaders(txnId)),
+                    JsonNode.class);
+            log.info("txnId={} TIKLUY topUp accNo={} amount={}", txnId, accNo, amount);
+        } catch (Exception e) {
+            log.warn("txnId={} TIKLUY topUp failed accNo={}: {}", txnId, accNo, e.getMessage());
+        }
+    }
+
+    /**
      * Xác minh tên chủ tài khoản ngân hàng thực (qua MB Bank API).
      */
     public String verifyBankAccount(String txnId, String bankCode, String bankAccountNo) {

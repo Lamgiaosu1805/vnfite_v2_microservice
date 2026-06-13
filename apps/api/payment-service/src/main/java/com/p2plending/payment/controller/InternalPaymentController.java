@@ -6,6 +6,7 @@ import com.p2plending.payment.dto.request.DepositCallbackRequest;
 import com.p2plending.payment.dto.response.LinkedBankResponse;
 import com.p2plending.payment.dto.response.WalletResponse;
 import com.p2plending.payment.service.LinkedBankService;
+import com.p2plending.payment.service.TikluyClient;
 import com.p2plending.payment.service.WalletService;
 import com.p2plending.payment.service.WithdrawService;
 import lombok.RequiredArgsConstructor;
@@ -33,6 +34,7 @@ public class InternalPaymentController {
     private final WithdrawService withdrawService;
     private final LinkedBankService linkedBankService;
     private final AppProperties appProperties;
+    private final TikluyClient tikluyClient;
 
     // ─── TIKLUY deposit callback ──────────────────────────────────────────────
 
@@ -252,17 +254,19 @@ public class InternalPaymentController {
         if (!appProperties.getInternal().getSecret().equals(secret)) {
             return ResponseEntity.status(401).body(Map.of("error", "Unauthorized"));
         }
-        if (!appProperties.getPayment().isMock()) {
-            return ResponseEntity.badRequest().body(Map.of("error", "Mock mode is disabled"));
-        }
 
         String txnId = "MOCK_DEP_" + System.currentTimeMillis();
         WalletResponse wallet = walletService.getWallet(userId);
+
+        // 1. Cập nhật TOTAL_MONEY trên TIKLUY để số dư live khớp
+        tikluyClient.topUpAccount(txnId, wallet.getVnfAccountNo(), amount);
+
+        // 2. Ghi nhận giao dịch vào payment-service (dedup theo txnId)
         walletService.processDeposit(txnId, wallet.getVnfAccountNo(), amount, txnId, amount);
 
         return ResponseEntity.ok(Map.of(
                 "status", "OK",
-                "message", "Mock deposit " + amount + " VND vào ví user " + userId
+                "message", "Nạp " + amount + " VND vào ví user " + userId + " (accNo=" + wallet.getVnfAccountNo() + ")"
         ));
     }
 }
