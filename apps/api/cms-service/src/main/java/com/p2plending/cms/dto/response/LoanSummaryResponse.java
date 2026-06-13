@@ -18,6 +18,7 @@ public class LoanSummaryResponse {
     private String loanCode;
     private String borrowerId;
     private String borrowerName;
+    private String borrowerPhone;
     private String productName;
     private BigDecimal amount;
     private BigDecimal interestRate;

@@ -537,11 +537,13 @@ public class SourceServiceClient {
 
     private LoanSummaryResponse parseLoan(JsonNode node) {
         String borrowerId = text(node, "borrowerId");
+        UserSummaryResponse borrower = resolveBorrower(borrowerId);
         return LoanSummaryResponse.builder()
                 .loanId(text(node, "id"))
                 .loanCode(text(node, "loanCode"))
                 .borrowerId(borrowerId)
-                .borrowerName(resolveBorrowerName(borrowerId))
+                .borrowerName(resolveBorrowerName(borrower))
+                .borrowerPhone(borrower != null ? borrower.getPhone() : null)
                 .productName(text(node, "productName"))
                 .amount(decimal(node, "amount"))
                 .interestRate(decimal(node, "interestRate"))
@@ -575,15 +577,19 @@ public class SourceServiceClient {
                 .build();
     }
 
-    private String resolveBorrowerName(String borrowerId) {
+    private UserSummaryResponse resolveBorrower(String borrowerId) {
         if (borrowerId == null) return null;
         try {
-            UserSummaryResponse user = getUser(borrowerId);
-            return user.getFullName() != null ? user.getFullName() : user.getPhone();
+            return getUser(borrowerId);
         } catch (Exception ex) {
-            log.warn("Could not resolve borrower name for {}", borrowerId);
+            log.warn("Could not resolve borrower profile for {}", borrowerId);
             return null;
         }
+    }
+
+    private String resolveBorrowerName(UserSummaryResponse borrower) {
+        if (borrower == null) return null;
+        return borrower.getFullName() != null ? borrower.getFullName() : borrower.getPhone();
     }
 
     private UserAccountStatus parseAccountStatus(String value) {
