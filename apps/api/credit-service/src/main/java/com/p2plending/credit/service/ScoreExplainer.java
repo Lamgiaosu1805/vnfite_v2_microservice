@@ -9,8 +9,10 @@ import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Sinh diễn giải "tại sao" cho điểm tín dụng — HOÀN TOÀN deterministic, không gọi AI.
@@ -257,28 +259,48 @@ public class ScoreExplainer {
     private void collectAlerts(DocumentAnalysis d, List<String> alerts) {
         String label = d.getFileName() != null ? d.getFileName()
                 : (d.getDocType() != null ? d.getDocType() : "Chứng từ");
+        Set<String> items = new LinkedHashSet<>();
         if (d.getExtractedData() == null || d.getExtractedData().isBlank()) {
             if (d.getSummary() != null && !d.getSummary().isBlank()) {
-                alerts.add(label + ": " + d.getSummary());
+                items.add(d.getSummary().trim());
             }
+            addGroupedAlert(label, items, alerts);
             return;
         }
         try {
             JsonNode node = MAPPER.readTree(d.getExtractedData());
-            boolean added = false;
             for (JsonNode issue : node.path("consistencyIssues")) {
                 String v = issue.asText("").trim();
-                if (!v.isEmpty()) { alerts.add(label + ": " + v); added = true; }
-            }
-            if (!added) {
-                for (JsonNode f : node.path("findings")) {
-                    String v = f.asText("").trim();
-                    if (!v.isEmpty()) { alerts.add(label + ": " + v); break; }
+                if (!v.isEmpty()) {
+                    items.add(v);
                 }
             }
+            if (items.isEmpty()) {
+                for (JsonNode f : node.path("findings")) {
+                    String v = f.asText("").trim();
+                    if (!v.isEmpty()) {
+                        items.add(v);
+                    }
+                }
+                if (items.isEmpty() && d.getSummary() != null && !d.getSummary().isBlank()) {
+                    items.add(d.getSummary().trim());
+                }
+            }
+            addGroupedAlert(label, items, alerts);
         } catch (Exception e) {
             log.debug("Không đọc được extractedData để gộp cảnh báo: {}", e.getMessage());
+            if (d.getSummary() != null && !d.getSummary().isBlank()) {
+                items.add(d.getSummary().trim());
+                addGroupedAlert(label, items, alerts);
+            }
         }
+    }
+
+    private void addGroupedAlert(String label, Set<String> items, List<String> alerts) {
+        if (items == null || items.isEmpty()) {
+            return;
+        }
+        alerts.add(label + ": " + String.join("; ", items));
     }
 
     // ── utils ───────────────────────────────────────────────────────────────────
