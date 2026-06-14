@@ -26,6 +26,27 @@ jobs:
         with:
           fetch-depth: 2
 
+      - name: Validate Flyway migrations (no duplicate versions)
+        run: |
+          FAIL=0
+          for dir in apps/api/*/src/main/resources/db/migration; do
+            [ -d "$dir" ] || continue
+            service=$(echo "$dir" | cut -d'/' -f3)
+            duplicates=$(ls "$dir"/V*.sql 2>/dev/null \
+              | sed 's|.*/V\([0-9]*\)__.*|\1|' \
+              | sort | uniq -d)
+            if [ -n "$duplicates" ]; then
+              echo "❌ $service: duplicate Flyway version(s): $duplicates"
+              FAIL=1
+            fi
+          done
+          if [ "$FAIL" = "1" ]; then
+            echo ""
+            echo "Fix: đổi tên file migration sang version tiếp theo chưa dùng."
+            exit 1
+          fi
+          echo "✅ Không có version Flyway trùng"
+
       - name: Detect changed services
         id: changes
         run: |
