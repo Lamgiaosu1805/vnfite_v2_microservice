@@ -4,9 +4,12 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.p2plending.cms.domain.enums.UserAccountStatus;
 import com.p2plending.cms.dto.request.LoanActionRequest;
+import com.p2plending.cms.dto.response.CustomerDetailResponse;
 import com.p2plending.cms.dto.response.LoanSummaryResponse;
 import com.p2plending.cms.dto.response.PagedResponse;
 import com.p2plending.cms.dto.response.UserSummaryResponse;
+import com.p2plending.cms.dto.response.WalletSummaryResponse;
+import com.p2plending.cms.dto.response.WalletTransactionSummaryResponse;
 import com.p2plending.cms.exception.SourceServiceException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -63,6 +66,9 @@ public class SourceServiceClient {
     @Value("${cms.sources.loan-url:http://loan-service:8082}")
     private String loanServiceUrl;
 
+    @Value("${cms.sources.payment-url:http://payment-service:8086}")
+    private String paymentServiceUrl;
+
     @Value("${cms.sources.credit-url:http://credit-service:8087}")
     private String creditServiceUrl;
 
@@ -100,6 +106,52 @@ public class SourceServiceClient {
                 .buildAndExpand(userId)
                 .toUriString();
         return parseUser(exchangeForJson(url, HttpMethod.GET, null));
+    }
+
+    public CustomerDetailResponse getCustomerDetail(String userId, int transactionPage, int transactionSize,
+                                                    int loanPage, int loanSize) {
+        UserSummaryResponse profile = getUser(userId);
+        WalletSummaryResponse wallet = safeGetWallet(userId);
+        PagedResponse<WalletTransactionSummaryResponse> transactions =
+                safeGetWalletTransactions(userId, transactionPage, transactionSize);
+        PagedResponse<LoanSummaryResponse> loans =
+                getLoans(null, userId, null, null, loanPage, loanSize);
+
+        return CustomerDetailResponse.builder()
+                .profile(profile)
+                .wallet(wallet)
+                .transactions(transactions)
+                .loans(loans)
+                .build();
+    }
+
+    private WalletSummaryResponse safeGetWallet(String userId) {
+        try {
+            URI uri = UriComponentsBuilder.fromHttpUrl(paymentServiceUrl)
+                    .path("/internal/payment/wallet/{userId}")
+                    .buildAndExpand(userId)
+                    .toUri();
+            return parseWallet(exchangeForJson(uri, HttpMethod.GET, null));
+        } catch (Exception ex) {
+            log.warn("Could not fetch wallet for customer {}: {}", userId, ex.getMessage());
+            return null;
+        }
+    }
+
+    private PagedResponse<WalletTransactionSummaryResponse> safeGetWalletTransactions(
+            String userId, int page, int size) {
+        try {
+            URI uri = UriComponentsBuilder.fromHttpUrl(paymentServiceUrl)
+                    .path("/internal/payment/wallet/{userId}/transactions")
+                    .queryParam("page", page)
+                    .queryParam("size", size)
+                    .buildAndExpand(userId)
+                    .toUri();
+            return parseTransactionPage(exchangeForJson(uri, HttpMethod.GET, null), page, size);
+        } catch (Exception ex) {
+            log.warn("Could not fetch wallet transactions for customer {}: {}", userId, ex.getMessage());
+            return PagedResponse.empty(page, size);
+        }
     }
 
     // ─── Stats ────────────────────────────────────────────────────────────────
@@ -322,6 +374,14 @@ public class SourceServiceClient {
         return List.of();
     }
 
+    /** Chạy ngay job hết hạn gọi vốn / ký khế ước (CMS bấm tay). Trả về số khoản đã xử lý. */
+    public JsonNode expireSweep() {
+        String url = UriComponentsBuilder.fromHttpUrl(loanServiceUrl)
+                .path("/internal/loans/expire-sweep")
+                .toUriString();
+        return exchangeForJson(url, HttpMethod.POST, null);
+    }
+
     /** Giải ngân vốn cho người gọi vốn (OPS bấm trên CMS). */
     public LoanSummaryResponse disburseLoan(String loanId, String disbursedBy) {
         String url = UriComponentsBuilder.fromHttpUrl(loanServiceUrl)
@@ -513,6 +573,48 @@ public class SourceServiceClient {
                 .accountStatus(parseAccountStatus(text(node, "accountStatus")))
                 .createdAt(dateTime(node, "createdAt"))
                 .dateOfBirth(date(node, "dateOfBirth"))
+                .gender(text(node, "gender"))
+                .permanentAddress(text(node, "permanentAddress"))
+                .hometown(text(node, "hometown"))
+                .issueDate(date(node, "issueDate"))
+                .issuingAuthority(text(node, "issuingAuthority"))
+                .expiryDate(date(node, "expiryDate"))
+                .build();
+    }
+
+    private WalletSummaryResponse parseWallet(JsonNode node) {
+        return WalletSummaryResponse.builder()
+                .walletId(text(node, "walletId"))
+                .vnfAccountNo(text(node, "vnfAccountNo"))
+                .totalBalance(decimal(node, "totalBalance"))
+                .lockedBalance(decimal(node, "lockedBalance"))
+                .availableBalance(decimal(node, "availableBalance"))
+                .createdAt(dateTime(node, "createdAt"))
+                .build();
+    }
+
+    private PagedResponse<WalletTransactionSummaryResponse> parseTransactionPage(JsonNode pageNode, int fallbackPage, int fallbackSize) {
+        List<WalletTransactionSummaryResponse> content = new ArrayList<>();
+        pageNode.path("content").forEach(node -> content.add(parseTransaction(node)));
+        return PagedResponse.<WalletTransactionSummaryResponse>builder()
+                .content(content)
+                .page(pageNode.has("page") ? pageNode.path("page").asInt() : pageNode.path("number").asInt(fallbackPage))
+                .size(pageNode.path("size").asInt(fallbackSize))
+                .totalElements(pageNode.path("totalElements").asLong())
+                .totalPages(pageNode.path("totalPages").asInt())
+                .last(pageNode.path("last").asBoolean(true))
+                .build();
+    }
+
+    private WalletTransactionSummaryResponse parseTransaction(JsonNode node) {
+        return WalletTransactionSummaryResponse.builder()
+                .id(text(node, "id"))
+                .type(text(node, "type"))
+                .amount(decimal(node, "amount"))
+                .status(text(node, "status"))
+                .description(text(node, "description"))
+                .balanceAfter(decimal(node, "balanceAfter"))
+                .createdAt(dateTime(node, "createdAt"))
                 .build();
     }
 

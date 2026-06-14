@@ -102,6 +102,12 @@ public class InternalUserQueryService {
                 .accountStatus(user.isDeleted() ? "LOCKED" : "ACTIVE")
                 .createdAt(user.getCreatedAt())
                 .dateOfBirth(kyc.map(KycSubmission::getDateOfBirth).orElse(null))
+                .gender(kyc.map(KycSubmission::getGender).map(Enum::name).orElse(null))
+                .permanentAddress(kyc.map(KycSubmission::getPermanentAddress).orElse(null))
+                .hometown(kyc.map(KycSubmission::getHometown).orElse(null))
+                .issueDate(kyc.map(KycSubmission::getIssueDate).orElse(null))
+                .issuingAuthority(kyc.map(KycSubmission::getIssuingAuthority).orElse(null))
+                .expiryDate(kyc.map(KycSubmission::getExpiryDate).orElse(null))
                 .build();
     }
 }

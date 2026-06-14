@@ -3,6 +3,7 @@ package com.p2plending.cms.controller;
 import com.p2plending.cms.domain.enums.UserAccountStatus;
 import com.p2plending.cms.dto.request.KycDecisionRequest;
 import com.p2plending.cms.dto.request.UserStatusRequest;
+import com.p2plending.cms.dto.response.CustomerDetailResponse;
 import com.p2plending.cms.dto.response.PagedResponse;
 import com.p2plending.cms.dto.response.UserSummaryResponse;
 import com.p2plending.cms.service.UserManagementService;
@@ -34,6 +35,17 @@ public class UserManagementController {
     @GetMapping("/{userId}")
     public ResponseEntity<UserSummaryResponse> getUser(@PathVariable String userId) {
         return ResponseEntity.ok(userService.getUser(userId));
+    }
+
+    @GetMapping("/{userId}/detail")
+    public ResponseEntity<CustomerDetailResponse> getCustomerDetail(
+            @PathVariable String userId,
+            @RequestParam(defaultValue = "0") int transactionPage,
+            @RequestParam(defaultValue = "20") int transactionSize,
+            @RequestParam(defaultValue = "0") int loanPage,
+            @RequestParam(defaultValue = "20") int loanSize) {
+        return ResponseEntity.ok(userService.getCustomerDetail(
+                userId, transactionPage, transactionSize, loanPage, loanSize));
     }
 
     @PutMapping("/{userId}/kyc")

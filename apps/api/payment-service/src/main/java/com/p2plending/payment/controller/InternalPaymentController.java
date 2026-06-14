@@ -4,6 +4,7 @@ import com.p2plending.payment.config.AppProperties;
 import com.p2plending.payment.dto.request.AddBankRequest;
 import com.p2plending.payment.dto.request.DepositCallbackRequest;
 import com.p2plending.payment.dto.response.LinkedBankResponse;
+import com.p2plending.payment.dto.response.TransactionResponse;
 import com.p2plending.payment.dto.response.WalletResponse;
 import com.p2plending.payment.service.LinkedBankService;
 import com.p2plending.payment.service.TikluyClient;
@@ -12,6 +13,7 @@ import com.p2plending.payment.service.WithdrawService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
+import org.springframework.data.domain.Page;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
@@ -128,6 +130,20 @@ public class InternalPaymentController {
         return ResponseEntity.ok(walletService.getWallet(userId));
     }
 
+    /** CMS xem lịch sử biến động ví: cộng/trừ tiền, đầu tư, hoàn tiền, hoàn trả... */
+    @GetMapping("/internal/payment/wallet/{userId}/transactions")
+    public ResponseEntity<Page<TransactionResponse>> getWalletTransactions(
+            @RequestHeader(value = "X-Internal-Secret", required = false) String secret,
+            @PathVariable String userId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+
+        if (!appProperties.getInternal().getSecret().equals(secret)) {
+            return ResponseEntity.status(401).build();
+        }
+        return ResponseEntity.ok(walletService.getTransactions(userId, page, size));
+    }
+
     /** Khóa số tiền khi user đặt offer đầu tư */
     @PostMapping("/internal/payment/wallet/{userId}/lock")
     public ResponseEntity<Map<String, String>> lockAmount(
@@ -144,35 +160,37 @@ public class InternalPaymentController {
         return ResponseEntity.ok(Map.of("status", "OK"));
     }
 
-    /** Mở khóa số tiền khi offer bị từ chối/hủy */
+    /** Mở khóa số tiền khi offer bị từ chối/hủy/hết hạn. referenceId để idempotent (chống hoàn trùng). */
     @PostMapping("/internal/payment/wallet/{userId}/unlock")
     public ResponseEntity<Map<String, String>> unlockAmount(
             @RequestHeader(value = "X-Internal-Secret", required = false) String secret,
             @PathVariable String userId,
             @RequestParam BigDecimal amount,
-            @RequestParam(required = false) String description) {
+            @RequestParam(required = false) String description,
+            @RequestParam(required = false) String referenceId) {
 
         if (!appProperties.getInternal().getSecret().equals(secret)) {
             return ResponseEntity.status(401).body(Map.of("error", "Unauthorized"));
         }
 
-        walletService.unlockAmount(userId, amount, description);
+        walletService.unlockAmount(userId, amount, description, referenceId);
         return ResponseEntity.ok(Map.of("status", "OK"));
     }
 
-    /** Trừ tiền thật khi khoản vay được giải ngân */
+    /** Trừ tiền thật khi khoản vay được giải ngân. referenceId để idempotent (chống debit trùng). */
     @PostMapping("/internal/payment/wallet/{userId}/debit")
     public ResponseEntity<Map<String, String>> debitInvestment(
             @RequestHeader(value = "X-Internal-Secret", required = false) String secret,
             @PathVariable String userId,
             @RequestParam BigDecimal amount,
-            @RequestParam(required = false) String description) {
+            @RequestParam(required = false) String description,
+            @RequestParam(required = false) String referenceId) {
 
         if (!appProperties.getInternal().getSecret().equals(secret)) {
             return ResponseEntity.status(401).body(Map.of("error", "Unauthorized"));
         }
 
-        walletService.debitInvestment(userId, amount, description);
+        walletService.debitInvestment(userId, amount, description, referenceId);
         return ResponseEntity.ok(Map.of("status", "OK"));
     }
 

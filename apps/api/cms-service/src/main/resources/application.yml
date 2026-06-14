@@ -49,6 +49,7 @@ cms:
   sources:
     auth-url: ${AUTH_SERVICE_URL:http://auth-service:8081}
     loan-url: ${LOAN_SERVICE_URL:http://loan-service:8082}
+    payment-url: ${PAYMENT_SERVICE_URL:http://payment-service:8086}
     credit-url: ${CREDIT_SERVICE_URL:http://credit-service:8087}
     internal-secret: ${INTERNAL_API_SECRET:dev-internal-secret}
 

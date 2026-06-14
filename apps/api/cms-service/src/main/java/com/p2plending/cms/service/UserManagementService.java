@@ -3,6 +3,7 @@ package com.p2plending.cms.service;
 import com.p2plending.cms.domain.enums.UserAccountStatus;
 import com.p2plending.cms.dto.request.KycDecisionRequest;
 import com.p2plending.cms.dto.request.UserStatusRequest;
+import com.p2plending.cms.dto.response.CustomerDetailResponse;
 import com.p2plending.cms.dto.response.PagedResponse;
 import com.p2plending.cms.dto.response.UserSummaryResponse;
 import lombok.RequiredArgsConstructor;
@@ -22,6 +23,11 @@ public class UserManagementService {
 
     public UserSummaryResponse getUser(String userId) {
         return sourceServiceClient.getUser(userId);
+    }
+
+    public CustomerDetailResponse getCustomerDetail(String userId, int transactionPage, int transactionSize,
+                                                    int loanPage, int loanSize) {
+        return sourceServiceClient.getCustomerDetail(userId, transactionPage, transactionSize, loanPage, loanSize);
     }
 
     public UserSummaryResponse decideKyc(String userId, KycDecisionRequest req) {

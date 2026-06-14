@@ -22,4 +22,10 @@ public class UserSummaryResponse {
     private LocalDateTime createdAt;
     /** Ngày sinh từ KYC đã duyệt — null nếu chưa eKYC hoặc KYC chưa APPROVED. */
     private LocalDate dateOfBirth;
+    private String gender;
+    private String permanentAddress;
+    private String hometown;
+    private LocalDate issueDate;
+    private String issuingAuthority;
+    private LocalDate expiryDate;
 }
