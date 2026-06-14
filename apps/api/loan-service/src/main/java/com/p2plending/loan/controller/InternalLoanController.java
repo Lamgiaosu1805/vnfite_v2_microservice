@@ -16,6 +16,7 @@ import com.p2plending.loan.dto.response.PagedResponse;
 import com.p2plending.loan.dto.response.RepaymentScheduleResponse;
 import com.p2plending.loan.service.AppraisalSuggestionService;
 import com.p2plending.loan.service.ContractService;
+import com.p2plending.loan.service.FundingExpiryService;
 import com.p2plending.loan.service.LoanService;
 import com.p2plending.loan.service.RepaymentService;
 import jakarta.validation.Valid;
@@ -42,6 +43,7 @@ public class InternalLoanController {
     private final AppraisalSuggestionService appraisalSuggestionService;
     private final ContractService contractService;
     private final LoanRequestRepository loanRequestRepository;
+    private final FundingExpiryService fundingExpiryService;
 
     @Value("${app.internal.secret:dev-internal-secret}")
     private String internalSecret;
@@ -176,6 +178,17 @@ public class InternalLoanController {
             @PathVariable String loanId) {
         requireInternalSecret(secret);
         return ResponseEntity.ok(loanService.getDocuments(loanId));
+    }
+
+    /**
+     * Chạy ngay job hết hạn gọi vốn / ký khế ược (thay vì chờ cron 01:30). CMS gọi qua nút vận hành.
+     * Trả về số khoản đã xử lý từng loại.
+     */
+    @PostMapping("/expire-sweep")
+    public ResponseEntity<FundingExpiryService.ExpirySweepResult> expireSweep(
+            @RequestHeader(INTERNAL_SECRET_HEADER) String secret) {
+        requireInternalSecret(secret);
+        return ResponseEntity.ok(fundingExpiryService.runSweep());
     }
 
     private void requireInternalSecret(String secret) {

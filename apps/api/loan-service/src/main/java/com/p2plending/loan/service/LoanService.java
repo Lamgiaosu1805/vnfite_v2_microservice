@@ -1,6 +1,7 @@
 package com.p2plending.loan.service;
 
 import com.p2plending.loan.client.AuthServiceClient;
+import com.p2plending.loan.client.PaymentServiceClient;
 import com.p2plending.loan.config.CacheConfig;
 import com.p2plending.loan.domain.entity.LoanContract;
 import com.p2plending.loan.domain.entity.LoanDocument;
@@ -31,6 +32,8 @@ import com.p2plending.loan.mapper.LoanRequestMapper;
 import com.p2plending.loan.specification.LoanSpecification;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.cache.CacheManager;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.cache.annotation.Caching;
@@ -74,6 +77,16 @@ public class LoanService {
     private final RepaymentService       repaymentService;
     private final ContractService        contractService;
     private final AuthServiceClient      authServiceClient;
+    private final PaymentServiceClient   paymentServiceClient;
+    private final CacheManager           cacheManager;
+
+    /** Số ngày một khoản được phép ở trạng thái ACTIVE để gọi vốn trước khi hết hạn & hoàn tiền. */
+    @Value("${app.funding.window-days:30}")
+    private int fundingWindowDays;
+
+    /** Số ngày người gọi vốn được phép ký khế ước sau khi FUNDED; quá hạn → hủy & hoàn tiền. */
+    @Value("${app.funding.signing-window-days:7}")
+    private int signingWindowDays;
 
     // ── Create ────────────────────────────────────────────────────
 
@@ -207,6 +220,16 @@ public class LoanService {
                         : "Hãy đầu tư toàn bộ %,.0f VNĐ còn lại.".formatted(remaining)));
         }
 
+        // Kiểm tra số dư ví nhà đầu tư (server-side, không tin client). Tiền chỉ thực sự
+        // bị khóa khi ký hợp đồng (ContractService.applyInvestmentSigned); đây là fail-fast
+        // để không phát hành hợp đồng cho lệnh không đủ tiền.
+        BigDecimal available = paymentServiceClient.getAvailableBalance(investorId);
+        if (available.compareTo(request.getAmount()) < 0) {
+            throw new InvalidLoanStateException(
+                    "Số dư ví không đủ để đầu tư. Khả dụng: %,.0f VNĐ, cần: %,.0f VNĐ"
+                    .formatted(available, request.getAmount()));
+        }
+
         // Offer ở trạng thái PENDING (giữ chỗ) — chỉ tính vào fundedAmount sau khi nhà đầu tư
         // ký hợp đồng đầu tư bằng OTP (ContractService.signContract).
         LoanOffer offer = LoanOffer.builder()
@@ -252,8 +275,19 @@ public class LoanService {
         // Sinh lịch trả nợ từ ngày giải ngân (generator dùng LocalDate.now).
         repaymentService.generateSchedule(loan);
 
-        List<String> investorIds = loanOfferRepository
-                .findByLoanRequestIdAndStatus(loanId, OfferStatus.ACCEPTED).stream()
+        List<LoanOffer> acceptedOffers = loanOfferRepository
+                .findByLoanRequestIdAndStatus(loanId, OfferStatus.ACCEPTED);
+
+        // Trừ tiền đã khóa của từng nhà đầu tư (locked → debit thật). Mỗi offer trừ riêng
+        // để xử lý đúng trường hợp một nhà đầu tư có nhiều lệnh trên cùng khoản. referenceId
+        // theo offerId để payment-service idempotent — retry giải ngân không debit trùng.
+        for (LoanOffer offer : acceptedOffers) {
+            paymentServiceClient.debit(offer.getInvestorId(), offer.getAmount(),
+                    "Giải ngân khoản gọi vốn " + loan.getLoanCode(),
+                    "DISBURSE-" + offer.getId());
+        }
+
+        List<String> investorIds = acceptedOffers.stream()
                 .map(LoanOffer::getInvestorId)
                 .distinct()
                 .toList();
@@ -261,6 +295,56 @@ public class LoanService {
 
         log.info("Loan {} disbursed by {} — schedule generated, loan.disbursed published", loanId, disbursedBy);
         return buildResponse(loan, false);
+    }
+
+    // ── Hết hạn gọi vốn / ký khế ước (scheduler) ──────────────────
+
+    /** ID các khoản ACTIVE đã quá hạn gọi vốn — đọc riêng để xử lý từng khoản trong transaction độc lập. */
+    @Transactional(readOnly = true)
+    public List<String> findExpiredActiveLoanIds() {
+        LocalDateTime cutoff = LocalDateTime.now().minusDays(fundingWindowDays);
+        return loanRequestRepository
+                .findByStatusAndActivatedAtBeforeAndIsDeletedFalse(LoanStatus.ACTIVE, cutoff)
+                .stream().map(LoanRequest::getId).toList();
+    }
+
+    /** ID các khoản FUNDED kẹt — người gọi vốn không ký khế ước trong thời hạn cho phép. */
+    @Transactional(readOnly = true)
+    public List<String> findStuckFundedLoanIds() {
+        LocalDateTime cutoff = LocalDateTime.now().minusDays(signingWindowDays);
+        return loanRequestRepository
+                .findByStatusAndFundedAtBeforeAndIsDeletedFalse(LoanStatus.FUNDED, cutoff)
+                .stream().map(LoanRequest::getId).toList();
+    }
+
+    /**
+     * Hết hạn một khoản (ACTIVE chưa đủ vốn, hoặc FUNDED chưa ký khế ước): hoàn tiền (unlock)
+     * toàn bộ nhà đầu tư đã cam kết, void hợp đồng chưa ký, chuyển khoản sang CANCELLED.
+     * Guard theo {@code expectedStatus} để bỏ qua khoản đã đổi trạng thái. Idempotent — chạy lại an toàn.
+     */
+    @Transactional
+    public void expireAndRefund(String loanId, LoanStatus expectedStatus, String reason) {
+        LoanRequest loan = findLoanOrThrow(loanId);
+        if (loan.getStatus() != expectedStatus) {
+            return; // trạng thái đã đổi từ lúc quét — bỏ qua
+        }
+
+        contractService.refundInvestorsAndVoid(loan, reason);
+
+        loan.setStatus(LoanStatus.CANCELLED);
+        loan.setBorrowerCancelledReason(reason);
+        loanRequestRepository.save(loan);
+
+        evictLoanCaches(loanId);
+        log.info("Loan {} expired from {} — investors refunded, CANCELLED ({})",
+                loanId, expectedStatus, reason);
+    }
+
+    private void evictLoanCaches(String loanId) {
+        var byId = cacheManager.getCache(CacheConfig.CACHE_LOAN_BY_ID);
+        if (byId != null) byId.evict(loanId);
+        var list = cacheManager.getCache(CacheConfig.CACHE_LOANS);
+        if (list != null) list.clear();
     }
 
     // ── Kafka consumer callbacks ──────────────────────────────────
@@ -391,6 +475,7 @@ public class LoanService {
         }
 
         loan.setStatus(LoanStatus.ACTIVE);
+        loan.setActivatedAt(LocalDateTime.now());
         loanRequestRepository.save(loan);
         kafkaProducerService.publishLoanCreated(loan);
 

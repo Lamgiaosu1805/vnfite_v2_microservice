@@ -8,6 +8,7 @@ import com.p2plending.notification.dto.NotificationResponse;
 import com.p2plending.notification.dto.PagedResponse;
 import com.p2plending.notification.kafka.event.ContractReadyEvent;
 import com.p2plending.notification.kafka.event.DepositCompletedEvent;
+import com.p2plending.notification.kafka.event.InvestmentRefundedEvent;
 import com.p2plending.notification.kafka.event.LoanApprovedAwaitingBorrowerEvent;
 import com.p2plending.notification.kafka.event.LoanDisbursedEvent;
 import lombok.RequiredArgsConstructor;
@@ -178,6 +179,34 @@ public class NotificationService {
         log.info("Stored loan.disbursed notifications for loan={} borrower={} investors={}",
                 event.getLoanId(), event.getBorrowerId(),
                 investorIds != null ? investorIds.size() : 0);
+    }
+
+    @Transactional
+    public void notifyInvestmentRefunded(InvestmentRefundedEvent event) {
+        String code = event.getLoanCode() != null ? event.getLoanCode() : event.getLoanId();
+        List<InvestmentRefundedEvent.Refund> refunds = event.getRefunds();
+        if (refunds == null || refunds.isEmpty()) return;
+
+        for (InvestmentRefundedEvent.Refund r : refunds) {
+            String title = "Đã hoàn tiền đầu tư";
+            String message = "Khoản %s đã đóng. Số tiền %s bạn đặt đầu tư đã được hoàn về số dư khả dụng."
+                    .formatted(code, formatMoney(r.getAmount()));
+            notificationRepository.save(Notification.builder()
+                    .userId(r.getInvestorId())
+                    .title(title)
+                    .message(message)
+                    .type(NotificationType.IN_APP)
+                    .channel("REFUND")
+                    .referenceId(event.getLoanId())
+                    .referenceType("LOAN")
+                    .sentAt(LocalDateTime.now())
+                    .build());
+            pushClient.pushToUser(r.getInvestorId(), title,
+                    "Khoản %s: đã hoàn %s về ví của bạn.".formatted(code, formatMoney(r.getAmount())),
+                    Map.of("action", "OPEN_WALLET", "loanId", event.getLoanId()));
+        }
+        log.info("Stored investment.refunded notifications for loan={} count={}",
+                event.getLoanId(), refunds.size());
     }
 
     @Transactional

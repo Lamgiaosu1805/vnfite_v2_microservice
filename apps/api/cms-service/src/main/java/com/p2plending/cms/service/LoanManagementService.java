@@ -107,6 +107,11 @@ public class LoanManagementService {
      * Giải ngân vốn cho người gọi vốn (OPS): AWAITING_DISBURSEMENT → DISBURSED.
      * Ghi audit log quyết định giải ngân.
      */
+    /** Chạy ngay job hết hạn gọi vốn / ký khế ước (vận hành/test). Trả về số khoản đã xử lý. */
+    public JsonNode expireSweep() {
+        return sourceServiceClient.expireSweep();
+    }
+
     public LoanSummaryResponse disburse(String loanId, CmsPrincipal operator) {
         LoanSummaryResponse loanBefore = safeGetLoan(loanId);
         String decidedBy   = operator != null ? operator.username() : "unknown";

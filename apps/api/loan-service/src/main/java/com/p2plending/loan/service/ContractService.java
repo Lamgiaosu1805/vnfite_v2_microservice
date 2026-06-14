@@ -1,5 +1,6 @@
 package com.p2plending.loan.service;
 
+import com.p2plending.loan.client.PaymentServiceClient;
 import com.p2plending.loan.config.CacheConfig;
 import com.p2plending.loan.config.RedisNamespaceProperties;
 import com.p2plending.loan.domain.entity.LoanContract;
@@ -17,6 +18,7 @@ import com.p2plending.loan.dto.response.ContractSignInitResponse;
 import com.p2plending.loan.exception.InvalidLoanStateException;
 import com.p2plending.loan.exception.LoanNotFoundException;
 import com.p2plending.loan.kafka.KafkaProducerService;
+import com.p2plending.loan.kafka.event.InvestmentRefundedEvent;
 import com.p2plending.loan.service.contract.ContractSignatureProvider;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -34,6 +36,7 @@ import java.security.SecureRandom;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -66,6 +69,7 @@ public class ContractService {
     private final StringRedisTemplate      redisTemplate;
     private final RedisNamespaceProperties redisNamespaceProperties;
     private final CacheManager             cacheManager;
+    private final PaymentServiceClient     paymentServiceClient;
 
     @Value("${app.otp.mock:true}")
     private boolean mockOtp;
@@ -235,6 +239,11 @@ public class ContractService {
         offer.setStatus(OfferStatus.ACCEPTED);
         loanOfferRepository.save(offer);
 
+        // Khóa tiền trong ví nhà đầu tư — cam kết vốn tại thời điểm ký hợp đồng. lockAmount
+        // re-validate số dư khả dụng; nếu không đủ sẽ ném lỗi → toàn bộ giao dịch ký rollback.
+        paymentServiceClient.lock(offer.getInvestorId(), offer.getAmount(),
+                "Đầu tư khoản gọi vốn " + loan.getLoanCode());
+
         // fundedAmount = tổng các offer ACCEPTED (nguồn sự thật duy nhất).
         BigDecimal accepted = loanOfferRepository
                 .sumAmountByLoanRequestIdAndStatus(loan.getId(), OfferStatus.ACCEPTED);
@@ -242,6 +251,7 @@ public class ContractService {
 
         if (loan.isFullyFunded() && loan.getStatus() == LoanStatus.ACTIVE) {
             loan.setStatus(LoanStatus.FUNDED);
+            loan.setFundedAt(LocalDateTime.now(TZ));
             loanRequestRepository.save(loan);
             issueLoanAgreement(loan);
             kafkaProducerService.publishLoanFunded(loan);
@@ -252,6 +262,44 @@ public class ContractService {
             log.info("Investment contract {} signed — offer {} accepted, fundedAmount={}",
                     contract.getId(), offer.getId(), loan.getFundedAmount());
         }
+    }
+
+    /**
+     * Hoàn tiền cho toàn bộ nhà đầu tư của một khoản (unlock các offer ACCEPTED) và void các
+     * hợp đồng đầu tư chưa ký. Dùng khi khoản bị hủy/hết hạn gọi vốn. Idempotent theo offerId
+     * (unlock dùng referenceId "REFUND-{offerId}"), nên chạy lại an toàn không hoàn trùng.
+     */
+    @Transactional
+    public void refundInvestorsAndVoid(LoanRequest loan, String reason) {
+        List<LoanOffer> accepted = loanOfferRepository
+                .findByLoanRequestIdAndStatus(loan.getId(), OfferStatus.ACCEPTED);
+
+        List<InvestmentRefundedEvent.Refund> refunds = new ArrayList<>();
+        for (LoanOffer offer : accepted) {
+            paymentServiceClient.unlock(offer.getInvestorId(), offer.getAmount(),
+                    reason + " " + loan.getLoanCode(),
+                    "REFUND-" + offer.getId());
+            offer.setStatus(OfferStatus.CANCELLED);
+            loanOfferRepository.save(offer);
+            refunds.add(InvestmentRefundedEvent.Refund.builder()
+                    .investorId(offer.getInvestorId())
+                    .amount(offer.getAmount())
+                    .build());
+        }
+
+        // Void hợp đồng còn chờ ký (PENDING_SIGNATURE): HĐ đầu tư chưa ký và/hoặc khế ước người gọi vốn.
+        contractRepository.findByLoanIdAndIsDeletedFalseOrderByCreatedAtDesc(loan.getId()).stream()
+                .filter(c -> c.getStatus() == ContractStatus.PENDING_SIGNATURE)
+                .forEach(c -> {
+                    c.setStatus(ContractStatus.VOIDED);
+                    contractRepository.save(c);
+                });
+
+        // Thông báo hoàn tiền cho từng nhà đầu tư (chỉ phát khi có refund).
+        kafkaProducerService.publishInvestmentRefunded(loan, reason, refunds);
+
+        log.info("Refunded {} offers and voided pending contracts for loan {} ({})",
+                refunds.size(), loan.getId(), reason);
     }
 
     private void applyLoanAgreementSigned(LoanRequest loan) {

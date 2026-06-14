@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.p2plending.loan.domain.entity.LoanContract;
 import com.p2plending.loan.domain.entity.LoanRequest;
 import com.p2plending.loan.kafka.event.ContractReadyEvent;
+import com.p2plending.loan.kafka.event.InvestmentRefundedEvent;
 import com.p2plending.loan.kafka.event.LoanApprovedAwaitingBorrowerEvent;
 import com.p2plending.loan.kafka.event.LoanCreatedEvent;
 import com.p2plending.loan.kafka.event.LoanDisbursedEvent;
@@ -29,6 +30,7 @@ public class KafkaProducerService {
     private static final String TOPIC_LOAN_APPROVED_AWAITING_BORROWER = "loan.approved.awaiting_borrower";
     private static final String TOPIC_CONTRACT_READY = "contract.ready";
     private static final String TOPIC_LOAN_DISBURSED = "loan.disbursed";
+    private static final String TOPIC_INVESTMENT_REFUNDED = "investment.refunded";
 
     private final KafkaTemplate<String, String> kafkaTemplate;
     private final ObjectMapper objectMapper;
@@ -115,6 +117,19 @@ public class KafkaProducerService {
                 .investorIds(investorIds)
                 .build();
         send(TOPIC_LOAN_DISBURSED, loan.getId(), event);
+    }
+
+    /** Published khi hoàn tiền đầu tư cho nhà đầu tư (khoản hết hạn/không ký khế ước). */
+    public void publishInvestmentRefunded(LoanRequest loan, String reason,
+                                          List<InvestmentRefundedEvent.Refund> refunds) {
+        if (refunds == null || refunds.isEmpty()) return;
+        InvestmentRefundedEvent event = InvestmentRefundedEvent.builder()
+                .loanId(loan.getId())
+                .loanCode(loan.getLoanCode())
+                .reason(reason)
+                .refunds(refunds)
+                .build();
+        send(TOPIC_INVESTMENT_REFUNDED, loan.getId(), event);
     }
 
     private void send(String topic, String key, Object payload) {

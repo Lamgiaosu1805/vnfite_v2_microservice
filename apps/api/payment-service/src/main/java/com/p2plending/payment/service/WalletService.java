@@ -174,8 +174,23 @@ public class WalletService {
                 .build());
     }
 
+    /**
+     * Mở khóa tiền khi lệnh đầu tư bị hủy/hết hạn (locked → available trở lại).
+     * Không đụng TIKLUY total (lock chỉ tăng lockedBalance, unlock giảm lại).
+     * Idempotent theo referenceId (vd "REFUND-{offerId}") để không hoàn trùng khi retry.
+     */
     @Transactional
     public void unlockAmount(String userId, BigDecimal amount, String description) {
+        unlockAmount(userId, amount, description, null);
+    }
+
+    @Transactional
+    public void unlockAmount(String userId, BigDecimal amount, String description, String referenceId) {
+        if (referenceId != null && transactionRepository.existsByReferenceId(referenceId)) {
+            log.warn("Idempotent unlock skip: referenceId={} đã xử lý", referenceId);
+            return;
+        }
+
         Wallet wallet = findByUser(userId);
         BigDecimal newLocked = wallet.getLockedBalance().subtract(amount);
         if (newLocked.compareTo(BigDecimal.ZERO) < 0) newLocked = BigDecimal.ZERO;
@@ -188,32 +203,58 @@ public class WalletService {
                 .type(TransactionType.INVEST_REFUND)
                 .amount(amount)
                 .status(TransactionStatus.SUCCESS)
+                .referenceId(referenceId)
                 .description(description != null ? description : "Hoàn tiền đầu tư")
                 .balanceAfter(computeAvailable(wallet))
                 .build());
     }
 
     /**
-     * Trừ tiền khi khoản vay được giải ngân (tiền locked → debit thật).
-     * Chỉ giảm lockedBalance — TIKLUY đã xử lý giải ngân thực tế sang tài khoản người gọi vốn.
+     * Trừ tiền khi khoản vay được giải ngân: tiền rời ví nhà đầu tư (locked → ra khỏi ví).
+     * Giảm cả TOTAL_MONEY trên TIKLUY lẫn lockedBalance để số dư khả dụng giảm vĩnh viễn.
+     *
+     * <p>Idempotent theo {@code referenceId} (vd "DISBURSE-{offerId}"): nếu đã xử lý thì bỏ qua,
+     * tránh debit trùng khi loan-service retry giải ngân.
      */
     @Transactional
     public void debitInvestment(String userId, BigDecimal amount, String description) {
+        debitInvestment(userId, amount, description, null);
+    }
+
+    @Transactional
+    public void debitInvestment(String userId, BigDecimal amount, String description, String referenceId) {
+        if (referenceId != null && transactionRepository.existsByReferenceId(referenceId)) {
+            log.warn("Idempotent debit skip: referenceId={} đã xử lý", referenceId);
+            return;
+        }
+
         Wallet wallet = findByUser(userId);
+        boolean mock = appProperties.getPayment().isMock();
+        BigDecimal tikluyTotal = mock ? BigDecimal.ZERO : getTikluyBalance(wallet);
 
         BigDecimal newLocked = wallet.getLockedBalance().subtract(amount);
         if (newLocked.compareTo(BigDecimal.ZERO) < 0) newLocked = BigDecimal.ZERO;
         wallet.setLockedBalance(newLocked);
         walletRepository.save(wallet);
 
+        BigDecimal balanceAfter = tikluyTotal.subtract(amount).subtract(newLocked).max(BigDecimal.ZERO);
         transactionRepository.save(WalletTransaction.builder()
                 .walletId(wallet.getId())
                 .type(TransactionType.INVEST)
                 .amount(amount)
                 .status(TransactionStatus.SUCCESS)
+                .referenceId(referenceId)
                 .description(description != null ? description : "Giải ngân khoản đầu tư")
-                .balanceAfter(computeAvailable(wallet))
+                .balanceAfter(balanceAfter)
                 .build());
+
+        // Trừ TIKLUY CUỐI CÙNG: không còn thao tác DB nào sau lời gọi ngoài này, nên nếu DB
+        // có lỗi sẽ xảy ra trước (rollback an toàn, chưa trừ TIKLUY). TIKLUY lỗi → ném →
+        // toàn bộ rollback. Cửa sổ trùng chỉ còn ở bước commit cuối (cực hiếm).
+        if (!mock) {
+            String tikluyTxnId = referenceId != null ? referenceId : "DEBIT-" + UUID.randomUUID();
+            tikluyClient.deductAccount(tikluyTxnId, wallet.getVnfAccountNo(), amount);
+        }
     }
 
     /**

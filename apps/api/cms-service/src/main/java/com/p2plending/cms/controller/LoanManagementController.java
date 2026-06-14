@@ -106,6 +106,17 @@ public class LoanManagementController {
     }
 
     /**
+     * POST /cms/loans/expire-sweep
+     * Chạy ngay job hết hạn gọi vốn (ACTIVE quá hạn) và hết hạn ký khế ước (FUNDED kẹt):
+     * hoàn tiền nhà đầu tư + chuyển khoản sang CANCELLED. Dùng cho vận hành/test thay vì chờ cron.
+     */
+    @PostMapping("/expire-sweep")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN')")
+    public ResponseEntity<JsonNode> expireSweep() {
+        return ResponseEntity.ok(loanService.expireSweep());
+    }
+
+    /**
      * POST /cms/loans/{loanId}/disburse
      * OPS giải ngân vốn cho người gọi vốn: AWAITING_DISBURSEMENT → DISBURSED.
      * Sinh lịch trả nợ từ ngày giải ngân + bắn loan.disbursed.

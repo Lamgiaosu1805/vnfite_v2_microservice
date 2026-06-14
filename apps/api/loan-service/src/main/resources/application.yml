@@ -89,11 +89,20 @@ app:
     secret: ${INTERNAL_API_SECRET:dev-internal-secret}
   auth-service:
     base-url: ${AUTH_SERVICE_URL:http://auth-service:8081}
+  payment-service:
+    base-url: ${PAYMENT_SERVICE_URL:http://payment-service:8086}
   dpd:
     # Số ngày quá hạn (DPD) → tự đánh khoản vay sang DEFAULTED
     default-threshold: ${APP_DPD_THRESHOLD:30}
     # Cron quét DPD hằng ngày (giờ Việt Nam)
     cron: ${APP_DPD_CRON:0 0 1 * * *}
+  funding:
+    # Số ngày khoản được phép ở ACTIVE để gọi vốn trước khi hết hạn & hoàn tiền nhà đầu tư
+    window-days: ${APP_FUNDING_WINDOW_DAYS:30}
+    # Số ngày người gọi vốn được phép ký khế ước sau khi FUNDED trước khi hủy & hoàn tiền
+    signing-window-days: ${APP_FUNDING_SIGNING_WINDOW_DAYS:7}
+    # Cron quét hết hạn gọi vốn / ký khế ước hằng ngày (giờ Việt Nam)
+    expiry-cron: ${APP_FUNDING_EXPIRY_CRON:0 30 1 * * *}
   appraisal:
     # Trần tỷ lệ trả nợ trên thu nhập (Payment-to-Income) khi tính số tiền đề xuất
     pti-cap: ${APP_APPRAISAL_PTI_CAP:0.40}

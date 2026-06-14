@@ -178,20 +178,39 @@ public class TikluyClient {
 
     /**
      * Cộng tiền trực tiếp vào tài khoản TIKLUY — dùng cho môi trường test khi không có giao dịch MB Bank thật.
-     * Tương đương với PUT /api/v2/account/{accNo} { fluctuatedAmount, isPlus: true }.
+     * Lỗi chỉ log, không ném (nạp tiền không nên chặn flow).
      */
     public void topUpAccount(String txnId, String accNo, BigDecimal amount) {
-        // TIKLUY DTO dùng `boolean isPlus` → Lombok getter isPlus() → Jackson property "plus"
-        Map<String, Object> body = Map.of("fluctuatedAmount", amount, "plus", true);
+        adjustBalance(txnId, accNo, amount, true, false);
+    }
+
+    /**
+     * Trừ tiền trực tiếp khỏi tài khoản TIKLUY — dùng khi giải ngân (tiền rời ví nhà đầu tư).
+     * Ném RuntimeException nếu thất bại để caller rollback (không được nuốt lỗi tiền).
+     */
+    public void deductAccount(String txnId, String accNo, BigDecimal amount) {
+        adjustBalance(txnId, accNo, amount, false, true);
+    }
+
+    /**
+     * PUT /api/v2/account/{accNo} { fluctuatedAmount, plus } để cộng/trừ TOTAL_MONEY.
+     * TIKLUY DTO dùng `boolean isPlus` → Lombok getter isPlus() → Jackson property "plus".
+     * plus=true cộng, plus=false trừ (xem AccountService.java của TIKLUY).
+     */
+    private void adjustBalance(String txnId, String accNo, BigDecimal amount, boolean plus, boolean throwOnError) {
+        Map<String, Object> body = Map.of("fluctuatedAmount", amount, "plus", plus);
         try {
             restTemplate.exchange(
                     props.getBaseUrl() + "/api/v2/account/" + accNo,
                     HttpMethod.PUT,
                     new HttpEntity<>(body, authHeaders(txnId)),
                     JsonNode.class);
-            log.info("txnId={} TIKLUY topUp accNo={} amount={}", txnId, accNo, amount);
+            log.info("txnId={} TIKLUY adjust accNo={} amount={} plus={}", txnId, accNo, amount, plus);
         } catch (Exception e) {
-            log.warn("txnId={} TIKLUY topUp failed accNo={}: {}", txnId, accNo, e.getMessage());
+            log.warn("txnId={} TIKLUY adjust failed accNo={} plus={}: {}", txnId, accNo, plus, e.getMessage());
+            if (throwOnError) {
+                throw new RuntimeException("Cập nhật số dư TIKLUY thất bại: " + e.getMessage(), e);
+            }
         }
     }
 

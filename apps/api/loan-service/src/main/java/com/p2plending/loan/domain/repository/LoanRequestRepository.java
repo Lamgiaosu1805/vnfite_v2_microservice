@@ -23,6 +23,14 @@ public interface LoanRequestRepository
     /** Khoản đang trong vòng đời trả nợ — dùng cho job DPD. */
     List<LoanRequest> findByStatusInAndIsDeletedFalse(Collection<LoanStatus> statuses);
 
+    /** Khoản ở trạng thái cho trước và lên sàn trước mốc cutoff — dùng cho job hết hạn gọi vốn. */
+    List<LoanRequest> findByStatusAndActivatedAtBeforeAndIsDeletedFalse(
+            LoanStatus status, LocalDateTime cutoff);
+
+    /** Khoản ở trạng thái cho trước và gọi đủ vốn trước mốc cutoff — dùng cho job hết hạn ký khế ước. */
+    List<LoanRequest> findByStatusAndFundedAtBeforeAndIsDeletedFalse(
+            LoanStatus status, LocalDateTime cutoff);
+
     /** Kiểm tra borrower có đang có khoản vay ở một trong các trạng thái chặn không. */
     boolean existsByBorrowerIdAndStatusInAndIsDeletedFalse(
             String borrowerId, Collection<LoanStatus> statuses);

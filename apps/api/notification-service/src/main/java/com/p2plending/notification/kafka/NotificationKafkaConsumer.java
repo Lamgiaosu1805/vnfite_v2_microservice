@@ -3,6 +3,7 @@ package com.p2plending.notification.kafka;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.p2plending.notification.kafka.event.ContractReadyEvent;
 import com.p2plending.notification.kafka.event.DepositCompletedEvent;
+import com.p2plending.notification.kafka.event.InvestmentRefundedEvent;
 import com.p2plending.notification.kafka.event.LoanApprovedAwaitingBorrowerEvent;
 import com.p2plending.notification.kafka.event.LoanDisbursedEvent;
 import com.p2plending.notification.service.NotificationService;
@@ -71,6 +72,19 @@ public class NotificationKafkaConsumer {
             notificationService.notifyLoanDisbursed(event);
         } catch (Exception ex) {
             log.error("Failed to process loan.disbursed key={}: {}", record.key(), ex.getMessage(), ex);
+        }
+    }
+
+    @KafkaListener(
+            topics = "investment.refunded",
+            groupId = "${spring.kafka.consumer.group-id:notification-service-group}"
+    )
+    public void onInvestmentRefunded(ConsumerRecord<String, String> record) {
+        try {
+            InvestmentRefundedEvent event = objectMapper.readValue(record.value(), InvestmentRefundedEvent.class);
+            notificationService.notifyInvestmentRefunded(event);
+        } catch (Exception ex) {
+            log.error("Failed to process investment.refunded key={}: {}", record.key(), ex.getMessage(), ex);
         }
     }
 }

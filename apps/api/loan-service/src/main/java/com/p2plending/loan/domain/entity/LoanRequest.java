@@ -161,6 +161,14 @@ public class LoanRequest {
     @Column(name = "reviewed_by", length = 100)
     private String reviewedBy;
 
+    /** Thời điểm khoản lên sàn (ACTIVE) — mốc tính hết hạn gọi vốn. */
+    @Column(name = "activated_at")
+    private LocalDateTime activatedAt;
+
+    /** Thời điểm khoản gọi đủ vốn (FUNDED) — mốc tính hết hạn ký khế ước của người gọi vốn. */
+    @Column(name = "funded_at")
+    private LocalDateTime fundedAt;
+
     /** Thời điểm OPS bấm giải ngân trên CMS. */
     @Column(name = "disbursed_at")
     private LocalDateTime disbursedAt;
