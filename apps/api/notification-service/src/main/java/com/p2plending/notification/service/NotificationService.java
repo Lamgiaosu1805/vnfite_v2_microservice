@@ -11,6 +11,7 @@ import com.p2plending.notification.kafka.event.DepositCompletedEvent;
 import com.p2plending.notification.kafka.event.InvestmentRefundedEvent;
 import com.p2plending.notification.kafka.event.LoanApprovedAwaitingBorrowerEvent;
 import com.p2plending.notification.kafka.event.LoanDisbursedEvent;
+import com.p2plending.notification.kafka.event.LoanRepaidEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
@@ -207,6 +208,76 @@ public class NotificationService {
         }
         log.info("Stored investment.refunded notifications for loan={} count={}",
                 event.getLoanId(), refunds.size());
+    }
+
+    /** Người gọi vốn trả một kỳ — thông báo cho người gọi vốn và từng nhà đầu tư nhận tiền. */
+    @Transactional
+    public void notifyLoanRepaid(LoanRepaidEvent event) {
+        String code = event.getLoanCode() != null ? event.getLoanCode() : event.getLoanId();
+        String periodLabel = event.getTotalPeriods() != null
+                ? "%d/%d".formatted(event.getPeriodNumber(), event.getTotalPeriods())
+                : String.valueOf(event.getPeriodNumber());
+
+        // ── Người gọi vốn ──
+        String bTitle;
+        String bMessage;
+        if (event.isLoanCompleted()) {
+            bTitle = "Đã tất toán khoản vay";
+            bMessage = "Bạn đã trả hết khoản gọi vốn %s. Cảm ơn bạn đã hoàn tất nghĩa vụ thanh toán."
+                    .formatted(code);
+        } else if (event.isPartial()) {
+            BigDecimal remaining = event.getPeriodTotalDue() != null && event.getAmountPaid() != null
+                    ? event.getPeriodTotalDue().subtract(event.getAmountPaid()) : null;
+            bTitle = "Đã trả một phần kỳ " + periodLabel;
+            bMessage = ("Bạn vừa trả %s cho kỳ %s khoản %s. " + (remaining != null
+                        ? "Còn thiếu %s — vui lòng nạp thêm để hoàn tất kỳ này."
+                        : "Vui lòng nạp thêm để hoàn tất kỳ này."))
+                    .formatted(formatMoney(event.getAmountPaid()), periodLabel, code,
+                            remaining != null ? formatMoney(remaining) : "");
+        } else {
+            bTitle = "Đã trả nợ kỳ " + periodLabel;
+            bMessage = "Bạn đã trả %s cho kỳ %s khoản gọi vốn %s thành công."
+                    .formatted(formatMoney(event.getAmountPaid()), periodLabel, code);
+        }
+
+        notificationRepository.save(Notification.builder()
+                .userId(event.getBorrowerId())
+                .title(bTitle)
+                .message(bMessage)
+                .type(NotificationType.IN_APP)
+                .channel("REPAYMENT")
+                .referenceId(event.getLoanId())
+                .referenceType("LOAN")
+                .sentAt(LocalDateTime.now())
+                .build());
+        pushClient.pushToUser(event.getBorrowerId(), bTitle, bMessage,
+                Map.of("action", "OPEN_LOAN_DETAIL", "loanId", event.getLoanId()));
+
+        // ── Nhà đầu tư nhận tiền ──
+        List<LoanRepaidEvent.InvestorPayout> payouts = event.getInvestorPayouts();
+        if (payouts != null) {
+            for (LoanRepaidEvent.InvestorPayout p : payouts) {
+                String iTitle = "Nhận tiền hoàn trả";
+                String iMessage = "Khoản %s vừa trả kỳ %s. Bạn nhận %s vào ví VNFITE."
+                        .formatted(code, periodLabel, formatMoney(p.getAmount()));
+                notificationRepository.save(Notification.builder()
+                        .userId(p.getInvestorId())
+                        .title(iTitle)
+                        .message(iMessage)
+                        .type(NotificationType.IN_APP)
+                        .channel("REPAYMENT")
+                        .referenceId(event.getLoanId())
+                        .referenceType("LOAN")
+                        .sentAt(LocalDateTime.now())
+                        .build());
+                pushClient.pushToUser(p.getInvestorId(), iTitle, iMessage,
+                        Map.of("action", "OPEN_WALLET", "loanId", event.getLoanId()));
+            }
+        }
+
+        log.info("Stored loan.repayment_completed notifications for loan={} borrower={} investors={} completed={}",
+                event.getLoanId(), event.getBorrowerId(),
+                payouts != null ? payouts.size() : 0, event.isLoanCompleted());
     }
 
     @Transactional

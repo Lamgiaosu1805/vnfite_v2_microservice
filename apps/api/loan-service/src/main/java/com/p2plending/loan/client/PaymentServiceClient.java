@@ -85,6 +85,23 @@ public class PaymentServiceClient {
         post(userId, "debit", amount, description, referenceId, "Không thể trừ tiền giải ngân.");
     }
 
+    /**
+     * Trừ ví người gọi vốn khi trả nợ (vế TRỪ của chuyển nội bộ borrower → investors).
+     * Fail-closed: số dư không đủ → payment-service trả 422 → ném InvalidLoanStateException (→ 409).
+     * referenceId (vd "REPAY-OUT-{loanId}-P{n}-{date}") để idempotent, chống trừ trùng khi retry.
+     */
+    public void debitRepayment(String userId, BigDecimal amount, String description, String referenceId) {
+        post(userId, "repay-debit", amount, description, referenceId, "Không thể trừ tiền trả nợ từ ví.");
+    }
+
+    /**
+     * Cộng ví nhà đầu tư khi nhận hoàn trả (vế CỘNG của chuyển nội bộ).
+     * referenceId (vd "REPAY-IN-{...}-{offerId}") để idempotent, chống cộng trùng khi retry.
+     */
+    public void creditRepayment(String userId, BigDecimal amount, String description, String referenceId) {
+        post(userId, "credit", amount, description, referenceId, "Không thể cộng tiền hoàn trả vào ví.");
+    }
+
     private void post(String userId, String action, BigDecimal amount, String description,
                       String referenceId, String fallback) {
         UriComponentsBuilder builder = UriComponentsBuilder

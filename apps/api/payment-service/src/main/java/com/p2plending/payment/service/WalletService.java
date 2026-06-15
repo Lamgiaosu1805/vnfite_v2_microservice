@@ -278,22 +278,82 @@ public class WalletService {
     }
 
     /**
-     * Nhận tiền hoàn trả (gốc + lãi) từ khoản cho vay.
-     * TIKLUY sẽ nhận tiền thực từ người gọi vốn trả về — không cập nhật local balance.
+     * Nhà đầu tư nhận tiền hoàn trả (gốc + lãi) khi người gọi vốn trả nợ.
+     *
+     * <p>Đây là vế CỘNG của giao dịch chuyển nội bộ: tiền vừa bị trừ khỏi VA người gọi vốn
+     * (xem {@link #debitRepayment}) được cộng vào VA nhà đầu tư trên TIKLUY → số dư khả dụng tăng.
+     * Idempotent theo {@code referenceId} (vd "REPAY-IN-{...}-{offerId}") chống cộng trùng khi retry.
      */
     @Transactional
-    public void creditRepayment(String userId, BigDecimal amount, String description, String externalRef) {
+    public void creditRepayment(String userId, BigDecimal amount, String description, String referenceId) {
+        if (referenceId != null && transactionRepository.existsByReferenceId(referenceId)) {
+            log.warn("Idempotent repay-credit skip: referenceId={} đã xử lý", referenceId);
+            return;
+        }
+
         Wallet wallet = findByUser(userId);
+        boolean mock = appProperties.getPayment().isMock();
+
+        // Cộng TIKLUY TRƯỚC khi ghi DB: nếu cộng thất bại (ném) thì rollback, không ghi ledger ảo.
+        if (!mock) {
+            String tikluyTxnId = referenceId != null ? referenceId : "REPAY-IN-" + UUID.randomUUID();
+            tikluyClient.topUpAccount(tikluyTxnId, wallet.getVnfAccountNo(), amount);
+        }
 
         transactionRepository.save(WalletTransaction.builder()
                 .walletId(wallet.getId())
                 .type(TransactionType.REPAYMENT)
                 .amount(amount)
                 .status(TransactionStatus.SUCCESS)
-                .externalRef(externalRef)
+                .referenceId(referenceId)
                 .description(description != null ? description : "Nhận tiền hoàn trả")
                 .balanceAfter(computeAvailable(wallet))
                 .build());
+    }
+
+    /**
+     * Người gọi vốn trả nợ — trừ tiền khỏi ví (vế TRỪ của chuyển nội bộ borrower → investors).
+     * Giảm TOTAL_MONEY trên TIKLUY để số dư khả dụng giảm thật.
+     *
+     * <p><b>Fail-closed:</b> nếu số dư khả dụng không đủ thì ném {@link IllegalStateException}
+     * (→ 4xx) để loan-service dừng luồng, không trả nợ khi ví thiếu tiền.
+     * Idempotent theo {@code referenceId} (vd "REPAY-OUT-{loanId}-P{n}-{date}") chống trừ trùng.
+     */
+    @Transactional
+    public void debitRepayment(String userId, BigDecimal amount, String description, String referenceId) {
+        if (referenceId != null && transactionRepository.existsByReferenceId(referenceId)) {
+            log.warn("Idempotent repay-debit skip: referenceId={} đã xử lý", referenceId);
+            return;
+        }
+
+        Wallet wallet = findByUser(userId);
+        boolean mock = appProperties.getPayment().isMock();
+        BigDecimal tikluyTotal = mock ? BigDecimal.ZERO : getTikluyBalance(wallet);
+        BigDecimal locked = wallet.getLockedBalance() != null ? wallet.getLockedBalance() : BigDecimal.ZERO;
+        BigDecimal available = tikluyTotal.subtract(locked).max(BigDecimal.ZERO);
+
+        // Mock mode: TIKLUY balance luôn = 0 nên bỏ qua kiểm tra để không chặn test cục bộ.
+        if (!mock && available.compareTo(amount) < 0) {
+            throw new IllegalStateException(
+                    "Số dư khả dụng không đủ để trả nợ. Khả dụng: " + available + ", cần: " + amount);
+        }
+
+        BigDecimal balanceAfter = available.subtract(amount).max(BigDecimal.ZERO);
+        transactionRepository.save(WalletTransaction.builder()
+                .walletId(wallet.getId())
+                .type(TransactionType.REPAY)
+                .amount(amount)
+                .status(TransactionStatus.SUCCESS)
+                .referenceId(referenceId)
+                .description(description != null ? description : "Trả nợ khoản vay")
+                .balanceAfter(balanceAfter)
+                .build());
+
+        // Trừ TIKLUY CUỐI CÙNG: không còn thao tác DB nào sau lời gọi ngoài này; TIKLUY lỗi → ném → rollback.
+        if (!mock) {
+            String tikluyTxnId = referenceId != null ? referenceId : "REPAY-OUT-" + UUID.randomUUID();
+            tikluyClient.deductAccount(tikluyTxnId, wallet.getVnfAccountNo(), amount);
+        }
     }
 
     // ─── Internal helpers ─────────────────────────────────────────────────────
@@ -385,7 +445,7 @@ public class WalletService {
 
         return switch (type) {
             case DEPOSIT, INVEST_REFUND, REPAYMENT -> transaction.getAmount();
-            case WITHDRAW, INVEST -> transaction.getAmount().negate();
+            case WITHDRAW, INVEST, REPAY -> transaction.getAmount().negate();
         };
     }
 }

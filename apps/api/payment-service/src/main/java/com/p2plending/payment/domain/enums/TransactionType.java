@@ -5,5 +5,6 @@ public enum TransactionType {
     WITHDRAW,      // Rút tiền ra ngân hàng
     INVEST,        // Khóa tiền khi đặt offer đầu tư
     INVEST_REFUND, // Hoàn tiền khi offer bị từ chối/hủy
-    REPAYMENT      // Nhận tiền gốc+lãi từ khoản cho vay
+    REPAYMENT,     // Nhà đầu tư nhận tiền gốc+lãi từ khoản cho vay (tiền vào)
+    REPAY          // Người gọi vốn trả nợ — trừ khỏi ví (tiền ra)
 }

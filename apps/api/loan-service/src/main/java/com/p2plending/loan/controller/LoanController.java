@@ -197,6 +197,21 @@ public class LoanController {
     }
 
     /**
+     * POST /api/loans/{id}/repay
+     * Người gọi vốn chủ động trả kỳ đến hạn sớm nhất từ ví VNFITE. Tiền được trừ khỏi ví người
+     * gọi vốn và phân bổ pro-rata về ví các nhà đầu tư. Ví không đủ số dư → 409 với thông báo rõ.
+     * Trả về lịch trả nợ đã cập nhật.
+     */
+    @PostMapping("/{id}/repay")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<List<RepaymentScheduleResponse>> repay(
+            @PathVariable String id,
+            @AuthenticationPrincipal AuthenticatedUser principal
+    ) {
+        return ResponseEntity.ok(repaymentService.repayNextDueFromWallet(id, principal.userId()));
+    }
+
+    /**
      * POST /api/loans/{id}/offer
      * Investor places an offer on an ACTIVE loan. Offer is created PENDING and an
      * investment contract is issued (PENDING_SIGNATURE) — the investor must sign it

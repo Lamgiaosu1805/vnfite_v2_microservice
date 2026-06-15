@@ -194,20 +194,40 @@ public class InternalPaymentController {
         return ResponseEntity.ok(Map.of("status", "OK"));
     }
 
-    /** Nhận tiền hoàn trả từ khoản vay */
+    /** Nhà đầu tư nhận tiền hoàn trả khi người gọi vốn trả nợ. referenceId để idempotent. */
     @PostMapping("/internal/payment/wallet/{userId}/credit")
     public ResponseEntity<Map<String, String>> creditRepayment(
             @RequestHeader(value = "X-Internal-Secret", required = false) String secret,
             @PathVariable String userId,
             @RequestParam BigDecimal amount,
             @RequestParam(required = false) String description,
-            @RequestParam(required = false) String externalRef) {
+            @RequestParam(required = false) String referenceId) {
 
         if (!appProperties.getInternal().getSecret().equals(secret)) {
             return ResponseEntity.status(401).body(Map.of("error", "Unauthorized"));
         }
 
-        walletService.creditRepayment(userId, amount, description, externalRef);
+        walletService.creditRepayment(userId, amount, description, referenceId);
+        return ResponseEntity.ok(Map.of("status", "OK"));
+    }
+
+    /**
+     * Người gọi vốn trả nợ — trừ tiền khỏi ví. referenceId để idempotent (chống trừ trùng).
+     * Fail-closed: số dư không đủ → walletService ném IllegalStateException → 409 ở GlobalExceptionHandler.
+     */
+    @PostMapping("/internal/payment/wallet/{userId}/repay-debit")
+    public ResponseEntity<Map<String, String>> debitRepayment(
+            @RequestHeader(value = "X-Internal-Secret", required = false) String secret,
+            @PathVariable String userId,
+            @RequestParam BigDecimal amount,
+            @RequestParam(required = false) String description,
+            @RequestParam(required = false) String referenceId) {
+
+        if (!appProperties.getInternal().getSecret().equals(secret)) {
+            return ResponseEntity.status(401).body(Map.of("error", "Unauthorized"));
+        }
+
+        walletService.debitRepayment(userId, amount, description, referenceId);
         return ResponseEntity.ok(Map.of("status", "OK"));
     }
 

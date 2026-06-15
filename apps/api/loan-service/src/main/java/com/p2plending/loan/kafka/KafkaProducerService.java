@@ -10,6 +10,7 @@ import com.p2plending.loan.kafka.event.LoanApprovedAwaitingBorrowerEvent;
 import com.p2plending.loan.kafka.event.LoanCreatedEvent;
 import com.p2plending.loan.kafka.event.LoanDisbursedEvent;
 import com.p2plending.loan.kafka.event.LoanFundedEvent;
+import com.p2plending.loan.kafka.event.LoanRepaidEvent;
 import com.p2plending.loan.kafka.event.LoanSubmittedEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -31,6 +32,7 @@ public class KafkaProducerService {
     private static final String TOPIC_CONTRACT_READY = "contract.ready";
     private static final String TOPIC_LOAN_DISBURSED = "loan.disbursed";
     private static final String TOPIC_INVESTMENT_REFUNDED = "investment.refunded";
+    private static final String TOPIC_LOAN_REPAID = "loan.repayment_completed";
 
     private final KafkaTemplate<String, String> kafkaTemplate;
     private final ObjectMapper objectMapper;
@@ -130,6 +132,11 @@ public class KafkaProducerService {
                 .refunds(refunds)
                 .build();
         send(TOPIC_INVESTMENT_REFUNDED, loan.getId(), event);
+    }
+
+    /** Published khi người gọi vốn trả một kỳ và đã phân bổ tiền về ví nhà đầu tư. */
+    public void publishLoanRepaid(LoanRepaidEvent event) {
+        send(TOPIC_LOAN_REPAID, event.getLoanId(), event);
     }
 
     private void send(String topic, String key, Object payload) {
