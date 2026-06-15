@@ -92,6 +92,13 @@ app:
     namespace: ${APP_REDIS_NAMESPACE:${SPRING_PROFILES_ACTIVE:dev}}:auth-service
   internal:
     secret: ${INTERNAL_API_SECRET:dev-internal-secret}
+  store:
+    android:
+      min-version: ${APP_MIN_VERSION_ANDROID:1.0.0}
+      store-url: ${APP_STORE_URL_ANDROID:https://play.google.com/store/apps/details?id=com.vnfite.vnfiteapp}
+    ios:
+      min-version: ${APP_MIN_VERSION_IOS:1.0.0}
+      store-url: ${APP_STORE_URL_IOS:https://apps.apple.com/app/id6739504697}
 
 logging:
   pattern:
