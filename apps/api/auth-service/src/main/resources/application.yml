@@ -98,7 +98,7 @@ app:
       store-url: ${APP_STORE_URL_ANDROID:https://play.google.com/store/apps/details?id=com.vnfite.vnfiteapp}
     ios:
       min-version: ${APP_MIN_VERSION_IOS:1.0.0}
-      store-url: ${APP_STORE_URL_IOS:https://apps.apple.com/app/id6739504697}
+      store-url: ${APP_STORE_URL_IOS:https://apps.apple.com/vn/app/vnfite-fintech-p2p-lending/id1610082008?l=vi}
 
 logging:
   pattern:
