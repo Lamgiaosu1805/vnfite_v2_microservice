@@ -24,6 +24,7 @@ import com.p2plending.auth.dto.response.AuthResponse;
 import com.p2plending.auth.dto.response.DeviceSessionResponse;
 import com.p2plending.auth.dto.response.KycDocumentResponse;
 import com.p2plending.auth.dto.response.RegisterInitResponse;
+import com.p2plending.auth.dto.response.UserProfileResponse;
 import com.p2plending.auth.exception.DeviceConflictException;
 import com.p2plending.auth.exception.InvalidCredentialsException;
 import com.p2plending.auth.exception.InvalidOtpException;
@@ -404,6 +405,38 @@ public class AuthService {
 
         log.info("KYC submitted: userId={} documentId={} docType={}", userId, saved.getId(), request.getDocType());
         return kycDocumentMapper.toResponse(saved);
+    }
+
+    // ── Profile ────────────────────────────────────────────────────
+
+    @Transactional(readOnly = true)
+    public UserProfileResponse getMyProfile(String userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found: " + userId));
+
+        var builder = UserProfileResponse.builder()
+                .id(user.getId())
+                .phone(user.getPhone())
+                .email(user.getEmail())
+                .kycStatus(user.getKycStatus())
+                .createdAt(user.getCreatedAt());
+
+        kycSubmissionRepository.findTopByUserIdAndStatusOrderByCreatedAtDesc(userId, user.getKycStatus())
+                .ifPresent(kyc -> builder
+                        .fullName(kyc.getFullName())
+                        .gender(kyc.getGender())
+                        .cccdNumber(kyc.getCccdNumber())
+                        .dateOfBirth(kyc.getDateOfBirth())
+                        .permanentAddress(kyc.getPermanentAddress())
+                        .hometown(kyc.getHometown())
+                        .issueDate(kyc.getIssueDate())
+                        .issuingAuthority(kyc.getIssuingAuthority())
+                        .expiryDate(kyc.getExpiryDate())
+                        .kycSubmissionStatus(kyc.getStatus())
+                        .kycSubmittedAt(kyc.getCreatedAt())
+                );
+
+        return builder.build();
     }
 
     // ── Helper ────────────────────────────────────────────────────

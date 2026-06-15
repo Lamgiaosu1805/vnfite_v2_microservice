@@ -22,6 +22,7 @@ import com.p2plending.auth.dto.response.AuthResponse;
 import com.p2plending.auth.dto.response.DeviceSessionResponse;
 import com.p2plending.auth.dto.response.KycSubmissionResponse;
 import com.p2plending.auth.dto.response.RegisterInitResponse;
+import com.p2plending.auth.dto.response.UserProfileResponse;
 import com.p2plending.auth.service.AuthService;
 import com.p2plending.auth.service.ChangePasswordService;
 import com.p2plending.auth.service.FcmTokenService;
@@ -340,5 +341,13 @@ public class AuthController {
         }
         fcmTokenService.saveToken(userId, fcmToken, deviceKey);
         return ResponseEntity.ok(Map.of("message", "FCM token đã được lưu"));
+    }
+
+    @GetMapping("/me")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<UserProfileResponse> getMyProfile(
+            @AuthenticationPrincipal UserDetails userDetails) {
+        String userId = authService.getUserIdByPhone(userDetails.getUsername());
+        return ResponseEntity.ok(authService.getMyProfile(userId));
     }
 }
