@@ -17,6 +17,12 @@ public class RepaymentScheduleResponse {
     private BigDecimal interestDue;
     private BigDecimal totalDue;
     private BigDecimal paidAmount;
+    /** Phí phạt trả chậm đã tính của kỳ. */
+    private BigDecimal lateFee;
+    /** Phí phạt còn phải trả (lateFee - đã trả). */
+    private BigDecimal lateFeeOutstanding;
+    /** Tổng còn phải trả của kỳ = gốc + lãi + phí phạt còn lại. */
+    private BigDecimal totalOutstanding;
     private RepaymentStatus status;
     private Integer dpd;
     private LocalDateTime paidAt;

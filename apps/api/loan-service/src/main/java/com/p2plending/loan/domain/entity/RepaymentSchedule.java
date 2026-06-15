@@ -54,6 +54,16 @@ public class RepaymentSchedule {
     @Builder.Default
     private BigDecimal paidAmount = BigDecimal.ZERO;
 
+    /** Phí phạt trả chậm đã tính tới hiện tại (job DPD cập nhật theo dpd). */
+    @Column(name = "late_fee", nullable = false, precision = 15, scale = 2)
+    @Builder.Default
+    private BigDecimal lateFee = BigDecimal.ZERO;
+
+    /** Phần phí phạt người gọi vốn đã trả. */
+    @Column(name = "late_fee_paid", nullable = false, precision = 15, scale = 2)
+    @Builder.Default
+    private BigDecimal lateFeePaid = BigDecimal.ZERO;
+
     private LocalDateTime paidAt;
 
     @Enumerated(EnumType.STRING)
@@ -77,8 +87,21 @@ public class RepaymentSchedule {
     @UpdateTimestamp
     private LocalDateTime updatedAt;
 
+    /** Gốc + lãi còn phải trả của kỳ (chưa gồm phí phạt). */
     public BigDecimal getRemainingDue() {
         return totalDue.subtract(paidAmount);
+    }
+
+    /** Phí phạt còn phải trả của kỳ. */
+    public BigDecimal getLateFeeOutstanding() {
+        BigDecimal fee = lateFee != null ? lateFee : BigDecimal.ZERO;
+        BigDecimal paid = lateFeePaid != null ? lateFeePaid : BigDecimal.ZERO;
+        return fee.subtract(paid).max(BigDecimal.ZERO);
+    }
+
+    /** Tổng còn phải trả của kỳ = gốc + lãi + phí phạt còn lại. */
+    public BigDecimal getTotalOutstanding() {
+        return getRemainingDue().add(getLateFeeOutstanding());
     }
 
     public boolean isSettled() {

@@ -4,15 +4,18 @@ import com.p2plending.loan.client.PaymentServiceClient;
 import com.p2plending.loan.config.CacheConfig;
 import com.p2plending.loan.domain.entity.LoanOffer;
 import com.p2plending.loan.domain.entity.LoanRequest;
+import com.p2plending.loan.domain.entity.PendingInvestorCredit;
 import com.p2plending.loan.domain.entity.RepaymentSchedule;
 import com.p2plending.loan.domain.entity.RepaymentTransaction;
 import com.p2plending.loan.domain.enums.LoanStatus;
 import com.p2plending.loan.domain.enums.OfferStatus;
 import com.p2plending.loan.domain.enums.PaymentChannel;
+import com.p2plending.loan.domain.enums.PendingCreditStatus;
 import com.p2plending.loan.domain.enums.RepaymentMethod;
 import com.p2plending.loan.domain.enums.RepaymentStatus;
 import com.p2plending.loan.domain.repository.LoanOfferRepository;
 import com.p2plending.loan.domain.repository.LoanRequestRepository;
+import com.p2plending.loan.domain.repository.PendingInvestorCreditRepository;
 import com.p2plending.loan.domain.repository.RepaymentScheduleRepository;
 import com.p2plending.loan.domain.repository.RepaymentTransactionRepository;
 import com.p2plending.loan.dto.request.RecordPaymentRequest;
@@ -20,7 +23,9 @@ import com.p2plending.loan.dto.response.RepaymentScheduleResponse;
 import com.p2plending.loan.exception.InvalidLoanStateException;
 import com.p2plending.loan.exception.LoanNotFoundException;
 import com.p2plending.loan.kafka.KafkaProducerService;
+import com.p2plending.loan.kafka.event.InvestmentCreditReconciledEvent;
 import com.p2plending.loan.kafka.event.LoanRepaidEvent;
+import com.p2plending.loan.kafka.event.RepaymentDueReminderEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -55,19 +60,28 @@ public class RepaymentService {
     private static final Set<LoanStatus> SERVICING_STATUSES =
             EnumSet.of(LoanStatus.DISBURSED, LoanStatus.REPAYING);
 
-    private final RepaymentScheduleRepository    scheduleRepository;
-    private final RepaymentTransactionRepository transactionRepository;
-    private final LoanRequestRepository          loanRequestRepository;
-    private final LoanOfferRepository            loanOfferRepository;
-    private final LoanProductService             loanProductService;
-    private final RepaymentScheduleGenerator     generator;
-    private final PaymentServiceClient           paymentServiceClient;
-    private final KafkaProducerService           kafkaProducerService;
-    private final CacheManager                   cacheManager;
+    private final RepaymentScheduleRepository      scheduleRepository;
+    private final RepaymentTransactionRepository   transactionRepository;
+    private final LoanRequestRepository            loanRequestRepository;
+    private final LoanOfferRepository              loanOfferRepository;
+    private final PendingInvestorCreditRepository  pendingCreditRepository;
+    private final LoanProductService               loanProductService;
+    private final RepaymentScheduleGenerator       generator;
+    private final PaymentServiceClient             paymentServiceClient;
+    private final KafkaProducerService             kafkaProducerService;
+    private final CacheManager                     cacheManager;
 
     /** Ngưỡng DPD đánh DEFAULTED — VNFITE dùng 30 ngày (siết chặt hơn chuẩn NHNN 90 ngày). */
     @Value("${app.dpd.default-threshold:30}")
     private int defaultDpdThreshold;
+
+    /** Bật/tắt tính phí phạt trả chậm (kill-switch cho tính năng tiền). */
+    @Value("${app.late-fee.enabled:true}")
+    private boolean lateFeeEnabled;
+
+    private static final BigDecimal HUNDRED = new BigDecimal("100");
+    private static final BigDecimal DAYS_PER_YEAR = new BigDecimal("365");
+    private static final BigDecimal DEFAULT_LATE_FEE_RATE = new BigDecimal("150.00");
 
     // ── Sinh lịch khi FUNDED ──────────────────────────────────────
 
@@ -210,8 +224,9 @@ public class RepaymentService {
                 .orElseThrow(() -> new InvalidLoanStateException(
                         "Khoản gọi vốn %s không còn kỳ nào cần trả".formatted(loan.getLoanCode())));
 
+        // Trả đủ kỳ: gốc + lãi + phí phạt còn lại.
         List<RepaymentSchedule> updated = doSettlePeriod(
-                loan, period, period.getRemainingDue(), PaymentChannel.WALLET, borrowerId, schedules.size());
+                loan, period, period.getTotalOutstanding(), PaymentChannel.WALLET, borrowerId, schedules.size());
         return updated.stream().map(this::toResponse).toList();
     }
 
@@ -249,12 +264,22 @@ public class RepaymentService {
             return;
         }
         if (available == null || available.signum() <= 0) {
-            log.info("Auto-debit loan {}: ví borrower không đủ số dư (available={}) — bỏ qua, để DPD đánh quá hạn",
+            log.info("Auto-debit loan {}: ví borrower không đủ số dư (available={}) — nhắc nạp tiền, để DPD đánh quá hạn",
                     loanId, available);
+            kafkaProducerService.publishRepaymentDueReminder(RepaymentDueReminderEvent.builder()
+                    .loanId(loan.getId())
+                    .loanCode(loan.getLoanCode())
+                    .borrowerId(loan.getBorrowerId())
+                    .periodNumber(due.getPeriodNumber())
+                    .totalPeriods(schedules.size())
+                    .amountDue(due.getTotalOutstanding())
+                    .dueDate(due.getDueDate())
+                    .dpd(due.getDpd() != null ? due.getDpd() : 0)
+                    .build());
             return;
         }
 
-        BigDecimal payAmount = available.min(due.getRemainingDue());
+        BigDecimal payAmount = available.min(due.getTotalOutstanding());
         doSettlePeriod(loan, due, payAmount, PaymentChannel.AUTO_DEBIT, null, schedules.size());
     }
 
@@ -269,9 +294,14 @@ public class RepaymentService {
     private List<RepaymentSchedule> doSettlePeriod(LoanRequest loan, RepaymentSchedule period,
                                                    BigDecimal payAmount, PaymentChannel channel,
                                                    String recordedBy, int totalPeriods) {
-        LocalDate refDate = LocalDate.now(TZ);
         LocalDateTime paidAt = LocalDateTime.now(TZ);
-        String baseRef = "%s-P%d-%s".formatted(loan.getId(), period.getPeriodNumber(), refDate);
+        // Khóa idempotent ổn định theo (khoản, kỳ, TỔNG đã trả TRƯỚC giao dịch này = gốc+lãi+phí phạt).
+        // Mỗi lần trả thành công làm tổng đã trả tăng → lần trả kế tiếp (kể cả cùng ngày: auto-debit một
+        // phần rồi trả tay) có khóa khác, không bị skip nhầm. Còn retry của CÙNG một lần trả đã rollback
+        // thấy tổng chưa đổi → cùng khóa → debit idempotent-skip an toàn (không trừ trùng người gọi vốn).
+        BigDecimal lateFeePaidBefore = period.getLateFeePaid() != null ? period.getLateFeePaid() : BigDecimal.ZERO;
+        String settledBefore = period.getPaidAmount().add(lateFeePaidBefore).toPlainString();
+        String baseRef = "%s-P%d-%s".formatted(loan.getId(), period.getPeriodNumber(), settledBefore);
         String borrowerRef = "REPAY-OUT-" + baseRef;
 
         // 1) Trừ ví người gọi vốn (fail-closed: ví thiếu → ném → rollback toàn bộ)
@@ -279,9 +309,18 @@ public class RepaymentService {
                 "Trả nợ kỳ %d khoản %s".formatted(period.getPeriodNumber(), loan.getLoanCode()),
                 borrowerRef);
 
-        // 2) Áp tiền vào kỳ
-        period.setPaidAmount(period.getPaidAmount().add(payAmount));
-        boolean periodSettled = period.getRemainingDue().signum() <= 0;
+        // 2) Áp tiền vào kỳ — ưu tiên gốc+lãi trước, phần dư trả vào phí phạt
+        BigDecimal remaining = payAmount;
+        BigDecimal toPrincipalInterest = remaining.min(period.getRemainingDue());
+        period.setPaidAmount(period.getPaidAmount().add(toPrincipalInterest));
+        remaining = remaining.subtract(toPrincipalInterest);
+
+        BigDecimal toLateFee = remaining.min(period.getLateFeeOutstanding());
+        if (toLateFee.signum() > 0) {
+            period.setLateFeePaid(lateFeePaidBefore.add(toLateFee));
+        }
+
+        boolean periodSettled = period.getTotalOutstanding().signum() <= 0;
         if (periodSettled) {
             period.setStatus(RepaymentStatus.PAID);
             period.setPaidAt(paidAt);
@@ -371,26 +410,39 @@ public class RepaymentService {
             distributed = distributed.add(share);
             if (share.signum() <= 0) continue;
 
+            String creditRef = creditRefBase + "-" + offer.getId();
             try {
                 paymentServiceClient.creditRepayment(offer.getInvestorId(), share,
-                        "Nhận hoàn trả khoản %s".formatted(loan.getLoanCode()),
-                        creditRefBase + "-" + offer.getId());
+                        "Nhận hoàn trả khoản %s".formatted(loan.getLoanCode()), creditRef);
                 payouts.add(LoanRepaidEvent.InvestorPayout.builder()
                         .investorId(offer.getInvestorId())
                         .amount(share)
                         .build());
             } catch (Exception e) {
-                log.error("ĐỐI SOÁT: cộng hoàn trả thất bại loan={} investor={} offer={} amount={}: {}",
-                        loan.getId(), offer.getInvestorId(), offer.getId(), share, e.getMessage());
+                // Cộng lỗi → ghi vào hàng đợi đối soát để job thử lại idempotent (không rollback,
+                // tránh trừ trùng người gọi vốn). Người gọi vốn đã bị trừ thành công ở bước trước.
+                log.error("ĐỐI SOÁT: cộng hoàn trả thất bại loan={} investor={} offer={} amount={} ref={}: {}",
+                        loan.getId(), offer.getInvestorId(), offer.getId(), share, creditRef, e.getMessage());
+                if (!pendingCreditRepository.existsByReferenceId(creditRef)) {
+                    pendingCreditRepository.save(PendingInvestorCredit.builder()
+                            .loanId(loan.getId())
+                            .loanCode(loan.getLoanCode())
+                            .investorId(offer.getInvestorId())
+                            .offerId(offer.getId())
+                            .amount(share)
+                            .referenceId(creditRef)
+                            .description("Nhận hoàn trả khoản %s".formatted(loan.getLoanCode()))
+                            .build());
+                }
             }
         }
         return payouts;
     }
 
-    /** Kỳ chưa thanh toán xong sớm nhất (PENDING/PARTIAL/OVERDUE còn dư nợ). */
+    /** Kỳ chưa thanh toán xong sớm nhất (còn nợ gốc+lãi hoặc phí phạt). */
     private java.util.Optional<RepaymentSchedule> firstUnpaid(List<RepaymentSchedule> schedules) {
         return schedules.stream()
-                .filter(s -> !s.isSettled() && s.getRemainingDue().signum() > 0)
+                .filter(s -> !s.isSettled() && s.getTotalOutstanding().signum() > 0)
                 .findFirst();
     }
 
@@ -426,6 +478,7 @@ public class RepaymentService {
             List<RepaymentSchedule> schedules =
                     scheduleRepository.findByLoanIdAndIsDeletedFalseOrderByPeriodNumberAsc(loan.getId());
             int maxDpd = 0;
+            BigDecimal lateFeeRate = resolveLateFeeRate(loan);
 
             for (RepaymentSchedule s : schedules) {
                 if (s.isSettled()) continue;
@@ -433,6 +486,12 @@ public class RepaymentService {
                     int dpd = (int) ChronoUnit.DAYS.between(s.getDueDate(), today);
                     s.setDpd(dpd);
                     s.setStatus(RepaymentStatus.OVERDUE);
+                    // Phí phạt theo dpd. KHÔNG cho giảm: phí đã phát sinh thì giữ nguyên (max với mức cũ),
+                    // nếu không khi borrower trả hết gốc+lãi (remainingDue=0) lần quét sau sẽ tính ra 0 và
+                    // xóa mất phí phạt còn nợ. Lấy max nên cũng luôn ≥ phần phí đã trả.
+                    BigDecimal fee = computeLateFee(s.getRemainingDue(), loan.getInterestRate(), lateFeeRate, dpd);
+                    BigDecimal current = s.getLateFee() != null ? s.getLateFee() : BigDecimal.ZERO;
+                    s.setLateFee(fee.max(current));
                     maxDpd = Math.max(maxDpd, dpd);
                 }
             }
@@ -452,6 +511,51 @@ public class RepaymentService {
         return defaulted;
     }
 
+    // ── Đối soát cộng tiền hoàn trả lỗi (gọi từ scheduler) ────────
+
+    /** ID các khoản cộng hoàn trả còn PENDING — scheduler đọc riêng để retry từng cái độc lập. */
+    @Transactional(readOnly = true)
+    public List<String> findPendingCreditIds() {
+        return pendingCreditRepository
+                .findTop200ByStatusAndIsDeletedFalseOrderByCreatedAtAsc(PendingCreditStatus.PENDING)
+                .stream().map(PendingInvestorCredit::getId).toList();
+    }
+
+    /**
+     * Thử cộng lại một khoản hoàn trả bị lỗi (idempotent theo referenceId — nếu lần đầu thực ra đã
+     * thành công ở payment-service thì lần này được skip, không cộng trùng). Thành công → COMPLETED
+     * + thông báo nhà đầu tư. Một row một transaction để lỗi cái này không ảnh hưởng cái khác.
+     */
+    @Transactional
+    public void reconcileCredit(String id) {
+        PendingInvestorCredit pc = pendingCreditRepository.findById(id).orElse(null);
+        if (pc == null || pc.isDeleted() || pc.getStatus() != PendingCreditStatus.PENDING) return;
+
+        pc.setAttempts(pc.getAttempts() + 1);
+        try {
+            paymentServiceClient.creditRepayment(pc.getInvestorId(), pc.getAmount(),
+                    pc.getDescription(), pc.getReferenceId());
+            pc.setStatus(PendingCreditStatus.COMPLETED);
+            pc.setLastError(null);
+            pendingCreditRepository.save(pc);
+
+            kafkaProducerService.publishCreditReconciled(InvestmentCreditReconciledEvent.builder()
+                    .loanId(pc.getLoanId())
+                    .loanCode(pc.getLoanCode())
+                    .investorId(pc.getInvestorId())
+                    .amount(pc.getAmount())
+                    .build());
+            log.info("Đối soát cộng bù thành công ref={} investor={} amount={} (lần {})",
+                    pc.getReferenceId(), pc.getInvestorId(), pc.getAmount(), pc.getAttempts());
+        } catch (Exception e) {
+            String msg = e.getMessage() != null ? e.getMessage() : "unknown";
+            pc.setLastError(msg.length() > 500 ? msg.substring(0, 500) : msg);
+            pendingCreditRepository.save(pc);
+            log.warn("Đối soát cộng bù vẫn lỗi ref={} (lần {}): {}",
+                    pc.getReferenceId(), pc.getAttempts(), e.getMessage());
+        }
+    }
+
     // ── Helpers ───────────────────────────────────────────────────
 
     private void evictLoanCaches(String loanId) {
@@ -459,6 +563,34 @@ public class RepaymentService {
         if (byId != null) byId.evict(loanId);
         Cache list = cacheManager.getCache(CacheConfig.CACHE_LOANS);
         if (list != null) list.clear();
+    }
+
+    /** Lãi suất phạt của khoản = lateFeeRate% (mặc định 150%) của lãi suất — lấy theo sản phẩm. */
+    private BigDecimal resolveLateFeeRate(LoanRequest loan) {
+        if (loan.getProductId() == null) return DEFAULT_LATE_FEE_RATE;
+        return loanProductService.findProductById(loan.getProductId())
+                .map(p -> p.getLateFeeRate() != null ? p.getLateFeeRate() : DEFAULT_LATE_FEE_RATE)
+                .orElse(DEFAULT_LATE_FEE_RATE);
+    }
+
+    /**
+     * Phí phạt trả chậm = dư nợ kỳ × (lãi suất năm × lateFeeRate%) ÷ 365 × số ngày quá hạn.
+     * Vd lãi 18%/năm, lateFeeRate 150% → lãi phạt 27%/năm trên dư nợ quá hạn. Làm tròn 2 chữ số.
+     */
+    private BigDecimal computeLateFee(BigDecimal remainingDue, BigDecimal baseAnnualRate,
+                                      BigDecimal lateFeeRatePct, int dpd) {
+        if (!lateFeeEnabled || dpd <= 0 || remainingDue == null || remainingDue.signum() <= 0
+                || baseAnnualRate == null || baseAnnualRate.signum() <= 0
+                || lateFeeRatePct == null || lateFeeRatePct.signum() <= 0) {
+            return BigDecimal.ZERO;
+        }
+        BigDecimal penaltyAnnualPct = baseAnnualRate.multiply(lateFeeRatePct)
+                .divide(HUNDRED, 10, RoundingMode.HALF_UP);
+        BigDecimal dailyFraction = penaltyAnnualPct
+                .divide(HUNDRED, 14, RoundingMode.HALF_UP)
+                .divide(DAYS_PER_YEAR, 14, RoundingMode.HALF_UP);
+        return remainingDue.multiply(dailyFraction).multiply(BigDecimal.valueOf(dpd))
+                .setScale(2, RoundingMode.HALF_UP);
     }
 
     private RepaymentScheduleResponse toResponse(RepaymentSchedule s) {
@@ -469,6 +601,9 @@ public class RepaymentService {
                 .interestDue(s.getInterestDue())
                 .totalDue(s.getTotalDue())
                 .paidAmount(s.getPaidAmount())
+                .lateFee(s.getLateFee())
+                .lateFeeOutstanding(s.getLateFeeOutstanding())
+                .totalOutstanding(s.getTotalOutstanding())
                 .status(s.getStatus())
                 .dpd(s.getDpd())
                 .paidAt(s.getPaidAt())

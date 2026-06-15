@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.p2plending.loan.domain.entity.LoanContract;
 import com.p2plending.loan.domain.entity.LoanRequest;
 import com.p2plending.loan.kafka.event.ContractReadyEvent;
+import com.p2plending.loan.kafka.event.InvestmentCreditReconciledEvent;
 import com.p2plending.loan.kafka.event.InvestmentRefundedEvent;
 import com.p2plending.loan.kafka.event.LoanApprovedAwaitingBorrowerEvent;
 import com.p2plending.loan.kafka.event.LoanCreatedEvent;
@@ -12,6 +13,7 @@ import com.p2plending.loan.kafka.event.LoanDisbursedEvent;
 import com.p2plending.loan.kafka.event.LoanFundedEvent;
 import com.p2plending.loan.kafka.event.LoanRepaidEvent;
 import com.p2plending.loan.kafka.event.LoanSubmittedEvent;
+import com.p2plending.loan.kafka.event.RepaymentDueReminderEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.kafka.core.KafkaTemplate;
@@ -33,6 +35,8 @@ public class KafkaProducerService {
     private static final String TOPIC_LOAN_DISBURSED = "loan.disbursed";
     private static final String TOPIC_INVESTMENT_REFUNDED = "investment.refunded";
     private static final String TOPIC_LOAN_REPAID = "loan.repayment_completed";
+    private static final String TOPIC_REPAYMENT_DUE_REMINDER = "loan.repayment_due_reminder";
+    private static final String TOPIC_CREDIT_RECONCILED = "loan.repayment_credit_reconciled";
 
     private final KafkaTemplate<String, String> kafkaTemplate;
     private final ObjectMapper objectMapper;
@@ -137,6 +141,16 @@ public class KafkaProducerService {
     /** Published khi người gọi vốn trả một kỳ và đã phân bổ tiền về ví nhà đầu tư. */
     public void publishLoanRepaid(LoanRepaidEvent event) {
         send(TOPIC_LOAN_REPAID, event.getLoanId(), event);
+    }
+
+    /** Published khi đến hạn nhưng ví người gọi vốn không đủ để auto-debit — nhắc nạp tiền. */
+    public void publishRepaymentDueReminder(RepaymentDueReminderEvent event) {
+        send(TOPIC_REPAYMENT_DUE_REMINDER, event.getLoanId(), event);
+    }
+
+    /** Published khi job đối soát cộng bù thành công tiền hoàn trả cho một nhà đầu tư. */
+    public void publishCreditReconciled(InvestmentCreditReconciledEvent event) {
+        send(TOPIC_CREDIT_RECONCILED, event.getLoanId(), event);
     }
 
     private void send(String topic, String key, Object payload) {

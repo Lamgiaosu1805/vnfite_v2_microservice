@@ -3,10 +3,12 @@ package com.p2plending.notification.kafka;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.p2plending.notification.kafka.event.ContractReadyEvent;
 import com.p2plending.notification.kafka.event.DepositCompletedEvent;
+import com.p2plending.notification.kafka.event.InvestmentCreditReconciledEvent;
 import com.p2plending.notification.kafka.event.InvestmentRefundedEvent;
 import com.p2plending.notification.kafka.event.LoanApprovedAwaitingBorrowerEvent;
 import com.p2plending.notification.kafka.event.LoanDisbursedEvent;
 import com.p2plending.notification.kafka.event.LoanRepaidEvent;
+import com.p2plending.notification.kafka.event.RepaymentDueReminderEvent;
 import com.p2plending.notification.service.NotificationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -99,6 +101,33 @@ public class NotificationKafkaConsumer {
             notificationService.notifyLoanRepaid(event);
         } catch (Exception ex) {
             log.error("Failed to process loan.repayment_completed key={}: {}", record.key(), ex.getMessage(), ex);
+        }
+    }
+
+    @KafkaListener(
+            topics = "loan.repayment_due_reminder",
+            groupId = "${spring.kafka.consumer.group-id:notification-service-group}"
+    )
+    public void onRepaymentDueReminder(ConsumerRecord<String, String> record) {
+        try {
+            RepaymentDueReminderEvent event = objectMapper.readValue(record.value(), RepaymentDueReminderEvent.class);
+            notificationService.notifyRepaymentDueReminder(event);
+        } catch (Exception ex) {
+            log.error("Failed to process loan.repayment_due_reminder key={}: {}", record.key(), ex.getMessage(), ex);
+        }
+    }
+
+    @KafkaListener(
+            topics = "loan.repayment_credit_reconciled",
+            groupId = "${spring.kafka.consumer.group-id:notification-service-group}"
+    )
+    public void onCreditReconciled(ConsumerRecord<String, String> record) {
+        try {
+            InvestmentCreditReconciledEvent event =
+                    objectMapper.readValue(record.value(), InvestmentCreditReconciledEvent.class);
+            notificationService.notifyCreditReconciled(event);
+        } catch (Exception ex) {
+            log.error("Failed to process loan.repayment_credit_reconciled key={}: {}", record.key(), ex.getMessage(), ex);
         }
     }
 }

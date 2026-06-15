@@ -9,9 +9,11 @@ import com.p2plending.notification.dto.PagedResponse;
 import com.p2plending.notification.kafka.event.ContractReadyEvent;
 import com.p2plending.notification.kafka.event.DepositCompletedEvent;
 import com.p2plending.notification.kafka.event.InvestmentRefundedEvent;
+import com.p2plending.notification.kafka.event.InvestmentCreditReconciledEvent;
 import com.p2plending.notification.kafka.event.LoanApprovedAwaitingBorrowerEvent;
 import com.p2plending.notification.kafka.event.LoanDisbursedEvent;
 import com.p2plending.notification.kafka.event.LoanRepaidEvent;
+import com.p2plending.notification.kafka.event.RepaymentDueReminderEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
@@ -278,6 +280,64 @@ public class NotificationService {
         log.info("Stored loan.repayment_completed notifications for loan={} borrower={} investors={} completed={}",
                 event.getLoanId(), event.getBorrowerId(),
                 payouts != null ? payouts.size() : 0, event.isLoanCompleted());
+    }
+
+    /** Đến hạn nhưng ví không đủ — nhắc người gọi vốn nạp tiền (đẩy hằng ngày tới khi trả/đủ). */
+    @Transactional
+    public void notifyRepaymentDueReminder(RepaymentDueReminderEvent event) {
+        String code = event.getLoanCode() != null ? event.getLoanCode() : event.getLoanId();
+        String periodLabel = event.getTotalPeriods() != null
+                ? "%d/%d".formatted(event.getPeriodNumber(), event.getTotalPeriods())
+                : String.valueOf(event.getPeriodNumber());
+        boolean overdue = event.getDpd() > 0;
+
+        String title = overdue ? "Khoản vay đã quá hạn" : "Đến hạn trả nợ";
+        String message = overdue
+                ? "Kỳ %s khoản %s đã quá hạn %d ngày. Số tiền cần trả %s nhưng ví chưa đủ — vui lòng nạp tiền để tránh phí phạt tăng thêm."
+                        .formatted(periodLabel, code, event.getDpd(), formatMoney(event.getAmountDue()))
+                : "Kỳ %s khoản %s đến hạn hôm nay (%s). Ví của bạn chưa đủ số dư — vui lòng nạp tiền để hệ thống tự động thu."
+                        .formatted(periodLabel, code, formatMoney(event.getAmountDue()));
+
+        notificationRepository.save(Notification.builder()
+                .userId(event.getBorrowerId())
+                .title(title)
+                .message(message)
+                .type(NotificationType.IN_APP)
+                .channel("REPAYMENT_DUE")
+                .referenceId(event.getLoanId())
+                .referenceType("LOAN")
+                .sentAt(LocalDateTime.now())
+                .build());
+        pushClient.pushToUser(event.getBorrowerId(), title, message,
+                Map.of("action", "OPEN_WALLET", "loanId", event.getLoanId()));
+
+        log.info("Stored repayment due reminder for borrower={} loan={} period={} dpd={}",
+                event.getBorrowerId(), event.getLoanId(), event.getPeriodNumber(), event.getDpd());
+    }
+
+    /** Đối soát đã cộng bù tiền hoàn trả cho nhà đầu tư (lần trả trước bị lỗi cộng ví). */
+    @Transactional
+    public void notifyCreditReconciled(InvestmentCreditReconciledEvent event) {
+        String code = event.getLoanCode() != null ? event.getLoanCode() : event.getLoanId();
+        String title = "Nhận tiền hoàn trả";
+        String message = "Khoản %s đã hoàn trả %s vào ví VNFITE của bạn."
+                .formatted(code, formatMoney(event.getAmount()));
+
+        notificationRepository.save(Notification.builder()
+                .userId(event.getInvestorId())
+                .title(title)
+                .message(message)
+                .type(NotificationType.IN_APP)
+                .channel("REPAYMENT")
+                .referenceId(event.getLoanId())
+                .referenceType("LOAN")
+                .sentAt(LocalDateTime.now())
+                .build());
+        pushClient.pushToUser(event.getInvestorId(), title, message,
+                Map.of("action", "OPEN_WALLET", "loanId", event.getLoanId()));
+
+        log.info("Stored reconciled credit notification for investor={} loan={} amount={}",
+                event.getInvestorId(), event.getLoanId(), event.getAmount());
     }
 
     @Transactional
