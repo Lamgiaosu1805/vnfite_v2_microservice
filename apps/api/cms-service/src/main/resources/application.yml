@@ -51,7 +51,7 @@ cms:
     loan-url: ${LOAN_SERVICE_URL:http://loan-service:8082}
     payment-url: ${PAYMENT_SERVICE_URL:http://payment-service:8086}
     credit-url: ${CREDIT_SERVICE_URL:http://credit-service:8087}
-    internal-secret: ${INTERNAL_API_SECRET:dev-internal-secret}
+    internal-secret: ${INTERNAL_API_SECRET}
 
 push:
   notification:

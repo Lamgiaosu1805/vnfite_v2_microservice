@@ -86,7 +86,7 @@ push:
 cms:
   sources:
     auth-url: ${AUTH_SERVICE_URL:http://auth-service:8081}
-    internal-secret: ${INTERNAL_API_SECRET:dev-internal-secret}
+    internal-secret: ${INTERNAL_API_SECRET}
 
 management:
   endpoints:

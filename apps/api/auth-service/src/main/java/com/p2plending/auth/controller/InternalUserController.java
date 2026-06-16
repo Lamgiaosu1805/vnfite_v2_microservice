@@ -32,7 +32,7 @@ public class InternalUserController {
     private final FcmTokenService          fcmTokenService;
     private final KycDecisionService       kycDecisionService;
 
-    @Value("${app.internal.secret:dev-internal-secret}")
+    @Value("${app.internal.secret}")
     private String internalSecret;
 
     @GetMapping

@@ -21,7 +21,7 @@ public class AppProperties {
 
     @Data
     public static class Internal {
-        private String secret = "dev-internal-secret";
+        private String secret;
     }
 
     @Data

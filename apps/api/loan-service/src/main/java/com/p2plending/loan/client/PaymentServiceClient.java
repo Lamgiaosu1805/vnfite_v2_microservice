@@ -40,7 +40,7 @@ public class PaymentServiceClient {
     @Value("${app.payment-service.base-url:http://payment-service:8086}")
     private String paymentBaseUrl;
 
-    @Value("${app.internal.secret:dev-internal-secret}")
+    @Value("${app.internal.secret}")
     private String internalSecret;
 
     /** Số dư khả dụng của ví nhà đầu tư. Lỗi/không kết nối được → ném InvalidLoanStateException. */

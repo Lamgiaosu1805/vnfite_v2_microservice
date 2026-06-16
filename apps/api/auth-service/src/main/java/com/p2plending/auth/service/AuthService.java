@@ -30,6 +30,7 @@ import com.p2plending.auth.exception.InvalidCredentialsException;
 import com.p2plending.auth.exception.InvalidOtpException;
 import com.p2plending.auth.exception.InvalidReferrerException;
 import com.p2plending.auth.exception.InvalidTokenException;
+import com.p2plending.auth.exception.OtpRateLimitException;
 import com.p2plending.auth.exception.ResourceNotFoundException;
 import com.p2plending.auth.exception.UserAlreadyExistsException;
 import com.p2plending.auth.kafka.KafkaProducerService;
@@ -74,9 +75,14 @@ public class AuthService {
     private static final String BIOMETRIC_CHALLENGE_PREFIX   = "biometric_challenge:";
     private static final String DEVICE_SESSION_PREFIX  = "device_session:";
     private static final String DEVICE_RESET_OTP_PREFIX = "device_reset:";
+    private static final String LOGIN_FAIL_PREFIX = "login_fail:";
+    private static final String LOGIN_LOCK_PREFIX = "login_lock:";
     private static final Duration BIOMETRIC_OTP_TTL = Duration.ofMinutes(5);
     private static final Duration BIOMETRIC_CHALLENGE_TTL = Duration.ofMinutes(2);
     private static final Duration DEVICE_RESET_OTP_TTL = Duration.ofMinutes(10);
+    private static final Duration LOGIN_FAIL_WINDOW = Duration.ofMinutes(15);
+    private static final Duration LOGIN_LOCK_TTL = Duration.ofMinutes(15);
+    private static final int MAX_LOGIN_FAILURES = 5;
     private static final String MOCK_OTP = "000000";
 
     @Value("${app.otp.mock:false}")
@@ -166,13 +172,20 @@ public class AuthService {
 
     @Transactional
     public AuthResponse login(LoginRequest request) {
+        assertLoginNotLocked(request.getPhone());
+
         User user = userRepository.findByPhone(request.getPhone())
-                .orElseThrow(() -> new InvalidCredentialsException("Số điện thoại hoặc mật khẩu không đúng"));
+                .orElseThrow(() -> {
+                    recordFailedLogin(request.getPhone());
+                    return new InvalidCredentialsException("Số điện thoại hoặc mật khẩu không đúng");
+                });
 
         if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
+            recordFailedLogin(request.getPhone());
             throw new InvalidCredentialsException("Số điện thoại hoặc mật khẩu không đúng");
         }
 
+        clearFailedLogin(request.getPhone());
         checkAndBindDevice(user.getId(), user.getPhone(), request.getDeviceKey(), request.getDeviceName(), request.getPlatform());
 
         log.info("User authenticated: id={} phone={}", user.getId(), user.getPhone());
@@ -235,11 +248,14 @@ public class AuthService {
 
     @Transactional
     public Map<String, String> verifyBiometricEnable(String userId, BiometricEnableRequest request) {
-        String stored = redisTemplate.opsForValue().get(biometricEnableOtpKey(userId));
+        otpRateLimitService.assertCanVerify(userId + ":biometric_enable");
+        String otpKey = biometricEnableOtpKey(userId);
+        String stored = redisTemplate.opsForValue().get(otpKey);
         if (stored == null) {
             throw new InvalidOtpException("OTP đã hết hạn hoặc chưa thực hiện yêu cầu bật sinh trắc học");
         }
         if (!stored.equals(request.getOtp())) {
+            otpRateLimitService.recordFailedVerify(userId + ":biometric_enable", otpKey);
             throw new InvalidOtpException("OTP không chính xác");
         }
 
@@ -248,7 +264,8 @@ public class AuthService {
             throw new InvalidTokenException("Public key sinh trắc học không hợp lệ");
         }
 
-        redisTemplate.delete(biometricEnableOtpKey(userId));
+        otpRateLimitService.clearVerifyFailures(userId + ":biometric_enable");
+        redisTemplate.delete(otpKey);
 
         // Lưu PUBLIC key vào DB. Private key nằm trong Secure Enclave / Keystore của thiết bị,
         // không bao giờ rời máy. Đây là credential lâu dài → DB, không phải Redis.
@@ -362,15 +379,19 @@ public class AuthService {
 
     @Transactional
     public Map<String, String> verifyBiometricDisable(String userId, KycVerifyRequest request) {
-        String stored = redisTemplate.opsForValue().get(biometricDisableOtpKey(userId));
+        otpRateLimitService.assertCanVerify(userId + ":biometric_disable");
+        String otpKey = biometricDisableOtpKey(userId);
+        String stored = redisTemplate.opsForValue().get(otpKey);
         if (stored == null) {
             throw new InvalidOtpException("OTP đã hết hạn hoặc chưa thực hiện yêu cầu tắt sinh trắc học");
         }
         if (!stored.equals(request.getOtp())) {
+            otpRateLimitService.recordFailedVerify(userId + ":biometric_disable", otpKey);
             throw new InvalidOtpException("OTP không chính xác");
         }
 
-        redisTemplate.delete(biometricDisableOtpKey(userId));
+        otpRateLimitService.clearVerifyFailures(userId + ":biometric_disable");
+        redisTemplate.delete(otpKey);
 
         // Xóa public key khỏi DB → vô hiệu hóa biometric login
         User user = userRepository.findById(userId)
@@ -538,6 +559,49 @@ public class AuthService {
         return redisNamespaceProperties.qualify(DEVICE_RESET_OTP_PREFIX + phone);
     }
 
+    private void assertLoginNotLocked(String phone) {
+        if (!StringUtils.hasText(phone)) return;
+        Long ttl = redisTemplate.getExpire(loginLockKey(phone), java.util.concurrent.TimeUnit.SECONDS);
+        if (ttl != null && ttl > 0) {
+            throw new OtpRateLimitException(
+                    "Bạn đã đăng nhập sai quá nhiều lần. Vui lòng thử lại sau " + ttl + " giây.",
+                    ttl);
+        }
+    }
+
+    private void recordFailedLogin(String phone) {
+        if (!StringUtils.hasText(phone)) return;
+
+        String failKey = loginFailKey(phone);
+        Long count = redisTemplate.opsForValue().increment(failKey);
+        if (count == null) count = 1L;
+        if (count == 1L) {
+            redisTemplate.expire(failKey, LOGIN_FAIL_WINDOW);
+        }
+        if (count >= MAX_LOGIN_FAILURES) {
+            redisTemplate.delete(failKey);
+            redisTemplate.opsForValue().set(loginLockKey(phone), "1", LOGIN_LOCK_TTL);
+            throw new OtpRateLimitException(
+                    "Bạn đã đăng nhập sai quá nhiều lần. Vui lòng thử lại sau "
+                            + LOGIN_LOCK_TTL.toSeconds() + " giây.",
+                    LOGIN_LOCK_TTL.toSeconds());
+        }
+    }
+
+    private void clearFailedLogin(String phone) {
+        if (StringUtils.hasText(phone)) {
+            redisTemplate.delete(loginFailKey(phone));
+        }
+    }
+
+    private String loginFailKey(String phone) {
+        return redisNamespaceProperties.qualify(LOGIN_FAIL_PREFIX + phone.trim());
+    }
+
+    private String loginLockKey(String phone) {
+        return redisNamespaceProperties.qualify(LOGIN_LOCK_PREFIX + phone.trim());
+    }
+
     /**
      * Kiểm tra single-device, gắn device session vào Redis và ghi lịch sử vào DB.
      * - Nếu chưa có session → lưu DeviceSessionData (không TTL) và cho qua
@@ -694,15 +758,19 @@ public class AuthService {
 
     @Transactional
     public Map<String, String> verifyDeviceReset(String phone, String otp) {
-        String stored = redisTemplate.opsForValue().get(deviceResetOtpKey(phone));
+        otpRateLimitService.assertCanVerify(phone + ":device_reset");
+        String otpKey = deviceResetOtpKey(phone);
+        String stored = redisTemplate.opsForValue().get(otpKey);
         if (stored == null) {
             throw new InvalidOtpException("OTP đã hết hạn hoặc chưa thực hiện yêu cầu đặt lại thiết bị");
         }
         if (!stored.equals(otp)) {
+            otpRateLimitService.recordFailedVerify(phone + ":device_reset", otpKey);
             throw new InvalidOtpException("OTP không chính xác");
         }
 
-        redisTemplate.delete(deviceResetOtpKey(phone));
+        otpRateLimitService.clearVerifyFailures(phone + ":device_reset");
+        redisTemplate.delete(otpKey);
         // Xóa toàn bộ session và device binding trong Redis
         redisTemplate.delete(refreshTokenKey(phone));
         redisTemplate.delete(deviceSessionKey(phone));

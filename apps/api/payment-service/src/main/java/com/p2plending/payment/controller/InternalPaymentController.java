@@ -55,17 +55,26 @@ public class InternalPaymentController {
      */
     @PostMapping("/transaction-management/add-transaction-by-ms-account")
     public ResponseEntity<Void> tikluyAddTransactionStub(
+            @RequestHeader(value = "X-Internal-Secret", required = false) String secret,
             @RequestHeader(value = "transactionId", required = false) String txnId,
             @RequestParam(required = false) String bankAccountNumber,
             @RequestParam(required = false) String amount) {
+        if (!isValidInternalSecret(secret)) {
+            return ResponseEntity.status(401).build();
+        }
         log.info("txnId={} TIKLUY CMS stub: accNo={} amount={}", txnId, bankAccountNumber, amount);
         return ResponseEntity.ok().build();
     }
 
     @PostMapping("/notification/save-by-ms-account")
     public ResponseEntity<Map<String, String>> handleDepositCallback(
+            @RequestHeader(value = "X-Internal-Secret", required = false) String secret,
             @RequestHeader(value = "transactionId", required = false) String txnId,
             @RequestBody DepositCallbackRequest req) {
+
+        if (!isValidInternalSecret(secret)) {
+            return ResponseEntity.status(401).body(Map.of("error", "Unauthorized"));
+        }
 
         log.info("txnId={} Deposit callback: accNo={} amount={} category={}",
                 txnId, req.getAccountNo(), req.getAmount(), req.getCategory());
@@ -76,6 +85,9 @@ public class InternalPaymentController {
         }
 
         try {
+            String effectiveTxnId = txnId != null && !txnId.isBlank()
+                    ? txnId
+                    : "tikluy-" + req.getAccountNo() + "-" + req.getAmount() + "-" + System.currentTimeMillis();
             BigDecimal amount = new BigDecimal(req.getAmount().replaceAll("[^0-9.]", ""));
             BigDecimal runningBalance = null;
             if (req.getRunningBalance() != null && !req.getRunningBalance().isBlank()) {
@@ -83,10 +95,10 @@ public class InternalPaymentController {
                 catch (NumberFormatException ignored) { }
             }
             walletService.processDeposit(
-                    txnId != null ? txnId : "tikluy-" + System.currentTimeMillis(),
+                    effectiveTxnId,
                     req.getAccountNo(),
                     amount,
-                    txnId, // dùng transactionId của TIKLUY làm referenceId để dedup
+                    effectiveTxnId,
                     runningBalance
             );
             return ResponseEntity.ok(Map.of("status", "OK"));
@@ -323,5 +335,10 @@ public class InternalPaymentController {
                 "status", "OK",
                 "message", "Nạp " + amount + " VND vào ví user " + userId + " (accNo=" + wallet.getVnfAccountNo() + ")"
         ));
+    }
+
+    private boolean isValidInternalSecret(String secret) {
+        String expected = appProperties.getInternal().getSecret();
+        return expected != null && !expected.isBlank() && expected.equals(secret);
     }
 }

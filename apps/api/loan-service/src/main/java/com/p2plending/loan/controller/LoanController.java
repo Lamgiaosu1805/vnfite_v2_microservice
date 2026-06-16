@@ -11,6 +11,7 @@ import com.p2plending.loan.dto.response.CashflowResponse;
 import com.p2plending.loan.dto.response.LoanDocumentResponse;
 import com.p2plending.loan.dto.response.LoanDocumentUploadResponse;
 import com.p2plending.loan.dto.response.LoanOtpInitResponse;
+import com.p2plending.loan.dto.response.LoanPublicResponse;
 import com.p2plending.loan.dto.response.LoanResponse;
 import com.p2plending.loan.dto.response.OfferCreateResponse;
 import com.p2plending.loan.dto.response.PagedResponse;
@@ -139,10 +140,11 @@ public class LoanController {
      * Query params: status, borrowerId, minAmount, maxAmount, page, size, sortBy, sortDir
      */
     @GetMapping
-    public ResponseEntity<PagedResponse<LoanResponse>> getLoans(
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<PagedResponse<LoanPublicResponse>> getLoans(
             @Valid LoanFilterParams params
     ) {
-        return ResponseEntity.ok(loanService.getLoans(params));
+        return ResponseEntity.ok(loanService.getPublicLoans(params));
     }
 
     /**
@@ -150,8 +152,12 @@ public class LoanController {
      * Fetches a single loan with its offers. Cached 10 minutes.
      */
     @GetMapping("/{id}")
-    public ResponseEntity<LoanResponse> getLoanById(@PathVariable String id) {
-        return ResponseEntity.ok(loanService.getLoanById(id));
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<LoanResponse> getLoanById(
+            @PathVariable String id,
+            @AuthenticationPrincipal AuthenticatedUser principal
+    ) {
+        return ResponseEntity.ok(loanService.getLoanByIdForCaller(id, principal));
     }
 
     /**

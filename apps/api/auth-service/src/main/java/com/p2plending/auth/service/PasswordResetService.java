@@ -102,15 +102,19 @@ public class PasswordResetService {
     // ── Bước 2: xác thực OTP → trả resetToken, chuyển sang màn nhập MK mới
 
     public Map<String, String> verifyOtp(ForgotPasswordOtpVerifyRequest request) {
-        String stored = redisTemplate.opsForValue().get(otpKey(request.getPhone()));
+        otpRateLimitService.assertCanVerify(request.getPhone());
+        String otpKey = otpKey(request.getPhone());
+        String stored = redisTemplate.opsForValue().get(otpKey);
         if (stored == null) {
             throw new InvalidOtpException("OTP đã hết hạn hoặc chưa thực hiện yêu cầu đặt lại mật khẩu");
         }
         if (!stored.equals(request.getOtp())) {
+            otpRateLimitService.recordFailedVerify(request.getPhone(), otpKey);
             throw new InvalidOtpException("OTP không chính xác");
         }
 
-        redisTemplate.delete(otpKey(request.getPhone()));
+        otpRateLimitService.clearVerifyFailures(request.getPhone());
+        redisTemplate.delete(otpKey);
 
         String resetToken = UUID.randomUUID().toString();
         redisTemplate.opsForValue().set(resetTokenKey(resetToken), request.getPhone(), RESET_TOKEN_TTL);

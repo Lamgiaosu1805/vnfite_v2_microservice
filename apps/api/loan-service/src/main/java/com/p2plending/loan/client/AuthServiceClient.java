@@ -23,7 +23,7 @@ public class AuthServiceClient {
     @Value("${app.auth-service.base-url:http://auth-service:8081}")
     private String authServiceBaseUrl;
 
-    @Value("${app.internal.secret:dev-internal-secret}")
+    @Value("${app.internal.secret}")
     private String internalSecret;
 
     public Optional<InternalUserResponse> getUserById(String userId) {

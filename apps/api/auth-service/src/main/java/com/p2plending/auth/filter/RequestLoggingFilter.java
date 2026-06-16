@@ -26,7 +26,12 @@ public class RequestLoggingFilter extends OncePerRequestFilter {
     private static final int MAX_BODY_LENGTH = 2000;
 
     private static final Pattern SENSITIVE = Pattern.compile(
-            "\"(password|accessToken|refreshToken|otp|token)\"\\s*:\\s*\"[^\"]*\"",
+            "\"(password|newPassword|currentPassword|oldPassword|accessToken|refreshToken|resetToken|otp|token|cccdNumber|frontImage|backImage|portraitImage)\"\\s*:\\s*\"[^\"]*\"",
+            Pattern.CASE_INSENSITIVE
+    );
+
+    private static final Pattern SKIP_BODY_URI = Pattern.compile(
+            ".*/(kyc|documents/upload).*",
             Pattern.CASE_INSENSITIVE
     );
 
@@ -51,8 +56,8 @@ public class RequestLoggingFilter extends OncePerRequestFilter {
             long duration = System.currentTimeMillis() - start;
             int  status   = resp.getStatus();
 
-            String reqBody  = readBody(req.getContentAsByteArray(),  req.getCharacterEncoding());
-            String respBody = readBody(resp.getContentAsByteArray(), resp.getCharacterEncoding());
+            String reqBody  = shouldSkipBody(uri) ? "[body omitted]" : readBody(req.getContentAsByteArray(),  req.getCharacterEncoding());
+            String respBody = shouldSkipBody(uri) ? "[body omitted]" : readBody(resp.getContentAsByteArray(), resp.getCharacterEncoding());
 
             String reqLog  = maskSensitive(reqBody);
             String respLog = maskSensitive(respBody);
@@ -91,6 +96,10 @@ public class RequestLoggingFilter extends OncePerRequestFilter {
     private String maskSensitive(String body) {
         if ("-".equals(body)) return body;
         return SENSITIVE.matcher(body).replaceAll("\"$1\":\"***\"");
+    }
+
+    private boolean shouldSkipBody(String uri) {
+        return uri != null && SKIP_BODY_URI.matcher(uri).matches();
     }
 
     private String resolveClientIp(HttpServletRequest request) {

@@ -24,14 +24,15 @@ services:
   redis:
     image: redis:7-alpine
     container_name: p2p-redis
-    ports:
-      - "6379:6379"
+    command: ["sh", "-c", "redis-server --appendonly yes --requirepass \"$${REDIS_PASSWORD:?REDIS_PASSWORD is required}\""]
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
     volumes:
       - redis_data:/data
     networks:
       - p2p-network
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD-SHELL", "redis-cli -a \"$${REDIS_PASSWORD}\" ping"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -39,8 +40,6 @@ services:
   zookeeper:
     image: confluentinc/cp-zookeeper:7.5.0
     container_name: p2p-zookeeper
-    ports:
-      - "2181:2181"
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
@@ -59,8 +58,6 @@ services:
   kafka:
     image: confluentinc/cp-kafka:7.5.0
     container_name: p2p-kafka
-    ports:
-      - "9092:9092"
     depends_on:
       zookeeper:
         condition: service_healthy
@@ -90,8 +87,6 @@ services:
       context: ./apps/api/auth-service
       dockerfile: Dockerfile
     container_name: p2p-auth-service
-    ports:
-      - "8084:8081"
     environment:
       MYSQL_HOST: ${MYSQL_HOST:-mysql}
       MYSQL_PORT: ${MYSQL_PORT:-3306}
@@ -100,12 +95,12 @@ services:
       DB_PASSWORD: ${DB_PASSWORD:-p2p_pass}
       REDIS_HOST: ${REDIS_HOST:-redis}
       REDIS_PORT: ${REDIS_PORT:-6379}
-      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       RSA_PRIVATE_KEY: ${RSA_PRIVATE_KEY:-}
       RSA_PUBLIC_KEY: ${RSA_PUBLIC_KEY:-}
       APP_REDIS_NAMESPACE: ${APP_REDIS_NAMESPACE:-dev}
-      INTERNAL_API_SECRET: ${INTERNAL_API_SECRET:-dev-internal-secret}
+      INTERNAL_API_SECRET: ${INTERNAL_API_SECRET:?INTERNAL_API_SECRET is required}
       APP_OTP_MOCK: ${APP_OTP_MOCK:-false}
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
     extra_hosts:
@@ -127,8 +122,6 @@ services:
       context: ./apps/api/loan-service
       dockerfile: Dockerfile
     container_name: p2p-loan-service
-    ports:
-      - "8082:8082"
     environment:
       MYSQL_HOST: ${MYSQL_HOST:-mysql}
       MYSQL_PORT: ${MYSQL_PORT:-3306}
@@ -137,7 +130,7 @@ services:
       DB_PASSWORD: ${DB_PASSWORD:-p2p_pass}
       REDIS_HOST: ${REDIS_HOST:-redis}
       REDIS_PORT: ${REDIS_PORT:-6379}
-      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       CMS_JWT_SECRET: ${CMS_JWT_SECRET:-dev-only-cms-jwt-secret-change-me-at-least-32-bytes}
       CMS_ACCESS_TOKEN_EXPIRY: ${CMS_ACCESS_TOKEN_EXPIRY:-28800}
@@ -147,7 +140,7 @@ services:
       CMS_ADMIN_FULL_NAME: ${CMS_ADMIN_FULL_NAME:-CMS Administrator}
       RSA_PUBLIC_KEY: ${RSA_PUBLIC_KEY:-}
       APP_REDIS_NAMESPACE: ${APP_REDIS_NAMESPACE:-dev}
-      INTERNAL_API_SECRET: ${INTERNAL_API_SECRET:-dev-internal-secret}
+      INTERNAL_API_SECRET: ${INTERNAL_API_SECRET:?INTERNAL_API_SECRET is required}
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -168,8 +161,6 @@ services:
       context: ./apps/api/matching-service
       dockerfile: Dockerfile
     container_name: p2p-matching-service
-    ports:
-      - "8083:8083"
     environment:
       MYSQL_HOST: ${MYSQL_HOST:-mysql}
       MYSQL_PORT: ${MYSQL_PORT:-3306}
@@ -178,7 +169,7 @@ services:
       DB_PASSWORD: ${DB_PASSWORD:-p2p_pass}
       REDIS_HOST: ${REDIS_HOST:-redis}
       REDIS_PORT: ${REDIS_PORT:-6379}
-      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
       APP_REDIS_NAMESPACE: ${APP_REDIS_NAMESPACE:-dev}
       RSA_PUBLIC_KEY: ${RSA_PUBLIC_KEY:-}
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
@@ -199,8 +190,6 @@ services:
       context: ./apps/api/cms-service
       dockerfile: Dockerfile
     container_name: p2p-cms-service
-    ports:
-      - "8090:8090"
     environment:
       MYSQL_HOST: ${MYSQL_HOST:-mysql}
       MYSQL_PORT: ${MYSQL_PORT:-3306}
@@ -209,14 +198,14 @@ services:
       DB_PASSWORD: ${DB_PASSWORD:-p2p_pass}
       REDIS_HOST: ${REDIS_HOST:-redis}
       REDIS_PORT: ${REDIS_PORT:-6379}
-      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
       RSA_PUBLIC_KEY: ${RSA_PUBLIC_KEY:-}
       APP_REDIS_NAMESPACE: ${APP_REDIS_NAMESPACE:-dev}
       AUTH_SERVICE_URL: ${AUTH_SERVICE_URL:-http://auth-service:8081}
       LOAN_SERVICE_URL: ${LOAN_SERVICE_URL:-http://loan-service:8082}
       PAYMENT_SERVICE_URL: ${PAYMENT_SERVICE_URL:-http://payment-service:8086}
       CREDIT_SERVICE_URL: ${CREDIT_SERVICE_URL:-http://credit-service:8087}
-      INTERNAL_API_SECRET: ${INTERNAL_API_SECRET:-dev-internal-secret}
+      INTERNAL_API_SECRET: ${INTERNAL_API_SECRET:?INTERNAL_API_SECRET is required}
       PUSH_NOTIFICATION_URL: ${PUSH_NOTIFICATION_URL:-https://service.vnfite.com.vn/push-notification/v2/notification}
       PUSH_NOTIFICATION_ALIAS: ${PUSH_NOTIFICATION_ALIAS:-vnfite}
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
@@ -237,8 +226,6 @@ services:
       context: ./apps/api/notification-service
       dockerfile: Dockerfile
     container_name: p2p-notification-service
-    ports:
-      - "8085:8084"
     environment:
       MYSQL_HOST: ${MYSQL_HOST:-mysql}
       MYSQL_PORT: ${MYSQL_PORT:-3306}
@@ -247,7 +234,7 @@ services:
       DB_PASSWORD: ${DB_PASSWORD:-p2p_pass}
       REDIS_HOST: ${REDIS_HOST:-redis}
       REDIS_PORT: ${REDIS_PORT:-6379}
-      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       RSA_PUBLIC_KEY: ${RSA_PUBLIC_KEY:-}
       APP_REDIS_NAMESPACE: ${APP_REDIS_NAMESPACE:-dev}
@@ -256,7 +243,7 @@ services:
       SMTP_USERNAME: ${SMTP_USERNAME:-}
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       AUTH_SERVICE_URL: ${AUTH_SERVICE_URL:-http://auth-service:8081}
-      INTERNAL_API_SECRET: ${INTERNAL_API_SECRET:-dev-internal-secret}
+      INTERNAL_API_SECRET: ${INTERNAL_API_SECRET:?INTERNAL_API_SECRET is required}
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -277,8 +264,6 @@ services:
       context: ./apps/api/payment-service
       dockerfile: Dockerfile
     container_name: p2p-payment-service
-    ports:
-      - "8086:8086"
     environment:
       MYSQL_HOST: ${MYSQL_HOST:-mysql}
       MYSQL_PORT: ${MYSQL_PORT:-3306}
@@ -287,7 +272,7 @@ services:
       DB_PASSWORD: ${DB_PASSWORD:-p2p_pass}
       REDIS_HOST: ${REDIS_HOST:-redis}
       REDIS_PORT: ${REDIS_PORT:-6379}
-      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       RSA_PUBLIC_KEY: ${RSA_PUBLIC_KEY:-}
       APP_REDIS_NAMESPACE: ${APP_REDIS_NAMESPACE:-dev}
@@ -298,7 +283,7 @@ services:
       TIKLUY_CLIENT_ID: ${TIKLUY_CLIENT_ID:-VF-NSK3SDF}
       TIKLUY_CLIENT_SECRET: ${TIKLUY_CLIENT_SECRET:-2tzMGst67sZfXqmx68TxnQUzyriBti}
       TIKLUY_SOURCE: ${TIKLUY_SOURCE:-VNFITE}
-      INTERNAL_API_SECRET: ${INTERNAL_API_SECRET:-dev-internal-secret}
+      INTERNAL_API_SECRET: ${INTERNAL_API_SECRET:?INTERNAL_API_SECRET is required}
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -319,15 +304,13 @@ services:
       context: ./apps/api/credit-service
       dockerfile: Dockerfile
     container_name: p2p-credit-service
-    ports:
-      - "8087:8087"
     environment:
       MYSQL_HOST: ${MYSQL_HOST:-mysql}
       MYSQL_PORT: ${MYSQL_PORT:-3306}
       CREDIT_DB: ${CREDIT_DB:-credit_db}
       DB_USERNAME: ${DB_USERNAME:-p2p_user}
       DB_PASSWORD: ${DB_PASSWORD:-p2p_pass}
-      INTERNAL_API_SECRET: ${INTERNAL_API_SECRET:-dev-internal-secret}
+      INTERNAL_API_SECRET: ${INTERNAL_API_SECRET:?INTERNAL_API_SECRET is required}
       APP_AI_ENABLED: ${APP_AI_ENABLED:-false}
       APP_AI_MODE: ${APP_AI_MODE:-claude}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
@@ -348,8 +331,6 @@ services:
   kafka-ui:
     image: provectuslabs/kafka-ui:latest
     container_name: kafka-ui
-    ports:
-      - "8989:8080"
     environment:
       KAFKA_CLUSTERS_0_NAME: local
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092

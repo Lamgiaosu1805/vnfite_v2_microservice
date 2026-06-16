@@ -72,7 +72,7 @@ public class SourceServiceClient {
     @Value("${cms.sources.credit-url:http://credit-service:8087}")
     private String creditServiceUrl;
 
-    @Value("${cms.sources.internal-secret:dev-internal-secret}")
+    @Value("${cms.sources.internal-secret}")
     private String internalSecret;
 
     public PagedResponse<UserSummaryResponse> getUsers(

@@ -17,6 +17,8 @@ import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
+import java.util.Locale;
 import java.util.List;
 import java.util.Map;
 
@@ -34,18 +36,18 @@ public class FileManagerUploadService {
     private String fileManagerBaseUrl;
 
     public LoanDocumentUploadResponse uploadLoanDocument(MultipartFile file, String label) {
-        validate(file);
+        byte[] bytes = validateAndRead(file);
 
         String safeLabel = label == null || label.isBlank() ? "Chứng từ gọi vốn" : label.trim();
         String originalFileName = file.getOriginalFilename() == null || file.getOriginalFilename().isBlank()
                 ? "chung-tu-goi-von"
-                : file.getOriginalFilename();
+                : sanitizeFilename(file.getOriginalFilename());
 
         try {
             HttpHeaders fileHeaders = new HttpHeaders();
-            fileHeaders.setContentType(resolveMediaType(file.getContentType()));
+            fileHeaders.setContentType(detectMediaType(bytes));
 
-            ByteArrayResource resource = new ByteArrayResource(file.getBytes()) {
+            ByteArrayResource resource = new ByteArrayResource(bytes) {
                 @Override
                 public String getFilename() {
                     return originalFileName;
@@ -91,7 +93,7 @@ public class FileManagerUploadService {
         }
     }
 
-    private void validate(MultipartFile file) {
+    private byte[] validateAndRead(MultipartFile file) {
         if (file == null || file.isEmpty()) {
             throw new IllegalArgumentException("Vui lòng chọn chứng từ cần tải lên");
         }
@@ -99,26 +101,59 @@ public class FileManagerUploadService {
             throw new IllegalArgumentException("Mỗi chứng từ chỉ được tối đa 10MB");
         }
 
+        byte[] bytes;
+        try {
+            bytes = file.getBytes();
+        } catch (IOException e) {
+            throw new IllegalArgumentException("Không đọc được nội dung chứng từ");
+        }
+        MediaType detected = detectMediaType(bytes);
+
         String contentType = file.getContentType();
-        if (contentType == null || contentType.isBlank()) {
-            return;
+        if (contentType != null && !contentType.isBlank()) {
+            String normalized = contentType.toLowerCase(Locale.ROOT);
+            if (!normalized.startsWith("image/") && !MediaType.APPLICATION_PDF_VALUE.equals(normalized)) {
+                throw new IllegalArgumentException("Chỉ hỗ trợ tải lên ảnh hoặc PDF");
+            }
         }
 
-        String normalized = contentType.toLowerCase();
-        if (!normalized.startsWith("image/") && !MediaType.APPLICATION_PDF_VALUE.equals(normalized)) {
-            throw new IllegalArgumentException("Chỉ hỗ trợ tải lên ảnh hoặc PDF");
+        if (detected == null) {
+            throw new IllegalArgumentException("Chứng từ phải là ảnh PNG/JPEG hoặc PDF hợp lệ");
         }
+        return bytes;
     }
 
-    private MediaType resolveMediaType(String contentType) {
-        if (contentType == null || contentType.isBlank()) {
-            return MediaType.APPLICATION_OCTET_STREAM;
+    private MediaType detectMediaType(byte[] bytes) {
+        if (bytes == null || bytes.length < 4) {
+            return null;
         }
-        try {
-            return MediaType.parseMediaType(contentType);
-        } catch (Exception ignored) {
-            return MediaType.APPLICATION_OCTET_STREAM;
+        if (bytes.length >= 5
+                && bytes[0] == 0x25 && bytes[1] == 0x50
+                && bytes[2] == 0x44 && bytes[3] == 0x46
+                && bytes[4] == 0x2D) {
+            return MediaType.APPLICATION_PDF;
         }
+        if (bytes.length >= 8
+                && (bytes[0] & 0xFF) == 0x89 && bytes[1] == 0x50
+                && bytes[2] == 0x4E && bytes[3] == 0x47
+                && bytes[4] == 0x0D && bytes[5] == 0x0A
+                && bytes[6] == 0x1A && bytes[7] == 0x0A) {
+            return MediaType.IMAGE_PNG;
+        }
+        if ((bytes[0] & 0xFF) == 0xFF && (bytes[1] & 0xFF) == 0xD8 && (bytes[2] & 0xFF) == 0xFF) {
+            return MediaType.IMAGE_JPEG;
+        }
+        return null;
+    }
+
+    private String sanitizeFilename(String filename) {
+        String onlyName = filename.replace('\\', '/');
+        int lastSlash = onlyName.lastIndexOf('/');
+        if (lastSlash >= 0) {
+            onlyName = onlyName.substring(lastSlash + 1);
+        }
+        String sanitized = onlyName.replaceAll("[^A-Za-z0-9._-]", "_");
+        return sanitized.isBlank() ? "chung-tu-goi-von" : sanitized;
     }
 
     private String extractFileId(JsonNode node) {

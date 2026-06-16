@@ -32,7 +32,7 @@ public class PushBroadcastService {
     @Value("${cms.sources.auth-url:http://auth-service:8081}")
     private String authServiceUrl;
 
-    @Value("${cms.sources.internal-secret:dev-internal-secret}")
+    @Value("${cms.sources.internal-secret}")
     private String internalSecret;
 
     @Value("${push.notification.base-url:https://service.vnfite.com.vn/push-notification/v2/notification}")

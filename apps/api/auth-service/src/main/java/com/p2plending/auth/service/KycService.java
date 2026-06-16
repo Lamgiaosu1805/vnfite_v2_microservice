@@ -92,7 +92,7 @@ public class KycService {
             throw new RuntimeException("Lỗi lưu trữ thông tin KYC tạm thời", e);
         }
 
-        log.info("KYC init: userId={} cccd={}", userId, request.getCccdNumber());
+        log.info("KYC init: userId={}", userId);
 
         return mockMode
                 ? Map.of("message", "OTP đã được gửi đến số điện thoại của bạn", "otp", otp)
@@ -103,7 +103,9 @@ public class KycService {
 
     @Transactional
     public KycSubmissionResponse verifyKyc(String userId, KycVerifyRequest request) {
-        String json = redisTemplate.opsForValue().get(pendingKey(userId));
+        otpRateLimitService.assertCanVerify(userId);
+        String pendingKey = pendingKey(userId);
+        String json = redisTemplate.opsForValue().get(pendingKey);
         if (json == null) {
             throw new InvalidOtpException("OTP đã hết hạn hoặc chưa thực hiện bước khởi tạo KYC");
         }
@@ -116,10 +118,12 @@ public class KycService {
         }
 
         if (!pending.getOtp().equals(request.getOtp())) {
+            otpRateLimitService.recordFailedVerify(userId, pendingKey);
             throw new InvalidOtpException("OTP không chính xác");
         }
 
-        redisTemplate.delete(pendingKey(userId));
+        otpRateLimitService.clearVerifyFailures(userId);
+        redisTemplate.delete(pendingKey);
 
         KycSubmission submission = KycSubmission.builder()
                 .userId(userId)

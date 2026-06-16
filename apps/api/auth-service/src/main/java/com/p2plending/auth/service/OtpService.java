@@ -59,7 +59,9 @@ public class OtpService {
     }
 
     public PendingRegistration verifyAndConsume(String phone, String otp) {
-        String json = redisTemplate.opsForValue().get(pendingKey(phone));
+        otpRateLimitService.assertCanVerify(phone);
+        String pendingKey = pendingKey(phone);
+        String json = redisTemplate.opsForValue().get(pendingKey);
         if (json == null) {
             throw new InvalidOtpException("OTP đã hết hạn hoặc không tồn tại");
         }
@@ -72,10 +74,12 @@ public class OtpService {
         }
 
         if (!pending.getOtp().equals(otp)) {
+            otpRateLimitService.recordFailedVerify(phone, pendingKey);
             throw new InvalidOtpException("OTP không chính xác");
         }
 
-        redisTemplate.delete(pendingKey(phone));
+        otpRateLimitService.clearVerifyFailures(phone);
+        redisTemplate.delete(pendingKey);
         return pending;
     }
 

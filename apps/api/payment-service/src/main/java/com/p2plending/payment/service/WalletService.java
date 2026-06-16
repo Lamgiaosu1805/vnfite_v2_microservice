@@ -474,7 +474,7 @@ public class WalletService {
         }
 
         return switch (type) {
-            case DEPOSIT, INVEST_REFUND, REPAYMENT -> transaction.getAmount();
+            case DEPOSIT, INVEST_REFUND, DISBURSEMENT, REPAYMENT -> transaction.getAmount();
             case WITHDRAW, INVEST, REPAY -> transaction.getAmount().negate();
         };
     }

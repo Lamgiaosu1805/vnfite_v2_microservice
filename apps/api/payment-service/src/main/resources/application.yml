@@ -68,7 +68,7 @@ app:
   redis:
     namespace: ${APP_REDIS_NAMESPACE:${SPRING_PROFILES_ACTIVE:dev}}:payment-service
   internal:
-    secret: ${INTERNAL_API_SECRET:dev-internal-secret}
+    secret: ${INTERNAL_API_SECRET}
   otp:
     mock: ${APP_OTP_MOCK:true}
   payment:

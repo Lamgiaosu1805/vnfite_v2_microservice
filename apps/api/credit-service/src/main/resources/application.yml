@@ -37,7 +37,7 @@ server:
 
 app:
   internal:
-    secret: ${INTERNAL_API_SECRET:dev-internal-secret}
+    secret: ${INTERNAL_API_SECRET}
   scoring:
     # Phiên bản model chấm điểm — lưu kèm mỗi credit_score để trace
     model-version: scorecard-v1.0

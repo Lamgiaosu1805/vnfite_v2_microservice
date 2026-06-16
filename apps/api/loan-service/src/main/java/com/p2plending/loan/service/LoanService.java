@@ -19,6 +19,7 @@ import com.p2plending.loan.dto.request.LoanFilterParams;
 import com.p2plending.loan.dto.request.LoanOfferCreateRequest;
 import com.p2plending.loan.dto.response.LoanDocumentResponse;
 import com.p2plending.loan.dto.response.LoanOfferResponse;
+import com.p2plending.loan.dto.response.LoanPublicResponse;
 import com.p2plending.loan.dto.response.LoanResponse;
 import com.p2plending.loan.dto.response.OfferCreateResponse;
 import com.p2plending.loan.dto.response.PagedResponse;
@@ -29,6 +30,7 @@ import com.p2plending.loan.kafka.event.LoanReviewedEvent;
 import com.p2plending.loan.kafka.event.PaymentCompletedEvent;
 import com.p2plending.loan.mapper.LoanOfferMapper;
 import com.p2plending.loan.mapper.LoanRequestMapper;
+import com.p2plending.loan.security.AuthenticatedUser;
 import com.p2plending.loan.specification.LoanSpecification;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -38,6 +40,8 @@ import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.cache.annotation.Caching;
 import org.springframework.data.domain.Page;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.GrantedAuthority;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -159,6 +163,15 @@ public class LoanService {
     }
 
     @Transactional(readOnly = true)
+    @Cacheable(value = CacheConfig.CACHE_LOANS, key = "'public:' + #params.cacheKey()")
+    public PagedResponse<LoanPublicResponse> getPublicLoans(LoanFilterParams params) {
+        Page<LoanPublicResponse> page = loanRequestRepository
+                .findAll(LoanSpecification.withFilters(params), params.toPageable())
+                .map(this::buildPublicResponse);
+        return PagedResponse.from(page);
+    }
+
+    @Transactional(readOnly = true)
     @Cacheable(value = CacheConfig.CACHE_LOAN_BY_ID, key = "#id")
     public LoanResponse getLoanById(String id) {
         LoanRequest loan = findLoanOrThrow(id);
@@ -169,6 +182,15 @@ public class LoanService {
             response.setBorrowerCccd(user.getCccdNumber());
         });
         return response;
+    }
+
+    @Transactional(readOnly = true)
+    public LoanResponse getLoanByIdForCaller(String id, AuthenticatedUser caller) {
+        LoanRequest loan = findLoanOrThrow(id);
+        if (caller == null || (!loan.getBorrowerId().equals(caller.userId()) && !hasCmsRole(caller))) {
+            throw new AccessDeniedException("Loan detail is only available to the owner or CMS operators");
+        }
+        return getLoanById(id);
     }
 
     // ── Offer ─────────────────────────────────────────────────────
@@ -644,6 +666,41 @@ public class LoanService {
             response.setDocuments(docs.isEmpty() ? null : docs);
         }
         return response;
+    }
+
+    private LoanPublicResponse buildPublicResponse(LoanRequest loan) {
+        LoanPublicResponse response = LoanPublicResponse.builder()
+                .id(loan.getId())
+                .loanCode(loan.getLoanCode())
+                .productId(loan.getProductId())
+                .amount(loan.getAmount())
+                .interestRate(loan.getInterestRate())
+                .proposedAmount(loan.getProposedAmount())
+                .proposedInterestRate(loan.getProposedInterestRate())
+                .termMonths(loan.getTermMonths())
+                .purpose(loan.getPurpose())
+                .occupation(loan.getOccupation())
+                .province(loan.getProvince())
+                .status(loan.getStatus())
+                .fundedAmount(loan.getFundedAmount())
+                .remainingAmount(loan.getRemainingAmount())
+                .createdAt(loan.getCreatedAt())
+                .updatedAt(loan.getUpdatedAt())
+                .build();
+
+        if (loan.getProductId() != null) {
+            loanProductService.findProductById(loan.getProductId()).ifPresent(product -> {
+                response.setProductCode(product.getCode());
+                response.setProductName(product.getName());
+            });
+        }
+        return response;
+    }
+
+    private boolean hasCmsRole(AuthenticatedUser caller) {
+        return caller.getAuthorities().stream()
+                .map(GrantedAuthority::getAuthority)
+                .anyMatch(role -> Set.of("ROLE_ADMIN", "ROLE_OPS", "ROLE_SUPER_ADMIN", "ADMIN", "OPS", "SUPER_ADMIN").contains(role));
     }
 
     // ─── Internal stats ───────────────────────────────────────────────────────

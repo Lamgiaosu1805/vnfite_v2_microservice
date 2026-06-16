@@ -34,7 +34,7 @@ public class PushNotificationClient {
     @Value("${cms.sources.auth-url:http://auth-service:8081}")
     private String authServiceUrl;
 
-    @Value("${cms.sources.internal-secret:dev-internal-secret}")
+    @Value("${cms.sources.internal-secret}")
     private String internalSecret;
 
     /**

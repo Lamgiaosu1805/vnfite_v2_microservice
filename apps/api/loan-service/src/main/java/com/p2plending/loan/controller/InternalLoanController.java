@@ -45,7 +45,7 @@ public class InternalLoanController {
     private final LoanRequestRepository loanRequestRepository;
     private final FundingExpiryService fundingExpiryService;
 
-    @Value("${app.internal.secret:dev-internal-secret}")
+    @Value("${app.internal.secret}")
     private String internalSecret;
 
     @GetMapping
