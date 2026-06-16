@@ -242,7 +242,8 @@ public class ContractService {
         // Khóa tiền trong ví nhà đầu tư — cam kết vốn tại thời điểm ký hợp đồng. lockAmount
         // re-validate số dư khả dụng; nếu không đủ sẽ ném lỗi → toàn bộ giao dịch ký rollback.
         paymentServiceClient.lock(offer.getInvestorId(), offer.getAmount(),
-                "Đầu tư khoản gọi vốn " + loan.getLoanCode());
+                "Đầu tư khoản gọi vốn " + loan.getLoanCode(),
+                "LOCK-" + offer.getId());
 
         // fundedAmount = tổng các offer ACCEPTED (nguồn sự thật duy nhất).
         BigDecimal accepted = loanOfferRepository

@@ -14,9 +14,11 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.data.domain.Page;
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
@@ -56,10 +58,12 @@ public class InternalPaymentController {
     @PostMapping("/transaction-management/add-transaction-by-ms-account")
     public ResponseEntity<Void> tikluyAddTransactionStub(
             @RequestHeader(value = "X-Internal-Secret", required = false) String secret,
+            @RequestHeader(value = "X-Forwarded-For", required = false) String forwardedFor,
             @RequestHeader(value = "transactionId", required = false) String txnId,
             @RequestParam(required = false) String bankAccountNumber,
-            @RequestParam(required = false) String amount) {
-        if (!isValidInternalSecret(secret)) {
+            @RequestParam(required = false) String amount,
+            jakarta.servlet.http.HttpServletRequest request) {
+        if (!isAllowedTikluyCallback(secret, forwardedFor, request.getRemoteAddr())) {
             return ResponseEntity.status(401).build();
         }
         log.info("txnId={} TIKLUY CMS stub: accNo={} amount={}", txnId, bankAccountNumber, amount);
@@ -69,10 +73,12 @@ public class InternalPaymentController {
     @PostMapping("/notification/save-by-ms-account")
     public ResponseEntity<Map<String, String>> handleDepositCallback(
             @RequestHeader(value = "X-Internal-Secret", required = false) String secret,
+            @RequestHeader(value = "X-Forwarded-For", required = false) String forwardedFor,
             @RequestHeader(value = "transactionId", required = false) String txnId,
-            @RequestBody DepositCallbackRequest req) {
+            @RequestBody DepositCallbackRequest req,
+            jakarta.servlet.http.HttpServletRequest request) {
 
-        if (!isValidInternalSecret(secret)) {
+        if (!isAllowedTikluyCallback(secret, forwardedFor, request.getRemoteAddr())) {
             return ResponseEntity.status(401).body(Map.of("error", "Unauthorized"));
         }
 
@@ -162,13 +168,14 @@ public class InternalPaymentController {
             @RequestHeader(value = "X-Internal-Secret", required = false) String secret,
             @PathVariable String userId,
             @RequestParam BigDecimal amount,
-            @RequestParam(required = false) String description) {
+            @RequestParam(required = false) String description,
+            @RequestParam(required = false) String referenceId) {
 
         if (!appProperties.getInternal().getSecret().equals(secret)) {
             return ResponseEntity.status(401).body(Map.of("error", "Unauthorized"));
         }
 
-        walletService.lockAmount(userId, amount, description);
+        walletService.lockAmount(userId, amount, description, referenceId);
         return ResponseEntity.ok(Map.of("status", "OK"));
     }
 
@@ -340,5 +347,30 @@ public class InternalPaymentController {
     private boolean isValidInternalSecret(String secret) {
         String expected = appProperties.getInternal().getSecret();
         return expected != null && !expected.isBlank() && expected.equals(secret);
+    }
+
+    private boolean isAllowedTikluyCallback(String secret, String forwardedFor, String remoteAddr) {
+        String callbackSecret = appProperties.getTikluy().getCallback().getSecret();
+        if (StringUtils.hasText(callbackSecret) && callbackSecret.equals(secret)) {
+            return true;
+        }
+
+        String allowedIps = appProperties.getTikluy().getCallback().getAllowedIps();
+        if (!StringUtils.hasText(allowedIps)) {
+            return true;
+        }
+
+        String clientIp = resolveClientIp(forwardedFor, remoteAddr);
+        return Arrays.stream(allowedIps.split(","))
+                .map(String::trim)
+                .filter(StringUtils::hasText)
+                .anyMatch(clientIp::equals);
+    }
+
+    private String resolveClientIp(String forwardedFor, String remoteAddr) {
+        if (StringUtils.hasText(forwardedFor)) {
+            return forwardedFor.split(",")[0].trim();
+        }
+        return remoteAddr;
     }
 }

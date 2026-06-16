@@ -1,6 +1,6 @@
-package com.p2plending.loan.security;
+package com.p2plending.matching.security;
 
-import com.p2plending.loan.config.JwtProperties;
+import com.p2plending.matching.config.JwtProperties;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.JwtException;
@@ -40,43 +40,37 @@ public class JwtFilter extends OncePerRequestFilter {
 
     @Override
     protected void doFilterInternal(
-            @NonNull HttpServletRequest  request,
+            @NonNull HttpServletRequest request,
             @NonNull HttpServletResponse response,
-            @NonNull FilterChain         chain
+            @NonNull FilterChain chain
     ) throws ServletException, IOException {
-
         String header = request.getHeader("Authorization");
         if (header == null || !header.startsWith("Bearer ")) {
             chain.doFilter(request, response);
             return;
         }
 
-        String token = header.substring(7);
         try {
-            Claims claims = parseClaims(token);
+            Claims claims = parseClaims(header.substring(7));
             if (!"access".equals(claims.get("type", String.class))) {
                 throw new JwtException("JWT token type is not access");
             }
-
             String userId = claims.get("userId", String.class);
             if (!StringUtils.hasText(userId)) {
                 throw new JwtException("JWT missing userId");
             }
-            String email  = claims.getSubject();
 
             @SuppressWarnings("unchecked")
             List<String> roles = claims.get("roles", List.class);
-
             List<SimpleGrantedAuthority> authorities = (roles == null ? List.<String>of() : roles).stream()
                     .map(SimpleGrantedAuthority::new)
                     .toList();
 
-            AuthenticatedUser principal = new AuthenticatedUser(userId, email, authorities);
+            AuthenticatedUser principal = new AuthenticatedUser(userId, claims.getSubject(), authorities);
             UsernamePasswordAuthenticationToken auth =
                     new UsernamePasswordAuthenticationToken(principal, null, authorities);
             auth.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
             SecurityContextHolder.getContext().setAuthentication(auth);
-
         } catch (ExpiredJwtException e) {
             log.debug("Expired JWT on {}", request.getRequestURI());
         } catch (JwtException e) {
@@ -98,9 +92,7 @@ public class JwtFilter extends OncePerRequestFilter {
 
     private RSAPublicKey loadPublicKey(String raw) {
         if (!StringUtils.hasText(raw)) {
-            log.warn("JWT: No RSA public key configured — all tokens will be rejected in production. " +
-                     "Set RSA_PUBLIC_KEY env var.");
-            // Return a dummy key that will reject every token at verification time
+            log.warn("JWT: RSA public key is not configured for matching-service");
             return generateDummyPublicKey();
         }
         try {
@@ -115,7 +107,7 @@ public class JwtFilter extends OncePerRequestFilter {
 
     private RSAPublicKey generateDummyPublicKey() {
         try {
-            java.security.KeyPairGenerator gen = java.security.KeyPairGenerator.getInstance("RSA");
+            var gen = java.security.KeyPairGenerator.getInstance("RSA");
             gen.initialize(2048);
             return (RSAPublicKey) gen.generateKeyPair().getPublic();
         } catch (Exception e) {

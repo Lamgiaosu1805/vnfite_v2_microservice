@@ -18,6 +18,10 @@ import org.springframework.web.client.RestTemplate;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.net.InetSocketAddress;
+import java.net.Socket;
 import java.util.Locale;
 import java.util.List;
 import java.util.Map;
@@ -35,8 +39,18 @@ public class FileManagerUploadService {
     @Value("${file-manager.base-url:https://service.vnfite.com.vn/file-manager/v2}")
     private String fileManagerBaseUrl;
 
+    @Value("${app.antivirus.enabled:false}")
+    private boolean antivirusEnabled;
+
+    @Value("${app.antivirus.host:clamav}")
+    private String antivirusHost;
+
+    @Value("${app.antivirus.port:3310}")
+    private int antivirusPort;
+
     public LoanDocumentUploadResponse uploadLoanDocument(MultipartFile file, String label) {
         byte[] bytes = validateAndRead(file);
+        scanForVirus(bytes);
 
         String safeLabel = label == null || label.isBlank() ? "Chứng từ gọi vốn" : label.trim();
         String originalFileName = file.getOriginalFilename() == null || file.getOriginalFilename().isBlank()
@@ -154,6 +168,46 @@ public class FileManagerUploadService {
         }
         String sanitized = onlyName.replaceAll("[^A-Za-z0-9._-]", "_");
         return sanitized.isBlank() ? "chung-tu-goi-von" : sanitized;
+    }
+
+    private void scanForVirus(byte[] bytes) {
+        if (!antivirusEnabled) {
+            return;
+        }
+        try (Socket socket = new Socket()) {
+            socket.connect(new InetSocketAddress(antivirusHost, antivirusPort), 3_000);
+            socket.setSoTimeout(10_000);
+
+            OutputStream out = socket.getOutputStream();
+            InputStream in = socket.getInputStream();
+            out.write("zINSTREAM\0".getBytes(java.nio.charset.StandardCharsets.US_ASCII));
+
+            int offset = 0;
+            while (offset < bytes.length) {
+                int chunk = Math.min(8192, bytes.length - offset);
+                out.write(new byte[] {
+                        (byte) (chunk >>> 24),
+                        (byte) (chunk >>> 16),
+                        (byte) (chunk >>> 8),
+                        (byte) chunk
+                });
+                out.write(bytes, offset, chunk);
+                offset += chunk;
+            }
+            out.write(new byte[] {0, 0, 0, 0});
+            out.flush();
+
+            String result = new String(in.readNBytes(512), java.nio.charset.StandardCharsets.UTF_8);
+            if (!result.contains("OK")) {
+                log.warn("Antivirus rejected uploaded loan document: {}", result.trim());
+                throw new IllegalArgumentException("Chứng từ không đạt kiểm tra an toàn. Vui lòng chọn file khác.");
+            }
+        } catch (IllegalArgumentException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error("Antivirus scan failed: {}", e.getMessage(), e);
+            throw new IllegalArgumentException("Không thể kiểm tra an toàn chứng từ. Vui lòng thử lại.");
+        }
     }
 
     private String extractFileId(JsonNode node) {

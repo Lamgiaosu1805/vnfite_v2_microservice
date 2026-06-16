@@ -75,6 +75,8 @@ server:
 
 jwt:
   public-key: ${RSA_PUBLIC_KEY:}
+  issuer: ${JWT_ISSUER:vnfite-auth}
+  audience: ${JWT_AUDIENCE:vnfite-api}
 
 # External push notification service
 push:

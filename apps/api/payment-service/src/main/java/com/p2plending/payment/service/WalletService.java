@@ -173,7 +173,18 @@ public class WalletService {
 
     @Transactional
     public void lockAmount(String userId, BigDecimal amount, String description) {
-        Wallet wallet = findByUser(userId);
+        lockAmount(userId, amount, description, null);
+    }
+
+    @Transactional
+    public void lockAmount(String userId, BigDecimal amount, String description, String referenceId) {
+        if (referenceId != null && transactionRepository.existsByReferenceId(referenceId)) {
+            log.warn("Idempotent lock skip: referenceId={} đã xử lý", referenceId);
+            return;
+        }
+
+        Wallet wallet = walletRepository.findWithLockByUserIdAndIsDeletedFalse(userId)
+                .orElseThrow(() -> new IllegalStateException("Wallet not found for user " + userId));
         BigDecimal available = computeAvailable(wallet);
 
         if (available.compareTo(amount) < 0) {
@@ -189,6 +200,7 @@ public class WalletService {
                 .type(TransactionType.INVEST)
                 .amount(amount)
                 .status(TransactionStatus.SUCCESS)
+                .referenceId(referenceId)
                 .description(description != null ? description : "Khóa tiền đầu tư")
                 .balanceAfter(computeAvailable(wallet))
                 .build());

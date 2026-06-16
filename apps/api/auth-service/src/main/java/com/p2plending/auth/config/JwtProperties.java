@@ -20,4 +20,8 @@ public class JwtProperties {
 
     /** Refresh token lifetime in seconds (default 10 minutes). */
     private long refreshTokenExpiry = 600;
+
+    private String issuer = "vnfite-auth";
+
+    private String audience = "vnfite-api";
 }

@@ -9,4 +9,6 @@ import org.springframework.context.annotation.Configuration;
 @ConfigurationProperties(prefix = "jwt")
 public class JwtProperties {
     private String publicKey;
+    private String issuer = "vnfite-auth";
+    private String audience = "vnfite-api";
 }

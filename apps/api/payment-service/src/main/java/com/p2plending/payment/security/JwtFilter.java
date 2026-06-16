@@ -31,8 +31,10 @@ import java.util.List;
 public class JwtFilter extends OncePerRequestFilter {
 
     private final RSAPublicKey publicKey;
+    private final JwtProperties props;
 
     public JwtFilter(JwtProperties props) {
+        this.props = props;
         this.publicKey = loadPublicKey(props.getPublicKey());
     }
 
@@ -52,8 +54,14 @@ public class JwtFilter extends OncePerRequestFilter {
         String token = header.substring(7);
         try {
             Claims claims = parseClaims(token);
+            if (!"access".equals(claims.get("type", String.class))) {
+                throw new JwtException("JWT token type is not access");
+            }
 
             String userId = claims.get("userId", String.class);
+            if (!StringUtils.hasText(userId)) {
+                throw new JwtException("JWT missing userId");
+            }
             String email  = claims.getSubject();
 
             @SuppressWarnings("unchecked")
@@ -81,6 +89,8 @@ public class JwtFilter extends OncePerRequestFilter {
     private Claims parseClaims(String token) {
         return Jwts.parser()
                 .verifyWith(publicKey)
+                .requireIssuer(props.getIssuer())
+                .requireAudience(props.getAudience())
                 .build()
                 .parseSignedClaims(token)
                 .getPayload();

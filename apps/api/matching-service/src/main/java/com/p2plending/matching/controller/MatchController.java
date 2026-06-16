@@ -2,11 +2,13 @@ package com.p2plending.matching.controller;
 
 import com.p2plending.matching.dto.request.InvestorPreferenceRequest;
 import com.p2plending.matching.dto.response.MatchRecordResponse;
+import com.p2plending.matching.security.AuthenticatedUser;
 import com.p2plending.matching.service.MatchingService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -31,13 +33,13 @@ public class MatchController {
     /**
      * POST /api/matches/preferences
      * Investor registers or updates their lending preferences.
-     * Requires X-Investor-Id header (set by API gateway after JWT validation).
+     * Uses investorId from the validated JWT, never from a client-controlled header.
      */
     @PostMapping("/preferences")
     public ResponseEntity<Void> upsertPreference(
-            @RequestHeader("X-Investor-Id") String investorId,
+            @AuthenticationPrincipal AuthenticatedUser principal,
             @Valid @RequestBody InvestorPreferenceRequest request) {
-        matchingService.upsertPreference(investorId, request);
+        matchingService.upsertPreference(principal.userId(), request);
         return ResponseEntity.status(HttpStatus.NO_CONTENT).build();
     }
 }

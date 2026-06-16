@@ -73,6 +73,8 @@ server:
 jwt:
   private-key: ${RSA_PRIVATE_KEY:}
   public-key: ${RSA_PUBLIC_KEY:}
+  issuer: ${JWT_ISSUER:vnfite-auth}
+  audience: ${JWT_AUDIENCE:vnfite-api}
   access-token-expiry: 300       # seconds — 5 minutes
   refresh-token-expiry: 600      # seconds — 10 minutes
 

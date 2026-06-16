@@ -29,16 +29,21 @@ public class JwtService {
 
     private static final String CLAIM_ROLES = "roles";
     private static final String CLAIM_TYPE  = "type";
+    private static final String TYPE_ACCESS = "access";
     private static final String TYPE_REFRESH = "refresh";
 
     private final RSAPrivateKey privateKey;
     private final RSAPublicKey  publicKey;
     private final long accessTokenExpiry;
     private final long refreshTokenExpiry;
+    private final String issuer;
+    private final String audience;
 
     public JwtService(JwtProperties props) throws NoSuchAlgorithmException {
         this.accessTokenExpiry  = props.getAccessTokenExpiry();
         this.refreshTokenExpiry = props.getRefreshTokenExpiry();
+        this.issuer = props.getIssuer();
+        this.audience = props.getAudience();
 
         KeyPair pair = resolveKeyPair(props);
         this.privateKey = (RSAPrivateKey) pair.getPrivate();
@@ -54,8 +59,12 @@ public class JwtService {
 
         return Jwts.builder()
                 .subject(userDetails.getUsername())
+                .issuer(issuer)
+                .audience().add(audience).and()
+                .id(java.util.UUID.randomUUID().toString())
                 .claim("userId", userId)
                 .claim(CLAIM_ROLES, roles)
+                .claim(CLAIM_TYPE, TYPE_ACCESS)
                 .issuedAt(new Date())
                 .expiration(expiresAt(accessTokenExpiry))
                 .signWith(privateKey, Jwts.SIG.RS256)
@@ -65,6 +74,9 @@ public class JwtService {
     public String generateRefreshToken(String subject) {
         return Jwts.builder()
                 .subject(subject)
+                .issuer(issuer)
+                .audience().add(audience).and()
+                .id(java.util.UUID.randomUUID().toString())
                 .claim(CLAIM_TYPE, TYPE_REFRESH)
                 .issuedAt(new Date())
                 .expiration(expiresAt(refreshTokenExpiry))
@@ -83,7 +95,7 @@ public class JwtService {
             Claims claims = parseClaims(token);
             return userDetails.getUsername().equals(claims.getSubject())
                     && !isExpired(claims)
-                    && !TYPE_REFRESH.equals(claims.get(CLAIM_TYPE));
+                    && TYPE_ACCESS.equals(claims.get(CLAIM_TYPE));
         } catch (JwtException e) {
             return false;
         }
@@ -107,6 +119,8 @@ public class JwtService {
     private Claims parseClaims(String token) {
         return Jwts.parser()
                 .verifyWith(publicKey)
+                .requireIssuer(issuer)
+                .requireAudience(audience)
                 .build()
                 .parseSignedClaims(token)
                 .getPayload();

@@ -11,4 +11,6 @@ public class JwtProperties {
 
     /** Base64-encoded X509 RSA public key used to verify tokens issued by auth-service. */
     private String publicKey = "";
+    private String issuer = "vnfite-auth";
+    private String audience = "vnfite-api";
 }

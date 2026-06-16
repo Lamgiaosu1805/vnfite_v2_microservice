@@ -13,6 +13,7 @@ public class AppProperties {
     private Internal internal = new Internal();
     private Otp otp = new Otp();
     private Payment payment = new Payment();
+    private Tikluy tikluy = new Tikluy();
 
     @Data
     public static class Redis {
@@ -33,5 +34,18 @@ public class AppProperties {
     public static class Payment {
         /** Khi true: bỏ qua TIKLUY, dùng mock VA / mock fund transfer cho dev/test */
         private boolean mock = true;
+    }
+
+    @Data
+    public static class Tikluy {
+        private Callback callback = new Callback();
+
+        @Data
+        public static class Callback {
+            /** Optional until TIKLUY can send X-Internal-Secret; when set it is accepted. */
+            private String secret;
+            /** Comma-separated exact IP allowlist. Empty keeps current TIKLUY flow compatible. */
+            private String allowedIps = "";
+        }
     }
 }

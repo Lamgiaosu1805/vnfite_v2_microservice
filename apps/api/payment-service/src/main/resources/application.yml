@@ -63,6 +63,8 @@ server:
 
 jwt:
   public-key: ${RSA_PUBLIC_KEY:}
+  issuer: ${JWT_ISSUER:vnfite-auth}
+  audience: ${JWT_AUDIENCE:vnfite-api}
 
 app:
   redis:
@@ -74,6 +76,10 @@ app:
   payment:
     # mock=true: bỏ qua TIKLUY, dùng dữ liệu giả cho môi trường dev/test
     mock: ${APP_PAYMENT_MOCK:true}
+  tikluy:
+    callback:
+      secret: ${TIKLUY_CALLBACK_SECRET:}
+      allowed-ips: ${TIKLUY_CALLBACK_ALLOWED_IPS:}
 
 tikluy:
   # ⚠️ Mặc định trỏ TEST để tránh chạm tiền thật.

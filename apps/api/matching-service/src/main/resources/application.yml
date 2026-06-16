@@ -48,6 +48,11 @@ server:
       force-response: true
       enabled: true
 
+jwt:
+  public-key: ${RSA_PUBLIC_KEY:}
+  issuer: ${JWT_ISSUER:vnfite-auth}
+  audience: ${JWT_AUDIENCE:vnfite-api}
+
 matching:
   min-score-threshold: 0.60   # minimum match score 0.0-1.0
   max-matches-per-loan: 10    # cap on matches published per loan

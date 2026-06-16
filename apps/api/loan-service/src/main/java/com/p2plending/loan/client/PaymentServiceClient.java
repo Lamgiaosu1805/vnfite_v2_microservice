@@ -69,6 +69,10 @@ public class PaymentServiceClient {
         post(userId, "lock", amount, description, null, "Không thể khóa tiền đầu tư.");
     }
 
+    public void lock(String userId, BigDecimal amount, String description, String referenceId) {
+        post(userId, "lock", amount, description, referenceId, "Không thể khóa tiền đầu tư.");
+    }
+
     /**
      * Mở khóa tiền khi lệnh đầu tư bị hủy/hết hạn (hoàn về số dư khả dụng).
      * referenceId (vd "REFUND-{offerId}") để payment-service idempotent, chống hoàn trùng.
