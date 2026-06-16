@@ -100,12 +100,12 @@ public class NotificationService {
         );
     }
 
-    /** Hợp đồng vay đã sẵn sàng để người gọi vốn ký (khoản vừa đủ vốn). */
+    /** Hợp đồng gọi vốn đã sẵn sàng để người gọi vốn ký (khoản vừa đủ vốn). */
     @Transactional
     public void notifyContractReady(ContractReadyEvent event) {
         String code = event.getLoanCode() != null ? event.getLoanCode() : event.getLoanId();
         String title = "Hợp đồng đã sẵn sàng để ký";
-        String message = ("Khoản gọi vốn %s đã được đầu tư đủ. Hợp đồng vay (số tiền %s, lãi suất %s/năm, "
+        String message = ("Khoản gọi vốn %s đã được đầu tư đủ. Hợp đồng gọi vốn (số tiền %s, lãi suất %s/năm, "
                 + "kỳ hạn %s tháng) đã sẵn sàng. Vui lòng ký hợp đồng để hoàn tất.")
                 .formatted(code, formatMoney(event.getAmount()), formatRate(event.getInterestRate()),
                         event.getTermMonths() != null ? event.getTermMonths() : 0);
