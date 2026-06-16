@@ -194,6 +194,23 @@ public class InternalPaymentController {
         return ResponseEntity.ok(Map.of("status", "OK"));
     }
 
+    /** Người gọi vốn nhận tiền giải ngân vào ví VNF sau khi CMS disburse. referenceId để idempotent. */
+    @PostMapping("/internal/payment/wallet/{userId}/credit-disbursement")
+    public ResponseEntity<Map<String, String>> creditDisbursement(
+            @RequestHeader(value = "X-Internal-Secret", required = false) String secret,
+            @PathVariable String userId,
+            @RequestParam BigDecimal amount,
+            @RequestParam(required = false) String description,
+            @RequestParam(required = false) String referenceId) {
+
+        if (!appProperties.getInternal().getSecret().equals(secret)) {
+            return ResponseEntity.status(401).body(Map.of("error", "Unauthorized"));
+        }
+
+        walletService.creditDisbursement(userId, amount, description, referenceId);
+        return ResponseEntity.ok(Map.of("status", "OK"));
+    }
+
     /** Nhà đầu tư nhận tiền hoàn trả khi người gọi vốn trả nợ. referenceId để idempotent. */
     @PostMapping("/internal/payment/wallet/{userId}/credit")
     public ResponseEntity<Map<String, String>> creditRepayment(

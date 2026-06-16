@@ -278,6 +278,36 @@ public class WalletService {
     }
 
     /**
+     * Người gọi vốn nhận tiền giải ngân vào ví VNF (tổng từ các nhà đầu tư sau khi CMS disburse).
+     * Idempotent theo referenceId (vd "CREDIT-BORROWER-{loanId}") chống cộng trùng khi retry.
+     */
+    @Transactional
+    public void creditDisbursement(String userId, BigDecimal amount, String description, String referenceId) {
+        if (referenceId != null && transactionRepository.existsByReferenceId(referenceId)) {
+            log.warn("Idempotent disbursement-credit skip: referenceId={} đã xử lý", referenceId);
+            return;
+        }
+
+        Wallet wallet = findByUser(userId);
+        boolean mock = appProperties.getPayment().isMock();
+
+        if (!mock) {
+            String tikluyTxnId = referenceId != null ? referenceId : "DISBURSE-IN-" + UUID.randomUUID();
+            tikluyClient.topUpAccount(tikluyTxnId, wallet.getVnfAccountNo(), amount);
+        }
+
+        transactionRepository.save(WalletTransaction.builder()
+                .walletId(wallet.getId())
+                .type(TransactionType.DISBURSEMENT)
+                .amount(amount)
+                .status(TransactionStatus.SUCCESS)
+                .referenceId(referenceId)
+                .description(description != null ? description : "Nhận tiền giải ngân")
+                .balanceAfter(computeAvailable(wallet))
+                .build());
+    }
+
+    /**
      * Nhà đầu tư nhận tiền hoàn trả (gốc + lãi) khi người gọi vốn trả nợ.
      *
      * <p>Đây là vế CỘNG của giao dịch chuyển nội bộ: tiền vừa bị trừ khỏi VA người gọi vốn

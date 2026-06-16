@@ -288,11 +288,19 @@ public class LoanService {
         // Trừ tiền đã khóa của từng nhà đầu tư (locked → debit thật). Mỗi offer trừ riêng
         // để xử lý đúng trường hợp một nhà đầu tư có nhiều lệnh trên cùng khoản. referenceId
         // theo offerId để payment-service idempotent — retry giải ngân không debit trùng.
+        BigDecimal totalDisbursed = BigDecimal.ZERO;
         for (LoanOffer offer : acceptedOffers) {
             paymentServiceClient.debit(offer.getInvestorId(), offer.getAmount(),
                     "Giải ngân khoản gọi vốn " + loan.getLoanCode(),
                     "DISBURSE-" + offer.getId());
+            totalDisbursed = totalDisbursed.add(offer.getAmount());
         }
+
+        // Credit toàn bộ tiền giải ngân vào ví VNF của người gọi vốn.
+        // Người gọi vốn sau đó tự rút về tài khoản ngân hàng qua luồng withdraw.
+        paymentServiceClient.creditBorrower(loan.getBorrowerId(), totalDisbursed,
+                "Nhận tiền giải ngân khoản vay " + loan.getLoanCode(),
+                "CREDIT-BORROWER-" + loanId);
 
         List<String> investorIds = acceptedOffers.stream()
                 .map(LoanOffer::getInvestorId)

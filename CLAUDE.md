@@ -10,7 +10,7 @@ Nền tảng cho vay ngang hàng (P2P Lending) dạng microservices, xây dựng
 
 **Tên thương hiệu:** Luôn viết là **VNFITE** (toàn bộ chữ hoa) — không dùng "VnFite", "Vnfite", hay bất kỳ cách viết khác. Áp dụng cho mọi nơi: UI, tài liệu, commit message, comment code.
 
-**Quy tắc commit & push:** Không tự ý chạy `git commit` hay `git push`. Sau khi hoàn thành thay đổi, chỉ được **gen câu lệnh** để người dùng tự chạy. Luôn gen đủ cả 3 lệnh: `git add`, `git commit`, và `git push` trong cùng một khối lệnh. Commit message ngắn gọn, 1 dòng, tiếng Anh hoặc tiếng Việt đều được.
+**Quy tắc commit & push:** Không tự ý chạy `git commit` hay `git push`. Sau khi hoàn thành thay đổi, chỉ được **gen câu lệnh** để người dùng tự chạy. Luôn gen đủ cả 4 lệnh: `cd /Users/lamgs/Desktop/p2p-lending`, `git add`, `git commit`, và `git push` trong cùng một khối lệnh (bắt đầu bằng `cd` vào thư mục project). Commit message ngắn gọn, 1 dòng, tiếng Anh hoặc tiếng Việt đều được.
 
 **Viết tắt trong dự án:** CMS = **Customer Manager Service** (không phải Content Management System). Khi đọc hoặc viết bất kỳ chỗ nào có chữ "CMS" trong project này đều hiểu là Customer Manager Service.
 

@@ -102,6 +102,14 @@ public class PaymentServiceClient {
         post(userId, "credit", amount, description, referenceId, "Không thể cộng tiền hoàn trả vào ví.");
     }
 
+    /**
+     * Cộng ví VNF người gọi vốn khi giải ngân (tổng tiền từ các nhà đầu tư → ví người gọi vốn).
+     * referenceId (vd "CREDIT-BORROWER-{loanId}") để idempotent, chống cộng trùng khi retry giải ngân.
+     */
+    public void creditBorrower(String userId, BigDecimal amount, String description, String referenceId) {
+        post(userId, "credit-disbursement", amount, description, referenceId, "Không thể cộng tiền giải ngân vào ví người gọi vốn.");
+    }
+
     private void post(String userId, String action, BigDecimal amount, String description,
                       String referenceId, String fallback) {
         UriComponentsBuilder builder = UriComponentsBuilder
