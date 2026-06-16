@@ -32,6 +32,9 @@ public class RepaymentSchedule {
     @GeneratedValue(strategy = GenerationType.UUID)
     private String id;
 
+    @Version
+    private Long version;
+
     @Column(nullable = false, length = 36)
     private String loanId;
 

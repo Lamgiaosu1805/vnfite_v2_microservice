@@ -140,6 +140,21 @@ public class RepaymentService {
                     "Khoản gọi vốn %s chưa có lịch trả nợ".formatted(loan.getLoanCode()));
         }
 
+        // Guard: nếu kỳ đầu chưa trả đã có giao dịch ví → không cho ghi đè bằng manual path
+        List<PaymentChannel> walletChannels = List.of(PaymentChannel.WALLET, PaymentChannel.AUTO_DEBIT);
+        schedules.stream()
+                .filter(s -> !s.isSettled() && s.getRemainingDue().signum() > 0)
+                .findFirst()
+                .ifPresent(firstUnpaid -> {
+                    if (transactionRepository.existsByScheduleIdAndChannelInAndIsDeletedFalse(
+                            firstUnpaid.getId(), walletChannels)) {
+                        throw new InvalidLoanStateException(
+                                "Kỳ %d của khoản %s đã có giao dịch qua ví VNFITE. "
+                                        .formatted(firstUnpaid.getPeriodNumber(), loan.getLoanCode()) +
+                                "Không được ghi đè bằng manual path — dùng luồng ví hoặc liên hệ kỹ thuật.");
+                    }
+                });
+
         LocalDateTime paidAt = request.getPaidAt() != null ? request.getPaidAt() : LocalDateTime.now(TZ);
         BigDecimal remaining = request.getAmount();
         String firstTouchedScheduleId = null;
@@ -166,6 +181,8 @@ public class RepaymentService {
         }
         scheduleRepository.saveAll(schedules);
 
+        String noteWithReason = "[REASON] " + request.getReason()
+                + (request.getNote() != null ? " | " + request.getNote() : "");
         transactionRepository.save(RepaymentTransaction.builder()
                 .loanId(loanId)
                 .scheduleId(firstTouchedScheduleId)
@@ -174,7 +191,7 @@ public class RepaymentService {
                 .channel(request.getChannel() != null ? request.getChannel() : PaymentChannel.MANUAL_ADMIN)
                 .externalRef(request.getExternalRef())
                 .recordedBy(request.getRecordedBy())
-                .note(request.getNote())
+                .note(noteWithReason)
                 .build());
 
         applyLoanStatusAfterPayment(loan, schedules);
