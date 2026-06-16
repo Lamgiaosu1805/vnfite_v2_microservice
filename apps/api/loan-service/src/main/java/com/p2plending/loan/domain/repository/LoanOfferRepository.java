@@ -19,6 +19,9 @@ public interface LoanOfferRepository extends JpaRepository<LoanOffer, String> {
 
     boolean existsByLoanRequestIdAndInvestorId(String loanRequestId, String investorId);
 
+    boolean existsByLoanRequestIdAndInvestorIdAndStatusIn(
+            String loanRequestId, String investorId, java.util.Collection<OfferStatus> statuses);
+
     @Query("SELECT COALESCE(SUM(o.amount), 0) FROM LoanOffer o " +
            "WHERE o.loanRequestId = :loanRequestId AND o.status = :status")
     BigDecimal sumAmountByLoanRequestIdAndStatus(

@@ -230,6 +230,13 @@ public class LoanService {
                     .formatted(available, request.getAmount()));
         }
 
+        // Không cho phép cùng nhà đầu tư đặt offer trùng khi đã có offer đang PENDING hoặc ACCEPTED
+        if (loanOfferRepository.existsByLoanRequestIdAndInvestorIdAndStatusIn(
+                loanId, investorId, List.of(OfferStatus.PENDING, OfferStatus.ACCEPTED))) {
+            throw new InvalidLoanStateException(
+                    "Bạn đã có lệnh đầu tư đang chờ xử lý hoặc đã được chấp nhận cho khoản gọi vốn này.");
+        }
+
         // Offer ở trạng thái PENDING (giữ chỗ) — chỉ tính vào fundedAmount sau khi nhà đầu tư
         // ký hợp đồng đầu tư bằng OTP (ContractService.signContract).
         LoanOffer offer = LoanOffer.builder()
