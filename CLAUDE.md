@@ -149,6 +149,35 @@ Không có tài khoản user mẫu — đăng ký qua app.
 
 ---
 
+### Deploy CMS Web (VnFiteCMS — tại `/Users/lamgs/Desktop/APP/VnFiteCMS`)
+
+CMS là frontend riêng, deploy tự động lên **server 155** (SSH port 2222), **không liên quan** đến microservices p2p-lending.
+
+| Nhánh | Môi trường | URL | Thư mục trên server |
+|-------|-----------|-----|---------------------|
+| `main` | Test | `cms-test.vnfite.com.vn` | `/var/www/cms-web-test` |
+| `release` | Live | `cms.vnfite.com.vn` | `/var/www/cms-web-prod` |
+
+**Deploy test:** push lên `main` → GitHub Actions tự build + rsync lên server 155.
+
+**Deploy live:** push lên `release` → GitHub Actions tự build + rsync lên server 155.
+
+**Quy trình thường dùng:**
+```bash
+cd /Users/lamgs/Desktop/APP/VnFiteCMS
+# Test trước
+git checkout main && git push origin main
+
+# Sau khi test ổn → merge sang live
+git checkout release
+git merge main
+git push origin release
+```
+
+⚠️ Push nhầm lên `release` là deploy live ngay — cẩn thận.
+
+---
+
 ### Deploy lên Live server (42.113.122.118)
 
 **Chỉ deploy thủ công** — không có auto-deploy khi push. Workflow: `.github/workflows/deploy-live.yml`.
