@@ -134,7 +134,7 @@ INSERT INTO wallet_transactions (
 ) VALUES (
     '24212259-89d3-4ca5-96da-5541ff4daa6b',
     'c5608da5-1b1c-4b79-935c-adf14e0f818c',
-    'WITHDRAWAL',
+    'WITHDRAW',
     101227397.00,
     'SUCCESS',
     'TNTD_0001_VNFITE',
