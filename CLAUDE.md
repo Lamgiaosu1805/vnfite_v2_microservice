@@ -135,6 +135,32 @@ Không có tài khoản user mẫu — đăng ký qua app.
 
 ## CI/CD
 
+### Deploy lên Test server (42.113.122.119)
+
+**Tự động:** push lên `main` → GitHub Actions (`.github/workflows/deploy-test.yml`) tự phát hiện service thay đổi qua `git diff` và deploy đúng service đó.
+
+**Deploy thủ công 1 hoặc nhiều service:**
+> GitHub → Actions → `CI/CD → Test Server` → Run workflow → nhập tên service (vd: `auth-service,payment-service`) hoặc `all`
+
+**Deploy thủ công toàn bộ:**
+> GitHub → Actions → `CI/CD → Test Server` → Run workflow → tick **force_all ✅**
+
+**Cập nhật biến môi trường test:** sửa GitHub Secret `ENV_FILE_TEST` (xem hướng dẫn bên dưới).
+
+---
+
+### Deploy lên Live server (42.113.122.118)
+
+**Chỉ deploy thủ công** — không có auto-deploy khi push. Workflow: `.github/workflows/deploy-live.yml`.
+
+> GitHub → Actions → `CI/CD → Live Server (Manual)` → Run workflow → nhập tên service (vd: `auth-service`) hoặc `all`
+
+**Cập nhật biến môi trường live:** sửa GitHub Secret `ENV_FILE_LIVE` (cùng quy trình với `ENV_FILE_TEST` nhưng SSH vào `42.113.122.118`).
+
+**SSH key cho live server:** đã có `SSH_PRIVATE_KEY_LIVE` trong GitHub Secrets. Không xem lại được sau khi lưu.
+
+---
+
 GitHub Actions (`.github/workflows/deploy-test.yml`):
 - Trigger: push lên `main` → phát hiện service nào thay đổi qua `git diff`, chỉ deploy service đó
 - Deploy thủ công toàn bộ: **Actions → Run workflow → force_all ✅**
