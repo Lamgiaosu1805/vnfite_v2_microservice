@@ -17,4 +17,7 @@ public interface KycSubmissionRepository extends JpaRepository<KycSubmission, St
 
     /** Lấy submission APPROVED mới nhất của user — dùng để lấy fullName. */
     Optional<KycSubmission> findTopByUserIdAndStatusOrderByCreatedAtDesc(String userId, KycStatus status);
+
+    /** Lấy submission mới nhất của user — dùng cho CMS xem ảnh eKYC cả khi đang PENDING. */
+    Optional<KycSubmission> findTopByUserIdOrderByCreatedAtDesc(String userId);
 }

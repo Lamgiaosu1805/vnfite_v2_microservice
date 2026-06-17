@@ -579,6 +579,9 @@ public class SourceServiceClient {
                 .issueDate(date(node, "issueDate"))
                 .issuingAuthority(text(node, "issuingAuthority"))
                 .expiryDate(date(node, "expiryDate"))
+                .frontImageId(text(node, "frontImageId"))
+                .backImageId(text(node, "backImageId"))
+                .portraitImageId(text(node, "portraitImageId"))
                 .build();
     }
 

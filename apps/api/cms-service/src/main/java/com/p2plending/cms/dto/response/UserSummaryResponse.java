@@ -28,4 +28,7 @@ public class UserSummaryResponse {
     private LocalDate issueDate;
     private String issuingAuthority;
     private LocalDate expiryDate;
+    private String frontImageId;
+    private String backImageId;
+    private String portraitImageId;
 }

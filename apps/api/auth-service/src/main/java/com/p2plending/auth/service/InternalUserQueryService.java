@@ -88,8 +88,9 @@ public class InternalUserQueryService {
     }
 
     private InternalUserSummaryResponse toSummary(User user) {
-        var kyc = kycSubmissionRepository
+        var approvedKyc = kycSubmissionRepository
                 .findTopByUserIdAndStatusOrderByCreatedAtDesc(user.getId(), KycStatus.APPROVED);
+        var kyc = approvedKyc.or(() -> kycSubmissionRepository.findTopByUserIdOrderByCreatedAtDesc(user.getId()));
 
         return InternalUserSummaryResponse.builder()
                 .userId(user.getId())
@@ -108,6 +109,9 @@ public class InternalUserQueryService {
                 .issueDate(kyc.map(KycSubmission::getIssueDate).orElse(null))
                 .issuingAuthority(kyc.map(KycSubmission::getIssuingAuthority).orElse(null))
                 .expiryDate(kyc.map(KycSubmission::getExpiryDate).orElse(null))
+                .frontImageId(kyc.map(KycSubmission::getFrontImageId).orElse(null))
+                .backImageId(kyc.map(KycSubmission::getBackImageId).orElse(null))
+                .portraitImageId(kyc.map(KycSubmission::getPortraitImageId).orElse(null))
                 .build();
     }
 }
