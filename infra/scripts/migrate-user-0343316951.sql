@@ -10,22 +10,19 @@ USE auth_db;
 
 -- 1.1 User
 INSERT INTO users (
-    id, phone, password, full_name, email,
-    role, kyc_status, referred_by, is_deleted, created_at, updated_at
+    id, phone, password, email,
+    kyc_status, referred_by, is_deleted, created_at, updated_at
 ) VALUES (
     '981bef75-2dd3-4607-a7ec-a39624e9e961',
     '0343316951',
-    '$2a$10$/rQjFCETIAK2.cvF2f8T.Oh0G7/r7W3Oa.06R65/pLJknbXptLLnu',
-    'BÙI VĂN NGHIÊM',
+    '$2a$10$9O1NukVfSJWPU3DJnPSOV.rwHNmwYSLl9ACIRVFWaT09qaRHlGPlW',
     NULL,
-    'USER',
     'APPROVED',
     NULL,
     0,
     '2026-02-26 14:54:21',
     NOW()
 ) ON DUPLICATE KEY UPDATE
-    full_name   = VALUES(full_name),
     kyc_status  = VALUES(kyc_status),
     updated_at  = NOW();
 
