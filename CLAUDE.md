@@ -164,19 +164,21 @@ CMS là frontend riêng, deploy tự động lên **server 155** (SSH port 2222)
 
 **Deploy live:** push lên `release` → GitHub Actions tự build + rsync lên server 155.
 
-**Quy trình thường dùng:**
+**Quy trình bắt buộc:**
 ```bash
 cd /Users/lamgs/Desktop/APP/VnFiteCMS
-# Test trước
-git checkout main && git push origin main
+# LUÔN làm việc trên nhánh main
+git checkout main
+# ... sửa code ...
+git add ...
+git commit -m "..."
+git push origin main   # → tự deploy test
 
-# Sau khi test ổn → merge sang live
-git checkout release
-git merge main
-git push origin release
+# Khi cần deploy live → tạo PR trên GitHub: main → release
+# KHÔNG push thẳng lên release
 ```
 
-⚠️ Push nhầm lên `release` là deploy live ngay — cẩn thận.
+⚠️ **KHÔNG BAO GIỜ** commit hay push thẳng lên nhánh `release`. Nhánh `release` có branch protection — chỉ được merge qua Pull Request từ `main`. Mọi thay đổi phải lên `main` trước, test ổn rồi tạo PR `main → release`.
 
 ---
 
