@@ -90,6 +90,14 @@ public class InternalPaymentController {
             return ResponseEntity.ok(Map.of("status", "IGNORED"));
         }
 
+        // Chỉ xử lý tài khoản VNF... của VNFITE.
+        // VNC... là tài khoản TIKLUY/Capital — TIKLUY đã xử lý balance phía mình rồi, không cần ledger ở đây.
+        String accNo = req.getAccountNo();
+        if (accNo == null || !accNo.startsWith("VNF")) {
+            log.debug("txnId={} Deposit callback: bỏ qua accNo={} (không phải VNF)", txnId, accNo);
+            return ResponseEntity.ok(Map.of("status", "IGNORED"));
+        }
+
         try {
             String effectiveTxnId = txnId != null && !txnId.isBlank()
                     ? txnId

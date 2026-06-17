@@ -40,7 +40,7 @@ import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.cache.annotation.Caching;
 import org.springframework.data.domain.Page;
-import org.springframework.security.access.AccessDeniedException;
+
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -184,13 +184,17 @@ public class LoanService {
         return response;
     }
 
+    /**
+     * Trả full detail (có PII) cho chủ sở hữu khoản gọi vốn và CMS.
+     * Nhà đầu tư (authenticated nhưng không phải owner/CMS) nhận public view không có PII.
+     */
     @Transactional(readOnly = true)
-    public LoanResponse getLoanByIdForCaller(String id, AuthenticatedUser caller) {
+    public Object getLoanByIdForCaller(String id, AuthenticatedUser caller) {
         LoanRequest loan = findLoanOrThrow(id);
-        if (caller == null || (!loan.getBorrowerId().equals(caller.userId()) && !hasCmsRole(caller))) {
-            throw new AccessDeniedException("Loan detail is only available to the owner or CMS operators");
+        if (caller != null && (loan.getBorrowerId().equals(caller.userId()) || hasCmsRole(caller))) {
+            return getLoanById(id);
         }
-        return getLoanById(id);
+        return buildPublicResponse(loan);
     }
 
     // ── Offer ─────────────────────────────────────────────────────

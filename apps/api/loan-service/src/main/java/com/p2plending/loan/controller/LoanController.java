@@ -149,11 +149,11 @@ public class LoanController {
 
     /**
      * GET /api/loans/{id}
-     * Fetches a single loan with its offers. Cached 10 minutes.
+     * Owner/CMS nhận full detail (có PII). Nhà đầu tư nhận public view (không có PII).
      */
     @GetMapping("/{id}")
     @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<LoanResponse> getLoanById(
+    public ResponseEntity<?> getLoanById(
             @PathVariable String id,
             @AuthenticationPrincipal AuthenticatedUser principal
     ) {
