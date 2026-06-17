@@ -1,0 +1,144 @@
+name: CI/CD → Live Server (Manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      services:
+        description: 'Services cần deploy (cách nhau bằng dấu phẩy, hoặc "all")'
+        required: true
+        default: 'all'
+        type: string
+
+env:
+  SERVER: root@42.113.122.118
+  APP_DIR: /root/p2p-lending
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  deploy:
+    name: Deploy to Live Server
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate Flyway migrations (no duplicate versions)
+        run: |
+          FAIL=0
+          for dir in apps/api/*/src/main/resources/db/migration; do
+            [ -d "$dir" ] || continue
+            service=$(echo "$dir" | cut -d'/' -f3)
+            duplicates=$(ls "$dir"/V*.sql 2>/dev/null \
+              | sed 's|.*/V\([0-9]*\)__.*|\1|' \
+              | sort | uniq -d)
+            if [ -n "$duplicates" ]; then
+              echo "❌ $service: duplicate Flyway version(s): $duplicates"
+              FAIL=1
+            fi
+          done
+          if [ "$FAIL" = "1" ]; then
+            echo "Fix: đổi tên file migration sang version tiếp theo chưa dùng."
+            exit 1
+          fi
+          echo "✅ Không có version Flyway trùng"
+
+      - name: Parse services to deploy
+        id: parse
+        run: |
+          INPUT="${{ inputs.services }}"
+          if [ "$INPUT" = "all" ]; then
+            echo "auth=true"         >> $GITHUB_OUTPUT
+            echo "loan=true"         >> $GITHUB_OUTPUT
+            echo "matching=true"     >> $GITHUB_OUTPUT
+            echo "cms=true"          >> $GITHUB_OUTPUT
+            echo "credit=true"       >> $GITHUB_OUTPUT
+            echo "payment=true"      >> $GITHUB_OUTPUT
+            echo "notification=true" >> $GITHUB_OUTPUT
+            echo "nginx=true"        >> $GITHUB_OUTPUT
+          else
+            echo "auth=$(echo "$INPUT"         | grep -q 'auth'         && echo true || echo false)" >> $GITHUB_OUTPUT
+            echo "loan=$(echo "$INPUT"         | grep -q 'loan'         && echo true || echo false)" >> $GITHUB_OUTPUT
+            echo "matching=$(echo "$INPUT"     | grep -q 'matching'     && echo true || echo false)" >> $GITHUB_OUTPUT
+            echo "cms=$(echo "$INPUT"          | grep -q 'cms'          && echo true || echo false)" >> $GITHUB_OUTPUT
+            echo "credit=$(echo "$INPUT"       | grep -q 'credit'       && echo true || echo false)" >> $GITHUB_OUTPUT
+            echo "payment=$(echo "$INPUT"      | grep -q 'payment'      && echo true || echo false)" >> $GITHUB_OUTPUT
+            echo "notification=$(echo "$INPUT" | grep -q 'notification' && echo true || echo false)" >> $GITHUB_OUTPUT
+            echo "nginx=$(echo "$INPUT"        | grep -q 'nginx'        && echo true || echo false)" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Setup SSH
+        env:
+          SSH_KEY_B64: ${{ secrets.SSH_PRIVATE_KEY_LIVE }}
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s' "$SSH_KEY_B64" | tr -d ' \n\r' | base64 -d > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H 42.113.122.118 >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Sync .env to server
+        env:
+          ENV_CONTENT: ${{ secrets.ENV_FILE_LIVE }}
+        run: |
+          printf '%s' "$ENV_CONTENT" > /tmp/.env_live
+          scp -i ~/.ssh/deploy_key /tmp/.env_live ${{ env.SERVER }}:${{ env.APP_DIR }}/.env
+          rm -f /tmp/.env_live
+
+      - name: Deploy auth-service
+        if: steps.parse.outputs.auth == 'true'
+        run: |
+          ssh -i ~/.ssh/deploy_key ${{ env.SERVER }} \
+            'set -e; cd /root/p2p-lending; git fetch origin main; git reset --hard origin/main; docker compose build auth-service; docker compose up -d auth-service; docker image prune -f'
+
+      - name: Deploy loan-service
+        if: steps.parse.outputs.loan == 'true'
+        run: |
+          ssh -i ~/.ssh/deploy_key ${{ env.SERVER }} \
+            'set -e; cd /root/p2p-lending; git fetch origin main; git reset --hard origin/main; docker compose build loan-service; docker compose up -d loan-service; docker image prune -f'
+
+      - name: Deploy matching-service
+        if: steps.parse.outputs.matching == 'true'
+        run: |
+          ssh -i ~/.ssh/deploy_key ${{ env.SERVER }} \
+            'set -e; cd /root/p2p-lending; git fetch origin main; git reset --hard origin/main; docker compose build matching-service; docker compose up -d matching-service; docker image prune -f'
+
+      - name: Deploy cms-service
+        if: steps.parse.outputs.cms == 'true'
+        run: |
+          ssh -i ~/.ssh/deploy_key ${{ env.SERVER }} \
+            'set -e; cd /root/p2p-lending; git fetch origin main; git reset --hard origin/main; docker compose build cms-service; docker compose up -d cms-service; docker image prune -f'
+
+      - name: Deploy credit-service
+        if: steps.parse.outputs.credit == 'true'
+        run: |
+          ssh -i ~/.ssh/deploy_key ${{ env.SERVER }} \
+            'set -e; cd /root/p2p-lending; git fetch origin main; git reset --hard origin/main; docker compose build credit-service; docker compose up -d credit-service; docker image prune -f'
+
+      - name: Deploy payment-service
+        if: steps.parse.outputs.payment == 'true'
+        run: |
+          ssh -i ~/.ssh/deploy_key ${{ env.SERVER }} \
+            'set -e; cd /root/p2p-lending; git fetch origin main; git reset --hard origin/main; docker compose build payment-service; docker compose up -d payment-service; docker image prune -f'
+
+      - name: Deploy notification-service
+        if: steps.parse.outputs.notification == 'true'
+        run: |
+          ssh -i ~/.ssh/deploy_key ${{ env.SERVER }} \
+            'set -e; cd /root/p2p-lending; git fetch origin main; git reset --hard origin/main; docker compose build notification-service; docker compose up -d notification-service; docker image prune -f'
+
+      - name: Reload nginx
+        if: steps.parse.outputs.nginx == 'true'
+        run: |
+          ssh -i ~/.ssh/deploy_key ${{ env.SERVER }} \
+            'set -e; cd /root/p2p-lending; git fetch origin main; git reset --hard origin/main; docker compose up -d nginx'
+
+      - name: Reset Redis cache
+        if: steps.parse.outputs.auth == 'true' || steps.parse.outputs.loan == 'true' || steps.parse.outputs.matching == 'true' || steps.parse.outputs.cms == 'true' || steps.parse.outputs.credit == 'true' || steps.parse.outputs.payment == 'true' || steps.parse.outputs.notification == 'true' || steps.parse.outputs.nginx == 'true'
+        run: |
+          ssh -i ~/.ssh/deploy_key ${{ env.SERVER }} \
+            'set -e; cd /root/p2p-lending; sh infra/scripts/reset-redis-cache.sh'
+
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/deploy_key /tmp/.env_live
