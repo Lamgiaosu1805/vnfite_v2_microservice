@@ -40,14 +40,19 @@ TRUNCATE TABLE _tmp_vnf_acc;
 ENDSQL
 
 log "Step 1b: Load VNF acc_no từ server 155..."
-$MYSQL_155 VNF_ACCOUNT_MANAGEMENT --skip-column-names -e \
-  "SELECT CONCAT('INSERT IGNORE INTO _tmp_vnf_acc VALUES (', QUOTE(IDENTITY_NUMBER), ',', QUOTE(acc_no), ');')
-   FROM tbl_account_information
-   WHERE acc_no LIKE 'VNF%'
-     AND IDENTITY_NUMBER IS NOT NULL
-     AND IDENTITY_NUMBER != ''
-     AND (is_delete IS NULL OR is_delete = 'N')" 2>/dev/null \
-| $MYSQL_OLD APP_V2 2>/dev/null
+if $MYSQL_155 VNF_ACCOUNT_MANAGEMENT --connect-timeout=10 -e "SELECT 1;" 2>/dev/null; then
+  $MYSQL_155 VNF_ACCOUNT_MANAGEMENT --skip-column-names -e \
+    "SELECT CONCAT('INSERT IGNORE INTO _tmp_vnf_acc VALUES (', QUOTE(IDENTITY_NUMBER), ',', QUOTE(acc_no), ');')
+     FROM tbl_account_information
+     WHERE acc_no LIKE 'VNF%'
+       AND IDENTITY_NUMBER IS NOT NULL
+       AND IDENTITY_NUMBER != ''
+       AND (is_delete IS NULL OR is_delete = 'N')" 2>/dev/null \
+  | $MYSQL_OLD APP_V2 2>/dev/null
+  log "  → Kết nối server 155 thành công, đã load VNF accounts."
+else
+  log "  ⚠️  Không kết nối được server 155 — bỏ qua VNF account mapping (ví sẽ không được tạo)."
+fi
 
 MAPPED=$(${MYSQL_OLD} APP_V2 --skip-column-names -e "SELECT COUNT(*) FROM _tmp_vnf_acc;" 2>/dev/null)
 log "  → Đã load ${MAPPED} VNF accounts."
@@ -290,8 +295,8 @@ log "Step 8: Drop bảng tạm..."
 $MYSQL_OLD APP_V2 -e "DROP TABLE IF EXISTS _tmp_vnf_acc; DROP TABLE IF EXISTS _tmp_best_user;" 2>/dev/null
 
 log "===== Migration hoàn thành ====="
-log "Users:        ${USERS} (từ ${TOTAL_RAW} gốc, loại ${DUPES} duplicate)"
-log "KYC:          ${KYC}"
-log "Wallets:      ${WALLETS}"
-log "Linked banks: ${BANKS}"
-log "Transactions: ${TXN}"
+log "Users:        ${USERS:-0} (từ ${TOTAL_RAW:-0} gốc, loại ${DUPES:-0} duplicate)"
+log "KYC:          ${KYC:-0}"
+log "Wallets:      ${WALLETS:-0}"
+log "Linked banks: ${BANKS:-0}"
+log "Transactions: ${TXN:-0}"
