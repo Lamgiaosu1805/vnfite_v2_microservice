@@ -96,7 +96,7 @@ public class PasswordResetService {
             log.info("Password reset OTP sent for phone={}", request.getPhone());
         }
 
-        return genericOkResponse(mockMode ? otp : null);
+        return genericOkResponse(otp);
     }
 
     // ── Bước 2: xác thực OTP → trả resetToken, chuyển sang màn nhập MK mới

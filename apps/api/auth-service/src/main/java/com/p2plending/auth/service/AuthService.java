@@ -140,7 +140,7 @@ public class AuthService {
 
         return RegisterInitResponse.builder()
                 .message("OTP đã được gửi đến số điện thoại của bạn")
-                .otp(mockMode ? otp : null)
+                .otp(otp)
                 .build();
     }
 
@@ -242,7 +242,7 @@ public class AuthService {
 
         Map<String, String> response = new HashMap<>();
         response.put("message", "OTP đã được gửi đến số điện thoại của bạn");
-        if (mockMode) response.put("otp", otp);
+        response.put("otp", otp);
         return response;
     }
 
@@ -373,7 +373,7 @@ public class AuthService {
 
         Map<String, String> response = new HashMap<>();
         response.put("message", "OTP đã được gửi đến số điện thoại của bạn");
-        if (mockMode) response.put("otp", otp);
+        response.put("otp", otp);
         return response;
     }
 
@@ -752,7 +752,7 @@ public class AuthService {
 
         Map<String, String> response = new HashMap<>();
         response.put("message", "OTP đã được gửi đến số điện thoại đăng ký");
-        if (mockMode) response.put("otp", otp);
+        response.put("otp", otp);
         return response;
     }
 

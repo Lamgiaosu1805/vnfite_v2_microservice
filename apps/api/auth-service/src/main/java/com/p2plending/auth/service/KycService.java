@@ -94,9 +94,7 @@ public class KycService {
 
         log.info("KYC init: userId={}", userId);
 
-        return mockMode
-                ? Map.of("message", "OTP đã được gửi đến số điện thoại của bạn", "otp", otp)
-                : Map.of("message", "OTP đã được gửi đến số điện thoại của bạn");
+        return Map.of("message", "OTP đã được gửi đến số điện thoại của bạn", "otp", otp);
     }
 
     // ── Bước 2: xác thực OTP, lưu KYC ──────────────────────────────
