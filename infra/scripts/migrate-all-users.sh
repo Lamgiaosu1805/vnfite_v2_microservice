@@ -122,12 +122,12 @@ SELECT
   NOW()
 FROM _tmp_best_user b
 JOIN tbl_user u ON u.ID = b.user_id
-LEFT JOIN (
-  SELECT USER_ID, MAX(ID) AS ID, EMAIL, STATUS
-  FROM tbl_identification_info
-  WHERE IS_DELETED = 'N'
-  GROUP BY USER_ID
-) i ON i.USER_ID = u.ID
+LEFT JOIN tbl_identification_info i
+  ON i.ID = (
+    SELECT MAX(x.ID)
+    FROM tbl_identification_info x
+    WHERE x.USER_ID = b.user_id AND x.IS_DELETED = 'N'
+  )
 ON DUPLICATE KEY UPDATE
   email      = VALUES(email),
   kyc_status = VALUES(kyc_status),
