@@ -5,6 +5,8 @@
 -- ============================================================
 -- LOAN PRODUCTS (cấu hình sản phẩm — không phải user data)
 -- ============================================================
+-- Các sản phẩm seed tạm thời đã được thay bằng sản phẩm thực từ hệ thống cũ (migrate-products.sh).
+-- Đánh dấu is_deleted=1 để ẩn khỏi app; ON DUPLICATE KEY UPDATE sẽ soft-delete chúng nếu đã tồn tại.
 INSERT INTO loan_products
   (id, code, name, category, product_group, profession_bound, description, min_amount, max_amount,
    available_terms, max_interest_rate, late_fee_rate, image_url, is_active, is_deleted, sort_order)
@@ -15,7 +17,7 @@ VALUES
    1000000.00, 10000000.00, '1,3,6',
    NULL, 150.00,
    'https://service.vnfite.com.vn/static-file//images/loan/image/giaovien.png',
-   1, 0, 1),
+   0, 1, 1),
 
   ('003c9051-96b2-4a5f-8151-fd6a0d902500',
    'STUDENT', 'Gọi vốn dành cho sinh viên', 'INDIVIDUAL', 1, 1,
@@ -23,7 +25,7 @@ VALUES
    3000000.00, 20000000.00, '1,3,6,12',
    NULL, 150.00,
    'https://service.vnfite.com.vn/static-file//images/loan/image/giaovien.png',
-   1, 0, 2),
+   0, 1, 2),
 
   ('6bb7588a-197c-408d-927d-6b6744e68a4f',
    'CONSUMER', 'Gọi vốn mua sắm tiêu dùng', 'INDIVIDUAL', 2, 0,
@@ -31,7 +33,7 @@ VALUES
    1000000.00, 100000000.00, '1,3,6,12',
    NULL, 150.00,
    'https://service.vnfite.com.vn/static-file//images/loan/image/giaovien.png',
-   1, 0, 3),
+   0, 1, 3),
 
   ('d63f3610-98e9-4198-917d-8e03595062fa',
    'COSMETIC', 'Gọi vốn mục đích thẩm mỹ', 'INDIVIDUAL', 2, 0,
@@ -39,7 +41,7 @@ VALUES
    3000000.00, 50000000.00, '1,3,6,9,12',
    90.00, 150.00,
    'https://service.vnfite.com.vn/static-file//images/loan/image/giaovien.png',
-   1, 0, 4)
+   0, 1, 4)
 ON DUPLICATE KEY UPDATE
   name = VALUES(name),
   category = VALUES(category),
