@@ -263,10 +263,30 @@ ENDSQL
 TXN=$(${MYSQL_OLD} APP_V2 --skip-column-names -e "SELECT COUNT(*) FROM payment_db.wallet_transactions;" 2>/dev/null)
 log "  → payment_db.wallet_transactions tổng: ${TXN}"
 
-# ── Step 7: Dọn bảng tạm ─────────────────────────────────────────────────────
+# ── Step 7: Reconcile kyc_status trong users từ kyc_submissions ─────────────
+# Đảm bảo kyc_status trong users khớp với trạng thái thực tế trong kyc_submissions
+log "Step 7: Reconcile kyc_status trong auth_db.users từ kyc_submissions..."
+mysql -u"${DB_USER}" -p"${DB_PASS}" -h"${DB_HOST}" --default-character-set=utf8mb4 auth_db 2>/dev/null <<'ENDSQL'
+UPDATE auth_db.users u
+JOIN (
+  SELECT user_id, status
+  FROM auth_db.kyc_submissions
+  WHERE is_deleted = 0
+  ORDER BY created_at DESC
+) k ON k.user_id = u.id
+SET u.kyc_status = k.status,
+    u.updated_at = NOW()
+WHERE u.kyc_status != k.status;
+ENDSQL
+RECONCILED=$(mysql -u"${DB_USER}" -p"${DB_PASS}" -h"${DB_HOST}" --default-character-set=utf8mb4 auth_db --skip-column-names -e \
+  "SELECT COUNT(*) FROM auth_db.users WHERE kyc_status IN ('APPROVED','PENDING','REJECTED');" 2>/dev/null)
+log "  → Tổng users có kyc_status != NONE: ${RECONCILED}"
+
+# ── Step 8: Dọn bảng tạm ─────────────────────────────────────────────────────
 # (Số dư ví không lưu trong DB — lấy trực tiếp từ TIKLUY thời gian thực)
-log "Step 7: Drop bảng tạm..."
+log "Step 8: Drop bảng tạm..."
 $MYSQL_OLD APP_V2 -e "DROP TABLE IF EXISTS _tmp_vnf_acc; DROP TABLE IF EXISTS _tmp_best_user;" 2>/dev/null
+
 
 log "===== Migration hoàn thành ====="
 log "Users:        ${USERS:-0} (từ ${TOTAL_RAW:-0} gốc, loại ${DUPES:-0} duplicate)"
