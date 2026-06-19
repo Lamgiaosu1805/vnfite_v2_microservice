@@ -374,6 +374,14 @@ public class SourceServiceClient {
         return List.of();
     }
 
+    /** Danh sách sản phẩm gọi vốn đang hoạt động — passthrough JSON từ loan-service. */
+    public JsonNode getLoanProducts() {
+        String url = UriComponentsBuilder.fromHttpUrl(loanServiceUrl)
+                .path("/api/loans/products")
+                .toUriString();
+        return exchangeForJson(url, HttpMethod.GET, null);
+    }
+
     /** Chạy ngay job hết hạn gọi vốn / ký khế ước (CMS bấm tay). Trả về số khoản đã xử lý. */
     public JsonNode expireSweep() {
         String url = UriComponentsBuilder.fromHttpUrl(loanServiceUrl)

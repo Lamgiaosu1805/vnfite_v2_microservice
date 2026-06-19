@@ -24,6 +24,11 @@ public class LoanManagementController {
 
     private final LoanManagementService loanService;
 
+    @GetMapping("/products")
+    public ResponseEntity<JsonNode> getLoanProducts() {
+        return ResponseEntity.ok(loanService.getLoanProducts());
+    }
+
     @GetMapping
     public ResponseEntity<PagedResponse<LoanSummaryResponse>> getLoans(
             @RequestParam(required = false) String status,

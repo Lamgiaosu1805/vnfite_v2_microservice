@@ -27,6 +27,10 @@ public class LoanManagementService {
     private final LoanDecisionAuditLogService auditService;
     private final CicManualLookupRepository cicRepository;
 
+    public JsonNode getLoanProducts() {
+        return sourceServiceClient.getLoanProducts();
+    }
+
     public PagedResponse<LoanSummaryResponse> getLoans(String status, String borrowerId,
                                                        String province, String search, int page, int size) {
         return sourceServiceClient.getLoans(status, borrowerId, province, search, page, size);
