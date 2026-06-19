@@ -102,15 +102,13 @@ log "  → Tổng user gốc: ${TOTAL_RAW} | Sau dedup: ${TOTAL_DEDUP} | Đã lo
 
 # ── Step 2: Migrate auth_db.users ────────────────────────────────────────────
 log "Step 2: Migrate users → auth_db.users (chỉ user đã dedup)..."
-$MYSQL_OLD APP_V2 <<'ENDSQL' 2>/dev/null
+$MYSQL_OLD APP_V2 <<'ENDSQL'
 INSERT INTO auth_db.users
-  (id, phone, password, full_name, email, kyc_status, referred_by, is_deleted, created_at, updated_at)
+  (id, phone, password, email, kyc_status, referred_by, is_deleted, created_at, updated_at)
 SELECT
   b.user_id,
   b.phone,
   u.PASSWORD,
-  -- Lấy full_name từ KYC nếu có
-  NULLIF(TRIM(COALESCE(i.FULL_NAME, '')), ''),
   NULLIF(TRIM(COALESCE(i.EMAIL, '')), ''),
   CASE
     WHEN i.ID IS NULL THEN 'NONE'
@@ -125,12 +123,12 @@ SELECT
 FROM _tmp_best_user b
 JOIN tbl_user u ON u.ID = b.user_id
 LEFT JOIN (
-  SELECT USER_ID, FULL_NAME, EMAIL, STATUS, ID
+  SELECT USER_ID, MAX(ID) AS ID, EMAIL, STATUS
   FROM tbl_identification_info
   WHERE IS_DELETED = 'N'
+  GROUP BY USER_ID
 ) i ON i.USER_ID = u.ID
 ON DUPLICATE KEY UPDATE
-  full_name  = VALUES(full_name),
   email      = VALUES(email),
   kyc_status = VALUES(kyc_status),
   updated_at = NOW();
