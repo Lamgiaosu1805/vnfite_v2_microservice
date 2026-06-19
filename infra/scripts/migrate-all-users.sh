@@ -263,38 +263,14 @@ ENDSQL
 TXN=$(${MYSQL_OLD} APP_V2 --skip-column-names -e "SELECT COUNT(*) FROM payment_db.wallet_transactions;" 2>/dev/null)
 log "  → payment_db.wallet_transactions tổng: ${TXN}"
 
-# ── Step 7: Cập nhật số dư ví từ giao dịch đã migrate ───────────────────────
-log "Step 7: Tính lại total_balance cho từng ví từ giao dịch..."
-$MYSQL_OLD APP_V2 <<'ENDSQL' 2>/dev/null
-UPDATE payment_db.wallets w
-JOIN (
-  SELECT
-    wt.wallet_id,
-    SUM(
-      CASE
-        WHEN wt.type = 'DEPOSIT'  AND wt.status = 'SUCCESS' THEN  wt.amount
-        WHEN wt.type = 'WITHDRAW' AND wt.status = 'SUCCESS' THEN -wt.amount
-        ELSE 0
-      END
-    ) AS net_balance
-  FROM payment_db.wallet_transactions wt
-  GROUP BY wt.wallet_id
-) calc ON calc.wallet_id = w.id
-SET
-  w.total_balance     = GREATEST(calc.net_balance, 0),
-  w.available_balance = GREATEST(calc.net_balance, 0) - w.locked_balance,
-  w.updated_at        = NOW()
-WHERE EXISTS (SELECT 1 FROM _tmp_best_user b WHERE b.user_id = w.user_id);
-ENDSQL
-log "  → Cập nhật số dư ví hoàn tất."
-
-# ── Step 8: Dọn bảng tạm ─────────────────────────────────────────────────────
-log "Step 8: Drop bảng tạm..."
+# ── Step 7: Dọn bảng tạm ─────────────────────────────────────────────────────
+# (Số dư ví không lưu trong DB — lấy trực tiếp từ TIKLUY thời gian thực)
+log "Step 7: Drop bảng tạm..."
 $MYSQL_OLD APP_V2 -e "DROP TABLE IF EXISTS _tmp_vnf_acc; DROP TABLE IF EXISTS _tmp_best_user;" 2>/dev/null
 
 log "===== Migration hoàn thành ====="
 log "Users:        ${USERS:-0} (từ ${TOTAL_RAW:-0} gốc, loại ${DUPES:-0} duplicate)"
 log "KYC:          ${KYC:-0}"
-log "Wallets:      ${WALLETS:-0}"
+log "Wallets:      ${WALLETS:-0} (số dư lấy live từ TIKLUY)"
 log "Linked banks: ${BANKS:-0}"
 log "Transactions: ${TXN:-0}"
