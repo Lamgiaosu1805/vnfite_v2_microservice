@@ -17,9 +17,14 @@
 
 set -euo pipefail
 
-DB_HOST="127.0.0.1"
-DB_USER="vnfite"
-DB_PASS="Vnfite080620!@#"
+# Đọc credentials từ .env nếu có (test server), fallback về giá trị cứng (live server)
+ENV_FILE="/root/p2p-lending/.env"
+if [[ -f "$ENV_FILE" ]]; then
+  set -a; source "$ENV_FILE"; set +a
+fi
+DB_HOST="${MYSQL_HOST:-127.0.0.1}"
+DB_USER="${DB_USERNAME:-vnfite}"
+DB_PASS="${DB_PASSWORD:-Vnfite080620!@#}"
 
 MYSQL="mysql -u${DB_USER} -p${DB_PASS} -h${DB_HOST} --default-character-set=utf8mb4 -s"
 
