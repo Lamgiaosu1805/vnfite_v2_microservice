@@ -2,6 +2,7 @@ package com.p2plending.auth.dto.request;
 
 import com.p2plending.auth.validation.VietnamesePhone;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
 
