@@ -43,6 +43,7 @@ public class ChangePasswordService {
     private final ObjectMapper        objectMapper;
     private final OtpRateLimitService otpRateLimitService;
     private final RedisNamespaceProperties redisNamespaceProperties;
+    private final VnfOtpSenderService vnfOtpSenderService;
 
     // ── Bước 1: xác minh mật khẩu hiện tại → gửi OTP ────────────────────
 
@@ -62,8 +63,14 @@ public class ChangePasswordService {
         }
 
         String newPasswordHash = passwordEncoder.encode(request.getNewPassword());
-        String otp = mockMode ? MOCK_OTP
-                : String.format("%06d", new SecureRandom().nextInt(1_000_000));
+        String otp;
+        if (mockMode) {
+            otp = MOCK_OTP;
+            log.info("[MOCK] Change password OTP for userId={}: {}", userId, otp);
+        } else {
+            String sentOtp = vnfOtpSenderService.sendOtp(phone, VnfOtpSenderService.FN_CHANGE_PASSWORD);
+            otp = (sentOtp != null) ? sentOtp : String.format("%06d", new SecureRandom().nextInt(1_000_000));
+        }
 
         PendingPasswordChange pending = new PendingPasswordChange(newPasswordHash, otp);
         try {
@@ -74,13 +81,6 @@ public class ChangePasswordService {
             );
         } catch (JsonProcessingException e) {
             throw new RuntimeException("Failed to serialize pending password change", e);
-        }
-
-        if (mockMode) {
-            log.info("[MOCK] Change password OTP for userId={}: {}", userId, otp);
-        } else {
-            // TODO: gửi OTP qua SMS / Zalo ZNS
-            log.info("Change password OTP sent for userId={}", userId);
         }
 
         Map<String, String> response = new HashMap<>();

@@ -31,11 +31,19 @@ public class OtpService {
     private final ObjectMapper        objectMapper;
     private final OtpRateLimitService otpRateLimitService;
     private final RedisNamespaceProperties redisNamespaceProperties;
+    private final VnfOtpSenderService vnfOtpSenderService;
 
     public String generateAndStore(PendingRegistration pending) {
         otpRateLimitService.assertCanRequest(pending.getPhone());
 
-        String otp = mockMode ? MOCK_OTP : String.format("%06d", new SecureRandom().nextInt(1_000_000));
+        String otp;
+        if (mockMode) {
+            otp = MOCK_OTP;
+            log.info("[MOCK] OTP for {}: {}", pending.getPhone(), otp);
+        } else {
+            String sentOtp = vnfOtpSenderService.sendOtp(pending.getPhone(), VnfOtpSenderService.FN_REGISTER);
+            otp = (sentOtp != null) ? sentOtp : String.format("%06d", new SecureRandom().nextInt(1_000_000));
+        }
         pending.setOtp(otp);
 
         try {
@@ -46,13 +54,6 @@ public class OtpService {
             );
         } catch (JsonProcessingException e) {
             throw new RuntimeException("Failed to serialize pending registration", e);
-        }
-
-        if (mockMode) {
-            log.info("[MOCK] OTP for {}: {}", pending.getPhone(), otp);
-        } else {
-            // TODO: send via SMS / Zalo ZNS
-            log.info("OTP sent to {}", pending.getPhone());
         }
 
         return otp;

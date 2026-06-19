@@ -49,6 +49,7 @@ public class PasswordResetService {
     private final StringRedisTemplate     redisTemplate;
     private final OtpRateLimitService     otpRateLimitService;
     private final RedisNamespaceProperties redisNamespaceProperties;
+    private final VnfOtpSenderService     vnfOtpSenderService;
 
     // ── Bước 0: kiểm tra phone → frontend biết có cần hiện ô CCCD không ──
 
@@ -85,16 +86,15 @@ public class PasswordResetService {
             }
         }
 
-        String otp = mockMode ? MOCK_OTP
-                : String.format("%06d", new SecureRandom().nextInt(1_000_000));
-        redisTemplate.opsForValue().set(otpKey(request.getPhone()), otp, OTP_TTL);
-
+        String otp;
         if (mockMode) {
+            otp = MOCK_OTP;
             log.info("[MOCK] Password reset OTP for phone={}: {}", request.getPhone(), otp);
         } else {
-            // TODO: gửi OTP qua SMS / Zalo ZNS
-            log.info("Password reset OTP sent for phone={}", request.getPhone());
+            String sentOtp = vnfOtpSenderService.sendOtp(request.getPhone(), VnfOtpSenderService.FN_FORGOT_PASSWORD);
+            otp = (sentOtp != null) ? sentOtp : String.format("%06d", new SecureRandom().nextInt(1_000_000));
         }
+        redisTemplate.opsForValue().set(otpKey(request.getPhone()), otp, OTP_TTL);
 
         return genericOkResponse(otp);
     }

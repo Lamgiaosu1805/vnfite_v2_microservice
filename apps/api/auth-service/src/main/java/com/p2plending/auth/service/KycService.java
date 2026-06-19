@@ -47,6 +47,7 @@ public class KycService {
     private final ObjectMapper             objectMapper;
     private final OtpRateLimitService      otpRateLimitService;
     private final RedisNamespaceProperties redisNamespaceProperties;
+    private final VnfOtpSenderService      vnfOtpSenderService;
 
     // ── Bước 1: kiểm tra CCCD, upload ảnh mock, gửi OTP ─────────────
 
@@ -62,8 +63,13 @@ public class KycService {
         String backImageId     = imageStorageService.upload(request.getBackImage());
         String portraitImageId = imageStorageService.upload(request.getPortraitImage());
 
-        String otp = mockMode ? MOCK_OTP
-                : String.format("%06d", new SecureRandom().nextInt(1_000_000));
+        String otp;
+        if (mockMode) {
+            otp = MOCK_OTP;
+        } else {
+            String sentOtp = vnfOtpSenderService.sendOtp(phone, VnfOtpSenderService.FN_KYC);
+            otp = (sentOtp != null) ? sentOtp : String.format("%06d", new SecureRandom().nextInt(1_000_000));
+        }
 
         PendingKycData pending = new PendingKycData(
                 userId,

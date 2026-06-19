@@ -104,6 +104,7 @@ public class AuthService {
     private final DeviceLoginHistoryRepository  deviceLoginHistoryRepository;
     private final RedisNamespaceProperties      redisNamespaceProperties;
     private final FcmTokenService               fcmTokenService;
+    private final VnfOtpSenderService           vnfOtpSenderService;
 
     // ── Check phone ───────────────────────────────────────────────
 
@@ -228,17 +229,15 @@ public class AuthService {
             throw new ResourceNotFoundException("User not found");
         }
 
-        String otp = mockMode ? MOCK_OTP
-                : String.format("%06d", new SecureRandom().nextInt(1_000_000));
-
-        redisTemplate.opsForValue().set(biometricEnableOtpKey(userId), otp, BIOMETRIC_OTP_TTL);
-
+        String otp;
         if (mockMode) {
+            otp = MOCK_OTP;
             log.info("[MOCK] Biometric enable OTP for userId={}: {}", userId, otp);
         } else {
-            // TODO: gửi OTP qua SMS / Zalo ZNS
-            log.info("Biometric enable OTP sent for userId={} phone={}", userId, phone);
+            String sentOtp = vnfOtpSenderService.sendOtp(phone, VnfOtpSenderService.FN_BIOMETRIC);
+            otp = (sentOtp != null) ? sentOtp : String.format("%06d", new SecureRandom().nextInt(1_000_000));
         }
+        redisTemplate.opsForValue().set(biometricEnableOtpKey(userId), otp, BIOMETRIC_OTP_TTL);
 
         Map<String, String> response = new HashMap<>();
         response.put("message", "OTP đã được gửi đến số điện thoại của bạn");
@@ -359,17 +358,15 @@ public class AuthService {
             throw new ResourceNotFoundException("User not found");
         }
 
-        String otp = mockMode ? MOCK_OTP
-                : String.format("%06d", new SecureRandom().nextInt(1_000_000));
-
-        redisTemplate.opsForValue().set(biometricDisableOtpKey(userId), otp, BIOMETRIC_OTP_TTL);
-
+        String otp;
         if (mockMode) {
+            otp = MOCK_OTP;
             log.info("[MOCK] Biometric disable OTP for userId={}: {}", userId, otp);
         } else {
-            // TODO: gửi OTP qua SMS / Zalo ZNS
-            log.info("Biometric disable OTP sent for userId={} phone={}", userId, phone);
+            String sentOtp = vnfOtpSenderService.sendOtp(phone, VnfOtpSenderService.FN_BIOMETRIC);
+            otp = (sentOtp != null) ? sentOtp : String.format("%06d", new SecureRandom().nextInt(1_000_000));
         }
+        redisTemplate.opsForValue().set(biometricDisableOtpKey(userId), otp, BIOMETRIC_OTP_TTL);
 
         Map<String, String> response = new HashMap<>();
         response.put("message", "OTP đã được gửi đến số điện thoại của bạn");
@@ -740,15 +737,15 @@ public class AuthService {
             throw new InvalidCredentialsException("Thông tin CCCD không khớp hoặc tài khoản chưa xác minh danh tính");
         }
 
-        String otp = mockMode ? MOCK_OTP
-                : String.format("%06d", new SecureRandom().nextInt(1_000_000));
-        redisTemplate.opsForValue().set(deviceResetOtpKey(phone), otp, DEVICE_RESET_OTP_TTL);
-
+        String otp;
         if (mockMode) {
+            otp = MOCK_OTP;
             log.info("[MOCK] Device reset OTP for phone={}: {}", phone, otp);
         } else {
-            log.info("Device reset OTP sent for phone={}", phone);
+            String sentOtp = vnfOtpSenderService.sendOtp(phone, VnfOtpSenderService.FN_DEVICE_RESET);
+            otp = (sentOtp != null) ? sentOtp : String.format("%06d", new SecureRandom().nextInt(1_000_000));
         }
+        redisTemplate.opsForValue().set(deviceResetOtpKey(phone), otp, DEVICE_RESET_OTP_TTL);
 
         Map<String, String> response = new HashMap<>();
         response.put("message", "OTP đã được gửi đến số điện thoại đăng ký");
