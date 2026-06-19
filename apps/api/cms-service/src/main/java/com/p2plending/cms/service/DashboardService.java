@@ -43,6 +43,7 @@ public class DashboardService {
                     .pendingLoans(l.path("pendingLoans").asLong())
                     .activeLoans(l.path("activeLoans").asLong())
                     .fundedLoans(l.path("fundedLoans").asLong())
+                    .activeFundingVolume(decimal(l, "activeFundingVolume"))
                     .totalFundedVolume(decimal(l, "totalFundedVolume"))
                     .todayNewLoans(l.path("newLoansToday").asLong())
                     .todayLoanVolume(decimal(l, "todayLoanVolume"))
@@ -192,6 +193,7 @@ public class DashboardService {
         return DashboardStatsResponse.builder()
                 .totalUsers(0).activeUsers(0).pendingKycCount(0)
                 .totalLoans(0).pendingLoans(0).activeLoans(0).fundedLoans(0)
+                .activeFundingVolume(BigDecimal.ZERO)
                 .totalFundedVolume(BigDecimal.ZERO)
                 .todayNewUsers(0).todayNewLoans(0).todayLoanVolume(BigDecimal.ZERO)
                 .build();

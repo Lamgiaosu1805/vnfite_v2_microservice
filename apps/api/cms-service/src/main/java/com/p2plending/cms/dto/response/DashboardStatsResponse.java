@@ -16,6 +16,7 @@ public class DashboardStatsResponse {
     private long pendingLoans;
     private long activeLoans;
     private long fundedLoans;
+    private BigDecimal activeFundingVolume;
     private BigDecimal totalFundedVolume;
     private long todayNewUsers;
     private long todayNewLoans;

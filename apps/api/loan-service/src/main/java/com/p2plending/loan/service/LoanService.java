@@ -720,9 +720,11 @@ public class LoanService {
         long pending = loanRequestRepository.countByStatusIn(
                 java.util.List.of(LoanStatus.PENDING_REVIEW, LoanStatus.AWAITING_BORROWER_APPROVAL));
         long active  = loanRequestRepository.countByStatusIn(
-                java.util.List.of(LoanStatus.ACTIVE, LoanStatus.FUNDED, LoanStatus.REPAYING));
+                java.util.List.of(LoanStatus.ACTIVE));
         long funded  = loanRequestRepository.countByStatusIn(
                 java.util.List.of(LoanStatus.FUNDED, LoanStatus.REPAYING, LoanStatus.COMPLETED));
+        java.math.BigDecimal activeVol = loanRequestRepository.sumAmountByStatusIn(
+                java.util.List.of(LoanStatus.ACTIVE));
         java.math.BigDecimal totalVol = loanRequestRepository.sumAmountByStatusIn(
                 java.util.List.of(LoanStatus.FUNDED, LoanStatus.REPAYING, LoanStatus.COMPLETED));
         long todayCount = loanRequestRepository.countCreatedBetween(todayStart, tomorrowStart);
@@ -742,6 +744,7 @@ public class LoanService {
                 .pendingLoans(pending)
                 .activeLoans(active)
                 .fundedLoans(funded)
+                .activeFundingVolume(activeVol != null ? activeVol : java.math.BigDecimal.ZERO)
                 .totalFundedVolume(totalVol != null ? totalVol : java.math.BigDecimal.ZERO)
                 .newLoansToday(todayCount)
                 .todayLoanVolume(todayVol != null ? todayVol : java.math.BigDecimal.ZERO)

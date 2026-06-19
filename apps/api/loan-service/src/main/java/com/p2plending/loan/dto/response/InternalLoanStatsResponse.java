@@ -15,6 +15,7 @@ public class InternalLoanStatsResponse {
     private long pendingLoans;
     private long activeLoans;
     private long fundedLoans;
+    private BigDecimal activeFundingVolume;
     private BigDecimal totalFundedVolume;
     private long newLoansToday;
     private BigDecimal todayLoanVolume;
