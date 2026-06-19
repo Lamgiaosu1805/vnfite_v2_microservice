@@ -28,6 +28,8 @@ public class SecurityConfig {
                         // Actuator
                         .requestMatchers("/actuator/health", "/actuator/info").permitAll()
                         .requestMatchers("/internal/**").permitAll()
+                        // Public endpoints
+                        .requestMatchers("/api/loans/products").permitAll()
                         // Everything else requires authentication
                         .anyRequest().authenticated()
                 )
