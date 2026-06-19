@@ -85,7 +85,6 @@ public class ChangePasswordService {
 
         Map<String, String> response = new HashMap<>();
         response.put("message", "OTP đã được gửi đến số điện thoại của bạn. Vui lòng nhập OTP để xác nhận đổi mật khẩu.");
-        response.put("otp", otp);
         return response;
     }
 

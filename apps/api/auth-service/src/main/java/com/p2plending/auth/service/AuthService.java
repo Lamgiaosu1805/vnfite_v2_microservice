@@ -141,7 +141,6 @@ public class AuthService {
 
         return RegisterInitResponse.builder()
                 .message("OTP đã được gửi đến số điện thoại của bạn")
-                .otp(otp)
                 .build();
     }
 
@@ -241,7 +240,6 @@ public class AuthService {
 
         Map<String, String> response = new HashMap<>();
         response.put("message", "OTP đã được gửi đến số điện thoại của bạn");
-        response.put("otp", otp);
         return response;
     }
 
@@ -370,7 +368,6 @@ public class AuthService {
 
         Map<String, String> response = new HashMap<>();
         response.put("message", "OTP đã được gửi đến số điện thoại của bạn");
-        response.put("otp", otp);
         return response;
     }
 
@@ -749,7 +746,6 @@ public class AuthService {
 
         Map<String, String> response = new HashMap<>();
         response.put("message", "OTP đã được gửi đến số điện thoại đăng ký");
-        response.put("otp", otp);
         return response;
     }
 

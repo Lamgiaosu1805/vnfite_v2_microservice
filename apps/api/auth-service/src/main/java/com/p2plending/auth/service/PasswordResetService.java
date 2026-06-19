@@ -162,7 +162,6 @@ public class PasswordResetService {
     private Map<String, String> genericOkResponse(String otp) {
         Map<String, String> res = new HashMap<>();
         res.put("message", "Nếu số điện thoại tồn tại, OTP sẽ được gửi đến điện thoại của bạn");
-        if (otp != null) res.put("otp", otp);
         return res;
     }
 }
