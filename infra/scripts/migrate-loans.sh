@@ -152,6 +152,19 @@ ENDSQL
 SCHEDULES=$($MYSQL APP_V2 --skip-column-names -e "SELECT COUNT(*) FROM loan_db.repayment_schedule;" 2>/dev/null)
 log "  → loan_db.repayment_schedule tổng: ${SCHEDULES}"
 
+# ── Step 3: Set activated_at cho khoản ACTIVE chưa có ────────────────────────
+log "Step 3: Set activated_at = created_at cho ACTIVE loans chưa có..."
+mysql -u"${DB_USER}" -p"${DB_PASS}" -h"${DB_HOST}" loan_db 2>/dev/null <<'ENDSQL'
+UPDATE loan_requests
+SET activated_at = created_at
+WHERE status = 'ACTIVE'
+  AND activated_at IS NULL
+  AND is_deleted = 0;
+ENDSQL
+ACTIVATED=$(mysql -u"${DB_USER}" -p"${DB_PASS}" -h"${DB_HOST}" loan_db --skip-column-names -e \
+  "SELECT COUNT(*) FROM loan_requests WHERE status='ACTIVE' AND activated_at IS NOT NULL;" 2>/dev/null)
+log "  → ACTIVE loans có activated_at: ${ACTIVATED}"
+
 log "===== Loan migration hoàn thành ====="
 log "loan_requests:       ${LOANS}"
 log "repayment_schedule:  ${SCHEDULES}"
