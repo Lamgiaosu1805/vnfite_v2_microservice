@@ -6,6 +6,10 @@
 #
 # Script idempotent — chạy nhiều lần không bị lỗi (ON DUPLICATE KEY UPDATE).
 # Không xóa hay reset dữ liệu đã có.
+#
+# Xử lý số điện thoại trùng:
+#   Với mỗi nhóm cùng USER_NAME (phone), chỉ lấy user có giao dịch gần nhất.
+#   Nếu không có giao dịch nào thì lấy user có CREATED_DATE muộn nhất.
 # =============================================================================
 
 set -euo pipefail
@@ -48,34 +52,80 @@ $MYSQL_155 VNF_ACCOUNT_MANAGEMENT --skip-column-names -e \
 MAPPED=$(${MYSQL_OLD} APP_V2 --skip-column-names -e "SELECT COUNT(*) FROM _tmp_vnf_acc;" 2>/dev/null)
 log "  → Đã load ${MAPPED} VNF accounts."
 
+# ── Step 1c: Tạo bảng dedup — 1 user_id duy nhất cho mỗi phone ──────────────
+# Tiêu chí chọn (ưu tiên giảm dần):
+#   1. User có giao dịch gần nhất (MAX tbl_transaction.CREATED_DATE)
+#   2. Nếu không có giao dịch: dùng CREATED_DATE muộn nhất của user
+log "Step 1c: Dedup users theo số điện thoại (giữ account hoạt động gần nhất)..."
+$MYSQL_OLD APP_V2 <<'ENDSQL' 2>/dev/null
+DROP TABLE IF EXISTS _tmp_best_user;
+CREATE TABLE _tmp_best_user (
+  user_id    VARCHAR(50)  NOT NULL,
+  phone      VARCHAR(20)  NOT NULL,
+  PRIMARY KEY (user_id),
+  UNIQUE KEY uq_phone (phone)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+INSERT INTO _tmp_best_user (user_id, phone)
+SELECT best.user_id, best.phone
+FROM (
+  SELECT
+    u.ID   AS user_id,
+    u.USER_NAME AS phone,
+    -- Sắp xếp: giao dịch gần nhất → CREATED_DATE muộn nhất
+    ROW_NUMBER() OVER (
+      PARTITION BY u.USER_NAME
+      ORDER BY
+        COALESCE(
+          (SELECT MAX(t.CREATED_DATE) FROM tbl_transaction t WHERE t.USER_ID = u.ID),
+          u.CREATED_DATE
+        ) DESC,
+        u.ID DESC  -- tiebreak nếu cùng thời điểm
+    ) AS rn
+  FROM tbl_user u
+  WHERE u.IS_DELETED = 'N'
+    AND u.USER_NAME IS NOT NULL
+    AND u.USER_NAME != ''
+) best
+WHERE best.rn = 1;
+ENDSQL
+
+TOTAL_RAW=$(${MYSQL_OLD} APP_V2 --skip-column-names -e "SELECT COUNT(*) FROM tbl_user WHERE IS_DELETED='N' AND USER_NAME IS NOT NULL AND USER_NAME != '';" 2>/dev/null)
+TOTAL_DEDUP=$(${MYSQL_OLD} APP_V2 --skip-column-names -e "SELECT COUNT(*) FROM _tmp_best_user;" 2>/dev/null)
+DUPES=$(( TOTAL_RAW - TOTAL_DEDUP ))
+log "  → Tổng user gốc: ${TOTAL_RAW} | Sau dedup: ${TOTAL_DEDUP} | Đã loại bỏ: ${DUPES} duplicate(s)"
+
 # ── Step 2: Migrate auth_db.users ────────────────────────────────────────────
-log "Step 2: Migrate users → auth_db.users..."
+log "Step 2: Migrate users → auth_db.users (chỉ user đã dedup)..."
 $MYSQL_OLD APP_V2 <<'ENDSQL' 2>/dev/null
 INSERT INTO auth_db.users
-  (id, phone, password, email, kyc_status, referred_by, is_deleted, created_at, updated_at)
+  (id, phone, password, full_name, email, kyc_status, referred_by, is_deleted, created_at, updated_at)
 SELECT
-  u.ID,
-  u.USER_NAME,
+  b.user_id,
+  b.phone,
   u.PASSWORD,
-  i.EMAIL,
+  -- Lấy full_name từ KYC nếu có
+  NULLIF(TRIM(COALESCE(i.FULL_NAME, '')), ''),
+  NULLIF(TRIM(COALESCE(i.EMAIL, '')), ''),
   CASE
-    WHEN i.ID IS NULL    THEN 'NONE'
-    WHEN i.STATUS = 0    THEN 'PENDING'
-    WHEN i.STATUS = 1    THEN 'APPROVED'
+    WHEN i.ID IS NULL THEN 'NONE'
+    WHEN i.STATUS = 1 THEN 'APPROVED'
+    WHEN i.STATUS = 0 THEN 'PENDING'
     ELSE 'NONE'
   END AS kyc_status,
   NULL AS referred_by,
   0    AS is_deleted,
   u.CREATED_DATE,
   NOW()
-FROM tbl_user u
+FROM _tmp_best_user b
+JOIN tbl_user u ON u.ID = b.user_id
 LEFT JOIN (
-  SELECT USER_ID, EMAIL, STATUS, ID
+  SELECT USER_ID, FULL_NAME, EMAIL, STATUS, ID
   FROM tbl_identification_info
   WHERE IS_DELETED = 'N'
 ) i ON i.USER_ID = u.ID
-WHERE u.IS_DELETED = 'N'
 ON DUPLICATE KEY UPDATE
+  full_name  = VALUES(full_name),
   email      = VALUES(email),
   kyc_status = VALUES(kyc_status),
   updated_at = NOW();
@@ -84,7 +134,7 @@ USERS=$(${MYSQL_OLD} APP_V2 --skip-column-names -e "SELECT COUNT(*) FROM auth_db
 log "  → auth_db.users tổng: ${USERS}"
 
 # ── Step 3: Migrate auth_db.kyc_submissions ───────────────────────────────────
-log "Step 3: Migrate KYC → auth_db.kyc_submissions..."
+log "Step 3: Migrate KYC → auth_db.kyc_submissions (chỉ user đã dedup)..."
 $MYSQL_OLD APP_V2 <<'ENDSQL' 2>/dev/null
 INSERT INTO auth_db.kyc_submissions
   (id, user_id, cccd_number, full_name, gender,
@@ -112,37 +162,38 @@ SELECT
   i.CREATED_DATE,
   NOW()
 FROM tbl_identification_info i
+JOIN _tmp_best_user b ON b.user_id = i.USER_ID  -- chỉ lấy KYC của user đã chọn
 WHERE i.IS_DELETED = 'N'
   AND i.LEGAL_ID   IS NOT NULL
   AND i.LEGAL_ID   != ''
   AND i.BIRTHDAY   IS NOT NULL
   AND i.LEGAL_ISSUE_DATE IS NOT NULL
-  AND EXISTS (SELECT 1 FROM auth_db.users u WHERE u.id = i.USER_ID)
 ON DUPLICATE KEY UPDATE
   status     = VALUES(status),
+  full_name  = VALUES(full_name),
   updated_at = NOW();
 ENDSQL
 KYC=$(${MYSQL_OLD} APP_V2 --skip-column-names -e "SELECT COUNT(*) FROM auth_db.kyc_submissions;" 2>/dev/null)
 log "  → auth_db.kyc_submissions tổng: ${KYC}"
 
 # ── Step 4: Migrate payment_db.wallets ───────────────────────────────────────
-log "Step 4: Migrate wallets → payment_db.wallets..."
+log "Step 4: Migrate wallets → payment_db.wallets (chỉ user đã dedup)..."
 $MYSQL_OLD APP_V2 <<'ENDSQL' 2>/dev/null
 INSERT INTO payment_db.wallets
   (id, user_id, vnf_account_no, locked_balance, is_deleted, created_at, updated_at)
 SELECT
   i.ID,
-  u.ID,
+  b.user_id,
   a.acc_no,
   0.00,
   0,
   u.CREATED_DATE,
   NOW()
-FROM tbl_user u
-JOIN tbl_identification_info i ON i.USER_ID = u.ID AND i.IS_DELETED = 'N'
+FROM _tmp_best_user b
+JOIN tbl_user u ON u.ID = b.user_id
+JOIN tbl_identification_info i ON i.USER_ID = b.user_id AND i.IS_DELETED = 'N'
 JOIN _tmp_vnf_acc a ON a.cccd = i.LEGAL_ID
-WHERE u.IS_DELETED = 'N'
-  AND i.LEGAL_ID IS NOT NULL
+WHERE i.LEGAL_ID IS NOT NULL
 ON DUPLICATE KEY UPDATE
   updated_at = NOW();
 ENDSQL
@@ -150,25 +201,25 @@ WALLETS=$(${MYSQL_OLD} APP_V2 --skip-column-names -e "SELECT COUNT(*) FROM payme
 log "  → payment_db.wallets tổng: ${WALLETS}"
 
 # ── Step 5: Migrate payment_db.linked_banks ───────────────────────────────────
-log "Step 5: Migrate ngân hàng liên kết → payment_db.linked_banks..."
+log "Step 5: Migrate ngân hàng liên kết → payment_db.linked_banks (chỉ user đã dedup)..."
 $MYSQL_OLD APP_V2 <<'ENDSQL' 2>/dev/null
 INSERT INTO payment_db.linked_banks
   (id, user_id, bank_code, bank_name, bank_account_no, account_name,
    is_default, is_deleted, created_at, updated_at)
 SELECT
-  b.ID,
-  b.USER_ID,
-  b.BANK_CODE,
-  b.BANK_CODE,
-  b.BANK_ACCOUNT_NUMBER,
-  b.BANK_ACCOUNT_NAME,
+  b_info.ID,
+  b_info.USER_ID,
+  b_info.BANK_CODE,
+  b_info.BANK_CODE,
+  b_info.BANK_ACCOUNT_NUMBER,
+  b_info.BANK_ACCOUNT_NAME,
   1,
   0,
-  b.CREATED_DATE,
+  b_info.CREATED_DATE,
   NOW()
-FROM tbl_associate_bank_information b
-WHERE b.IS_DELETED = 'N'
-  AND EXISTS (SELECT 1 FROM auth_db.users u WHERE u.id = b.USER_ID)
+FROM tbl_associate_bank_information b_info
+JOIN _tmp_best_user b ON b.user_id = b_info.USER_ID  -- chỉ lấy ngân hàng của user đã chọn
+WHERE b_info.IS_DELETED = 'N'
 ON DUPLICATE KEY UPDATE
   updated_at = NOW();
 ENDSQL
@@ -176,7 +227,7 @@ BANKS=$(${MYSQL_OLD} APP_V2 --skip-column-names -e "SELECT COUNT(*) FROM payment
 log "  → payment_db.linked_banks tổng: ${BANKS}"
 
 # ── Step 6: Migrate payment_db.wallet_transactions ───────────────────────────
-log "Step 6: Migrate giao dịch → payment_db.wallet_transactions..."
+log "Step 6: Migrate giao dịch → payment_db.wallet_transactions (chỉ user đã dedup)..."
 $MYSQL_OLD APP_V2 <<'ENDSQL' 2>/dev/null
 INSERT INTO payment_db.wallet_transactions
   (id, wallet_id, type, amount, status,
@@ -201,7 +252,7 @@ SELECT
   t.CREATED_DATE,
   COALESCE(t.UPDATED_DATE, t.CREATED_DATE)
 FROM tbl_transaction t
-JOIN tbl_identification_info i ON i.USER_ID = t.USER_ID AND i.IS_DELETED = 'N'
+JOIN _tmp_best_user b ON b.user_id = t.USER_ID  -- chỉ lấy giao dịch của user đã chọn
 JOIN payment_db.wallets w ON w.user_id = t.USER_ID
 ON DUPLICATE KEY UPDATE
   updated_at = NOW();
@@ -209,12 +260,37 @@ ENDSQL
 TXN=$(${MYSQL_OLD} APP_V2 --skip-column-names -e "SELECT COUNT(*) FROM payment_db.wallet_transactions;" 2>/dev/null)
 log "  → payment_db.wallet_transactions tổng: ${TXN}"
 
-# ── Step 7: Dọn bảng tạm ─────────────────────────────────────────────────────
-log "Step 7: Drop bảng tạm _tmp_vnf_acc..."
-$MYSQL_OLD APP_V2 -e "DROP TABLE IF EXISTS _tmp_vnf_acc;" 2>/dev/null
+# ── Step 7: Cập nhật số dư ví từ giao dịch đã migrate ───────────────────────
+log "Step 7: Tính lại total_balance cho từng ví từ giao dịch..."
+$MYSQL_OLD APP_V2 <<'ENDSQL' 2>/dev/null
+UPDATE payment_db.wallets w
+JOIN (
+  SELECT
+    wt.wallet_id,
+    SUM(
+      CASE
+        WHEN wt.type = 'DEPOSIT'  AND wt.status = 'SUCCESS' THEN  wt.amount
+        WHEN wt.type = 'WITHDRAW' AND wt.status = 'SUCCESS' THEN -wt.amount
+        ELSE 0
+      END
+    ) AS net_balance
+  FROM payment_db.wallet_transactions wt
+  GROUP BY wt.wallet_id
+) calc ON calc.wallet_id = w.id
+SET
+  w.total_balance     = GREATEST(calc.net_balance, 0),
+  w.available_balance = GREATEST(calc.net_balance, 0) - w.locked_balance,
+  w.updated_at        = NOW()
+WHERE EXISTS (SELECT 1 FROM _tmp_best_user b WHERE b.user_id = w.user_id);
+ENDSQL
+log "  → Cập nhật số dư ví hoàn tất."
+
+# ── Step 8: Dọn bảng tạm ─────────────────────────────────────────────────────
+log "Step 8: Drop bảng tạm..."
+$MYSQL_OLD APP_V2 -e "DROP TABLE IF EXISTS _tmp_vnf_acc; DROP TABLE IF EXISTS _tmp_best_user;" 2>/dev/null
 
 log "===== Migration hoàn thành ====="
-log "Users:        ${USERS}"
+log "Users:        ${USERS} (từ ${TOTAL_RAW} gốc, loại ${DUPES} duplicate)"
 log "KYC:          ${KYC}"
 log "Wallets:      ${WALLETS}"
 log "Linked banks: ${BANKS}"
