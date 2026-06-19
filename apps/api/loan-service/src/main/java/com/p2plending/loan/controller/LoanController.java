@@ -13,6 +13,7 @@ import com.p2plending.loan.dto.response.LoanDocumentUploadResponse;
 import com.p2plending.loan.dto.response.LoanOtpInitResponse;
 import com.p2plending.loan.dto.response.LoanPublicResponse;
 import com.p2plending.loan.dto.response.LoanResponse;
+import com.p2plending.loan.dto.response.MarketplaceStatsResponse;
 import com.p2plending.loan.dto.response.OfferCreateResponse;
 import com.p2plending.loan.dto.response.PagedResponse;
 import com.p2plending.loan.dto.response.RepaymentScheduleResponse;
@@ -145,6 +146,16 @@ public class LoanController {
             @Valid LoanFilterParams params
     ) {
         return ResponseEntity.ok(loanService.getPublicLoans(params));
+    }
+
+    /**
+     * GET /api/loans/marketplace/stats
+     * Thống kê sàn giao dịch theo đúng trạng thái đang gọi vốn ACTIVE.
+     */
+    @GetMapping("/marketplace/stats")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<MarketplaceStatsResponse> getMarketplaceStats() {
+        return ResponseEntity.ok(loanService.getMarketplaceStats());
     }
 
     /**

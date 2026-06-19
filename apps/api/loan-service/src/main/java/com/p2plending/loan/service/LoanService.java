@@ -21,6 +21,7 @@ import com.p2plending.loan.dto.response.LoanDocumentResponse;
 import com.p2plending.loan.dto.response.LoanOfferResponse;
 import com.p2plending.loan.dto.response.LoanPublicResponse;
 import com.p2plending.loan.dto.response.LoanResponse;
+import com.p2plending.loan.dto.response.MarketplaceStatsResponse;
 import com.p2plending.loan.dto.response.OfferCreateResponse;
 import com.p2plending.loan.dto.response.PagedResponse;
 import com.p2plending.loan.exception.InvalidLoanStateException;
@@ -749,6 +750,16 @@ public class LoanService {
                 .newLoansToday(todayCount)
                 .todayLoanVolume(todayVol != null ? todayVol : java.math.BigDecimal.ZERO)
                 .dailyCounts(daily)
+                .build();
+    }
+
+    @Transactional(readOnly = true)
+    public MarketplaceStatsResponse getMarketplaceStats() {
+        List<LoanStatus> activeStatuses = List.of(LoanStatus.ACTIVE);
+        BigDecimal activeFundingVolume = loanRequestRepository.sumAmountByStatusIn(activeStatuses);
+        return MarketplaceStatsResponse.builder()
+                .activeLoanCount(loanRequestRepository.countByStatusIn(activeStatuses))
+                .activeFundingVolume(activeFundingVolume != null ? activeFundingVolume : BigDecimal.ZERO)
                 .build();
     }
 }
