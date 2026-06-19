@@ -6,17 +6,20 @@ import com.p2plending.loan.dto.request.DisburseRequest;
 import com.p2plending.loan.dto.request.InternalLoanProposeRequest;
 import com.p2plending.loan.dto.request.InternalLoanReviewRequest;
 import com.p2plending.loan.dto.request.LoanFilterParams;
+import com.p2plending.loan.dto.request.LoanProductUpdateRequest;
 import com.p2plending.loan.dto.request.RecordPaymentRequest;
 import com.p2plending.loan.dto.response.AppraisalSuggestionResponse;
 import com.p2plending.loan.dto.response.ContractResponse;
 import com.p2plending.loan.dto.response.InternalLoanStatsResponse;
 import com.p2plending.loan.dto.response.LoanDocumentResponse;
+import com.p2plending.loan.dto.response.LoanProductResponse;
 import com.p2plending.loan.dto.response.LoanResponse;
 import com.p2plending.loan.dto.response.PagedResponse;
 import com.p2plending.loan.dto.response.RepaymentScheduleResponse;
 import com.p2plending.loan.service.AppraisalSuggestionService;
 import com.p2plending.loan.service.ContractService;
 import com.p2plending.loan.service.FundingExpiryService;
+import com.p2plending.loan.service.LoanProductService;
 import com.p2plending.loan.service.LoanService;
 import com.p2plending.loan.service.RepaymentService;
 import jakarta.validation.Valid;
@@ -39,6 +42,7 @@ public class InternalLoanController {
     private static final String INTERNAL_SECRET_HEADER = "X-Internal-Secret";
 
     private final LoanService loanService;
+    private final LoanProductService loanProductService;
     private final RepaymentService repaymentService;
     private final AppraisalSuggestionService appraisalSuggestionService;
     private final ContractService contractService;
@@ -189,6 +193,15 @@ public class InternalLoanController {
             @RequestHeader(INTERNAL_SECRET_HEADER) String secret) {
         requireInternalSecret(secret);
         return ResponseEntity.ok(fundingExpiryService.runSweep());
+    }
+
+    @PutMapping("/products/{id}")
+    public ResponseEntity<LoanProductResponse> updateProduct(
+            @RequestHeader(INTERNAL_SECRET_HEADER) String secret,
+            @PathVariable String id,
+            @Valid @RequestBody LoanProductUpdateRequest request) {
+        requireInternalSecret(secret);
+        return ResponseEntity.ok(loanProductService.updateProduct(id, request));
     }
 
     private void requireInternalSecret(String secret) {

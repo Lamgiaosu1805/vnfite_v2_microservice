@@ -31,6 +31,10 @@ public class LoanManagementService {
         return sourceServiceClient.getLoanProducts();
     }
 
+    public JsonNode updateLoanProduct(String id, java.util.Map<String, Object> body) {
+        return sourceServiceClient.updateLoanProduct(id, body);
+    }
+
     public PagedResponse<LoanSummaryResponse> getLoans(String status, String borrowerId,
                                                        String province, String search, int page, int size) {
         return sourceServiceClient.getLoans(status, borrowerId, province, search, page, size);

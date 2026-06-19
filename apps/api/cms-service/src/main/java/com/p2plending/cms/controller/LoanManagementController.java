@@ -29,6 +29,14 @@ public class LoanManagementController {
         return ResponseEntity.ok(loanService.getLoanProducts());
     }
 
+    @PutMapping("/products/{id}")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN')")
+    public ResponseEntity<JsonNode> updateLoanProduct(
+            @PathVariable String id,
+            @RequestBody java.util.Map<String, Object> body) {
+        return ResponseEntity.ok(loanService.updateLoanProduct(id, body));
+    }
+
     @GetMapping
     public ResponseEntity<PagedResponse<LoanSummaryResponse>> getLoans(
             @RequestParam(required = false) String status,

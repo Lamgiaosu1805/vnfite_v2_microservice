@@ -382,6 +382,15 @@ public class SourceServiceClient {
         return exchangeForJson(url, HttpMethod.GET, null);
     }
 
+    /** Cập nhật thông tin sản phẩm gọi vốn (CMS admin). */
+    public JsonNode updateLoanProduct(String id, java.util.Map<String, Object> body) {
+        String url = UriComponentsBuilder.fromHttpUrl(loanServiceUrl)
+                .path("/internal/loans/products/{id}")
+                .buildAndExpand(id)
+                .toUriString();
+        return exchangeForJson(url, HttpMethod.PUT, body);
+    }
+
     /** Chạy ngay job hết hạn gọi vốn / ký khế ước (CMS bấm tay). Trả về số khoản đã xử lý. */
     public JsonNode expireSweep() {
         String url = UriComponentsBuilder.fromHttpUrl(loanServiceUrl)

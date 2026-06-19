@@ -2,6 +2,7 @@ package com.p2plending.loan.service;
 
 import com.p2plending.loan.domain.entity.LoanProduct;
 import com.p2plending.loan.domain.repository.LoanProductRepository;
+import com.p2plending.loan.dto.request.LoanProductUpdateRequest;
 import com.p2plending.loan.dto.response.LoanProductResponse;
 import com.p2plending.loan.exception.LoanNotFoundException;
 import lombok.RequiredArgsConstructor;
@@ -30,6 +31,29 @@ public class LoanProductService {
     @Transactional(readOnly = true)
     public Optional<LoanProduct> findProductById(String id) {
         return productRepository.findById(id);
+    }
+
+    @Transactional
+    public LoanProductResponse updateProduct(String id, LoanProductUpdateRequest req) {
+        LoanProduct product = productRepository.findById(id)
+                .filter(p -> !p.isDeleted())
+                .orElseThrow(() -> new LoanNotFoundException("Sản phẩm không tồn tại: " + id));
+
+        product.setName(req.getName());
+        product.setDescription(req.getDescription());
+        product.setMinAmount(req.getMinAmount());
+        product.setMaxAmount(req.getMaxAmount());
+        product.setAvailableTerms(
+                req.getAvailableTerms().stream()
+                        .map(String::valueOf)
+                        .reduce((a, b) -> a + "," + b)
+                        .orElse(""));
+        product.setMaxInterestRate(req.getMaxInterestRate());
+        if (req.getLateFeeRate() != null) product.setLateFeeRate(req.getLateFeeRate());
+        if (req.getSortOrder() != null) product.setSortOrder(req.getSortOrder());
+        if (req.getActive() != null) product.setActive(req.getActive());
+
+        return toResponse(productRepository.save(product));
     }
 
     @Transactional(readOnly = true)
