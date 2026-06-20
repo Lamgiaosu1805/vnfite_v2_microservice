@@ -1,6 +1,7 @@
 package com.p2plending.payment.controller;
 
 import com.p2plending.payment.dto.request.AddBankRequest;
+import com.p2plending.payment.dto.response.BankCatalogItem;
 import com.p2plending.payment.dto.response.LinkedBankResponse;
 import com.p2plending.payment.security.AuthenticatedUser;
 import com.p2plending.payment.service.LinkedBankService;
@@ -39,6 +40,12 @@ public class BankController {
             @PathVariable String bankId) {
         linkedBankService.removeBank(user.userId(), bankId);
         return ResponseEntity.ok(Map.of("message", "Đã xóa tài khoản ngân hàng"));
+    }
+
+    /** Danh sách ngân hàng hỗ trợ — proxy từ TIKLUY common/bank */
+    @GetMapping("/catalog")
+    public ResponseEntity<List<BankCatalogItem>> bankCatalog() {
+        return ResponseEntity.ok(linkedBankService.getBankCatalog());
     }
 
     /** Xác minh tên chủ TK ngân hàng qua MB Bank (trước khi add) */

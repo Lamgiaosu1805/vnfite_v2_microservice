@@ -4,6 +4,7 @@ import com.p2plending.payment.config.AppProperties;
 import com.p2plending.payment.domain.entity.LinkedBank;
 import com.p2plending.payment.domain.repository.LinkedBankRepository;
 import com.p2plending.payment.dto.request.AddBankRequest;
+import com.p2plending.payment.dto.response.BankCatalogItem;
 import com.p2plending.payment.dto.response.LinkedBankResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -49,12 +50,12 @@ public class LinkedBankService {
                 accountName = tikluyClient.verifyBankAccount(txnId, req.getBankCode(), req.getBankAccountNo());
                 if (accountName == null || accountName.isBlank()) {
                     throw new IllegalArgumentException(
-                            "Không tìm thấy tài khoản ngân hàng " + req.getBankAccountNo());
+                            "Không tìm thấy số tài khoản " + req.getBankAccountNo()
+                            + " tại " + req.getBankName() + ". Vui lòng kiểm tra lại.");
                 }
             }
         }
 
-        // Nếu đây là bank đầu tiên hoặc set isDefault → reset default cũ
         if (req.isDefault()) {
             resetDefaults(userId);
         }
@@ -82,7 +83,6 @@ public class LinkedBankService {
         bank.setDeleted(true);
         linkedBankRepository.save(bank);
 
-        // Nếu xóa default → set default cho bank đầu tiên còn lại
         if (bank.isDefault()) {
             linkedBankRepository
                     .findByUserIdAndIsDeletedFalseOrderByIsDefaultDescCreatedAtDesc(userId)
@@ -95,7 +95,18 @@ public class LinkedBankService {
     }
 
     /**
-     * Xác minh tên chủ tài khoản ngân hàng qua TIKLUY → MB Bank.
+     * Lấy danh sách ngân hàng hỗ trợ từ TIKLUY.
+     * Mock mode: trả rỗng — frontend dùng fallback hardcode.
+     */
+    public List<BankCatalogItem> getBankCatalog() {
+        if (appProperties.getPayment().isMock()) {
+            return List.of();
+        }
+        return tikluyClient.getBankCatalog(UUID.randomUUID().toString());
+    }
+
+    /**
+     * Tra tên chủ tài khoản ngân hàng qua TIKLUY → MB Bank.
      */
     @Transactional(readOnly = true)
     public String verifyBankAccount(String userId, String bankCode, String bankAccountNo) {

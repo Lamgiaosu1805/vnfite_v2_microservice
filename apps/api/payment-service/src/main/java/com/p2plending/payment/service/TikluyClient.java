@@ -215,6 +215,32 @@ public class TikluyClient {
     }
 
     /**
+     * Lấy danh sách ngân hàng được hỗ trợ từ TIKLUY.
+     */
+    @SuppressWarnings("unchecked")
+    public java.util.List<com.p2plending.payment.dto.response.BankCatalogItem> getBankCatalog(String txnId) {
+        try {
+            ResponseEntity<com.fasterxml.jackson.databind.JsonNode> resp = restTemplate.exchange(
+                    props.getBaseUrl() + "/common/bank",
+                    HttpMethod.GET,
+                    new HttpEntity<>(authHeaders(txnId)),
+                    com.fasterxml.jackson.databind.JsonNode.class);
+
+            com.fasterxml.jackson.databind.JsonNode data = extractData(resp.getBody(), "getBankCatalog");
+            if (data.isArray()) {
+                return objectMapper.convertValue(data,
+                        objectMapper.getTypeFactory().constructCollectionType(
+                                java.util.List.class,
+                                com.p2plending.payment.dto.response.BankCatalogItem.class));
+            }
+            return java.util.List.of();
+        } catch (Exception e) {
+            log.error("txnId={} TIKLUY getBankCatalog failed: {}", txnId, e.getMessage());
+            throw new RuntimeException("Không thể tải danh sách ngân hàng: " + e.getMessage(), e);
+        }
+    }
+
+    /**
      * Xác minh tên chủ tài khoản ngân hàng thực (qua MB Bank API).
      */
     public String verifyBankAccount(String txnId, String bankCode, String bankAccountNo) {
