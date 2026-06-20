@@ -12,9 +12,7 @@ import org.springframework.web.client.RestTemplate;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.Base64;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -213,33 +211,6 @@ public class TikluyClient {
             if (throwOnError) {
                 throw new RuntimeException("Cập nhật số dư TIKLUY thất bại: " + e.getMessage(), e);
             }
-        }
-    }
-
-    /**
-     * Lấy danh sách ngân hàng mà TIKLUY hỗ trợ (/common/bank).
-     * Trả về raw JsonNode array để VietQrClient enrich logo và map sang BankCatalogItem.
-     */
-    public List<JsonNode> getBankList() {
-        try {
-            String txnId = java.util.UUID.randomUUID().toString();
-            ResponseEntity<JsonNode> resp = restTemplate.exchange(
-                    props.getBaseUrl() + "/common/bank",
-                    HttpMethod.GET,
-                    new HttpEntity<>(authHeaders(txnId)),
-                    JsonNode.class);
-            JsonNode data = extractData(resp.getBody(), "getBankList");
-            if (data != null && data.isArray()) {
-                List<JsonNode> result = new ArrayList<>();
-                data.forEach(result::add);
-                log.info("TIKLUY bank list: {} banks", result.size());
-                return result;
-            }
-            log.warn("TIKLUY /common/bank returned unexpected structure: {}", data);
-            return List.of();
-        } catch (Exception e) {
-            log.error("TIKLUY getBankList failed: {}", e.getMessage());
-            return List.of();
         }
     }
 
