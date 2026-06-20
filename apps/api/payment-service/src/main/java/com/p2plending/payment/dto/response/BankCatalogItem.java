@@ -1,14 +1,14 @@
 package com.p2plending.payment.dto.response;
 
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
-/**
- * Một mục ngân hàng từ TIKLUY GET common/bank.
- * Chỉ giữ các field mobile cần — bỏ qua các field thừa bằng @JsonIgnoreProperties.
- */
 @Data
-@JsonIgnoreProperties(ignoreUnknown = true)
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class BankCatalogItem {
     private String bankCode;
     private String bankName;

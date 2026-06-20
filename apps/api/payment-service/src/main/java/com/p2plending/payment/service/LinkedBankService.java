@@ -2,6 +2,7 @@ package com.p2plending.payment.service;
 
 import com.p2plending.payment.config.AppProperties;
 import com.p2plending.payment.domain.entity.LinkedBank;
+import com.p2plending.payment.domain.repository.BankCatalogRepository;
 import com.p2plending.payment.domain.repository.LinkedBankRepository;
 import com.p2plending.payment.dto.request.AddBankRequest;
 import com.p2plending.payment.dto.response.BankCatalogItem;
@@ -20,6 +21,7 @@ import java.util.UUID;
 public class LinkedBankService {
 
     private final LinkedBankRepository linkedBankRepository;
+    private final BankCatalogRepository bankCatalogRepository;
     private final TikluyClient tikluyClient;
     private final AppProperties appProperties;
 
@@ -95,14 +97,19 @@ public class LinkedBankService {
     }
 
     /**
-     * Lấy danh sách ngân hàng hỗ trợ từ TIKLUY.
-     * Mock mode: trả rỗng — frontend dùng fallback hardcode.
+     * Lấy danh sách ngân hàng từ bank_catalog trong payment_db.
      */
+    @Transactional(readOnly = true)
     public List<BankCatalogItem> getBankCatalog() {
-        if (appProperties.getPayment().isMock()) {
-            return List.of();
-        }
-        return tikluyClient.getBankCatalog(UUID.randomUUID().toString());
+        return bankCatalogRepository.findByIsDeletedFalseOrderByBankShortNameAsc()
+                .stream()
+                .map(b -> BankCatalogItem.builder()
+                        .bankCode(b.getBankCode())
+                        .bankName(b.getBankName())
+                        .bankShortName(b.getBankShortName())
+                        .icon(b.getIcon())
+                        .build())
+                .toList();
     }
 
     /**
