@@ -2,7 +2,6 @@ package com.p2plending.payment.service;
 
 import com.p2plending.payment.config.AppProperties;
 import com.p2plending.payment.domain.entity.LinkedBank;
-import com.p2plending.payment.domain.repository.BankCatalogRepository;
 import com.p2plending.payment.domain.repository.LinkedBankRepository;
 import com.p2plending.payment.dto.request.AddBankRequest;
 import com.p2plending.payment.dto.response.BankCatalogItem;
@@ -21,7 +20,7 @@ import java.util.UUID;
 public class LinkedBankService {
 
     private final LinkedBankRepository linkedBankRepository;
-    private final BankCatalogRepository bankCatalogRepository;
+    private final VietQrClient vietQrClient;
     private final TikluyClient tikluyClient;
     private final AppProperties appProperties;
 
@@ -97,19 +96,10 @@ public class LinkedBankService {
     }
 
     /**
-     * Lấy danh sách ngân hàng từ bank_catalog trong payment_db.
+     * Lấy danh sách ngân hàng từ VietQR API (cache Redis 24h).
      */
-    @Transactional(readOnly = true)
     public List<BankCatalogItem> getBankCatalog() {
-        return bankCatalogRepository.findByIsDeletedFalseOrderByBankShortNameAsc()
-                .stream()
-                .map(b -> BankCatalogItem.builder()
-                        .bankCode(b.getBankCode())
-                        .bankName(b.getBankName())
-                        .bankShortName(b.getBankShortName())
-                        .icon(b.getIcon())
-                        .build())
-                .toList();
+        return vietQrClient.getBankList();
     }
 
     /**
