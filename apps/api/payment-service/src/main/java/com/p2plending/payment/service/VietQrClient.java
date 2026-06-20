@@ -6,7 +6,6 @@ import com.p2plending.payment.config.AppProperties;
 import com.p2plending.payment.dto.response.BankCatalogItem;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.core.io.ClassPathResource;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
@@ -14,16 +13,8 @@ import org.springframework.web.client.RestTemplate;
 
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
-/**
- * Danh sách ngân hàng:
- * - Primary source: banks.json (danh sách TIKLUY đầy đủ, gồm LIOBANK/CAKE/Ubank)
- * - Logo enrich: VietQR api.vietqr.io/v2/banks (ghép theo bankCode)
- * - Kết quả cache Redis 24h
- */
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -51,7 +42,7 @@ public class VietQrClient {
             }
         }
 
-        List<BankCatalogItem> banks = buildMergedList();
+        List<BankCatalogItem> banks = fetchFromVietQr();
         if (!banks.isEmpty()) {
             try {
                 redisTemplate.opsForValue().set(cacheKey, objectMapper.writeValueAsString(banks), CACHE_TTL);
@@ -62,62 +53,31 @@ public class VietQrClient {
         return banks;
     }
 
-    private List<BankCatalogItem> buildMergedList() {
-        Map<String, String> logoMap = fetchLogoMapFromVietQr();
-        List<BankCatalogItem> staticBanks = loadStaticBankList();
-
-        List<BankCatalogItem> result = new ArrayList<>();
-        for (BankCatalogItem bank : staticBanks) {
-            result.add(BankCatalogItem.builder()
-                    .bankCode(bank.getBankCode())
-                    .bankName(bank.getBankName())
-                    .bankShortName(bank.getBankShortName())
-                    .icon(logoMap.get(bank.getBankCode()))
-                    .build());
-        }
-        log.info("Built bank catalog: {} banks (static list + VietQR logos)", result.size());
-        return result;
-    }
-
-    private List<BankCatalogItem> loadStaticBankList() {
-        try {
-            ClassPathResource resource = new ClassPathResource("banks.json");
-            JsonNode array = objectMapper.readTree(resource.getInputStream());
-            List<BankCatalogItem> result = new ArrayList<>();
-            for (JsonNode node : array) {
-                result.add(BankCatalogItem.builder()
-                        .bankCode(node.path("bankCode").asText())
-                        .bankName(node.path("bankName").asText())
-                        .bankShortName(node.path("bankShortName").asText())
-                        .build());
-            }
-            log.info("Loaded {} banks from static banks.json", result.size());
-            return result;
-        } catch (Exception e) {
-            log.error("Failed to load static bank list: {}", e.getMessage());
-            return List.of();
-        }
-    }
-
-    private Map<String, String> fetchLogoMapFromVietQr() {
-        Map<String, String> logoMap = new HashMap<>();
+    private List<BankCatalogItem> fetchFromVietQr() {
         try {
             ResponseEntity<JsonNode> resp = restTemplate.getForEntity(VIETQR_URL, JsonNode.class);
             JsonNode body = resp.getBody();
-            if (body != null && "00".equals(body.path("code").asText())) {
-                for (JsonNode bank : body.path("data")) {
-                    String code = bank.path("code").asText();
-                    String logo = bank.path("logo").asText();
-                    if (!code.isBlank() && !logo.isBlank()) {
-                        logoMap.put(code, logo);
-                    }
-                }
-                log.info("VietQR logo map: {} entries", logoMap.size());
+            if (body == null || !"00".equals(body.path("code").asText())) {
+                log.warn("VietQR returned non-OK response: {}", body);
+                return List.of();
             }
+
+            List<BankCatalogItem> result = new ArrayList<>();
+            for (JsonNode bank : body.path("data")) {
+                if (bank.path("lookupSupported").asInt(0) == 0) continue;
+                result.add(BankCatalogItem.builder()
+                        .bankCode(bank.path("code").asText())
+                        .bankName(bank.path("name").asText())
+                        .bankShortName(bank.path("shortName").asText())
+                        .icon(bank.path("logo").asText())
+                        .build());
+            }
+            log.info("Fetched {} banks from VietQR", result.size());
+            return result;
         } catch (Exception e) {
-            log.warn("Failed to fetch VietQR logo map: {}", e.getMessage());
+            log.error("Failed to fetch bank list from VietQR: {}", e.getMessage());
+            return List.of();
         }
-        return logoMap;
     }
 
     public void evictCache() {
