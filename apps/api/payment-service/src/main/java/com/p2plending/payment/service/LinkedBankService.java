@@ -6,6 +6,7 @@ import com.p2plending.payment.domain.repository.LinkedBankRepository;
 import com.p2plending.payment.dto.request.AddBankRequest;
 import com.p2plending.payment.dto.response.BankCatalogItem;
 import com.p2plending.payment.dto.response.LinkedBankResponse;
+import com.p2plending.payment.util.TextNormalizer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -22,6 +23,7 @@ public class LinkedBankService {
     private final LinkedBankRepository linkedBankRepository;
     private final VietQrClient vietQrClient;
     private final TikluyClient tikluyClient;
+    private final AuthServiceClient authServiceClient;
     private final AppProperties appProperties;
 
     @Transactional(readOnly = true)
@@ -42,19 +44,20 @@ public class LinkedBankService {
 
         String accountName = req.getAccountName();
 
-        if (accountName == null || accountName.isBlank()) {
-            if (appProperties.getPayment().isMock()) {
-                accountName = "MOCK_ACCOUNT_NAME";
-                log.info("userId={} [MOCK] Bank verify skipped for {}", userId, req.getBankAccountNo());
-            } else {
-                String txnId = UUID.randomUUID().toString();
-                accountName = tikluyClient.verifyBankAccount(txnId, req.getBankCode(), req.getBankAccountNo());
-                if (accountName == null || accountName.isBlank()) {
-                    throw new IllegalArgumentException(
-                            "Không tìm thấy số tài khoản " + req.getBankAccountNo()
-                            + " tại " + req.getBankName() + ". Vui lòng kiểm tra lại.");
-                }
+        if (appProperties.getPayment().isMock()) {
+            if (accountName == null || accountName.isBlank()) {
+                accountName = "MOCK ACCOUNT NAME";
             }
+            log.info("userId={} [MOCK] Bank verify + name check skipped", userId);
+        } else {
+            String txnId = UUID.randomUUID().toString();
+            accountName = tikluyClient.verifyBankAccount(txnId, req.getBankCode(), req.getBankAccountNo());
+            if (accountName == null || accountName.isBlank()) {
+                throw new IllegalArgumentException(
+                        "Không tìm thấy số tài khoản " + req.getBankAccountNo()
+                        + " tại " + req.getBankName() + ". Vui lòng kiểm tra lại.");
+            }
+            validateAccountNameMatchesKyc(userId, accountName, req.getBankAccountNo());
         }
 
         if (req.isDefault()) {
@@ -112,6 +115,23 @@ public class LinkedBankService {
         }
         String txnId = UUID.randomUUID().toString();
         return tikluyClient.verifyBankAccount(txnId, bankCode, bankAccountNo);
+    }
+
+    private void validateAccountNameMatchesKyc(String userId, String tikluyName, String bankAccountNo) {
+        String userFullName = authServiceClient.getUserFullName(userId);
+        if (userFullName == null || userFullName.isBlank()) {
+            log.warn("userId={} fullName not found in auth-service, skipping name check", userId);
+            return;
+        }
+        String normalizedKyc    = TextNormalizer.normalize(userFullName);
+        String normalizedTikluy = TextNormalizer.normalize(tikluyName);
+        if (!normalizedKyc.equals(normalizedTikluy)) {
+            log.warn("userId={} name mismatch: kyc='{}' tikluy='{}' stk={}",
+                    userId, normalizedKyc, normalizedTikluy, bankAccountNo);
+            throw new IllegalArgumentException(
+                    "Tên chủ tài khoản (" + tikluyName + ") không khớp với thông tin định danh của bạn. "
+                    + "Vui lòng liên kết tài khoản ngân hàng đứng tên chính chủ.");
+        }
     }
 
     private void resetDefaults(String userId) {

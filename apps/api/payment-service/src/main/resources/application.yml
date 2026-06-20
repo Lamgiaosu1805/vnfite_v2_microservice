@@ -76,6 +76,8 @@ app:
   payment:
     # mock=true: bỏ qua TIKLUY, dùng dữ liệu giả cho môi trường dev/test
     mock: ${APP_PAYMENT_MOCK:true}
+  auth:
+    service-url: ${AUTH_SERVICE_URL:http://auth-service:8081}
   tikluy:
     callback:
       secret: ${TIKLUY_CALLBACK_SECRET:}

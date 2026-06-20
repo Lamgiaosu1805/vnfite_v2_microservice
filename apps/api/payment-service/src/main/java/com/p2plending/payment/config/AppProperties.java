@@ -14,6 +14,7 @@ public class AppProperties {
     private Otp otp = new Otp();
     private Payment payment = new Payment();
     private Tikluy tikluy = new Tikluy();
+    private Auth auth = new Auth();
 
     @Data
     public static class Redis {
@@ -34,6 +35,11 @@ public class AppProperties {
     public static class Payment {
         /** Khi true: bỏ qua TIKLUY, dùng mock VA / mock fund transfer cho dev/test */
         private boolean mock = true;
+    }
+
+    @Data
+    public static class Auth {
+        private String serviceUrl = "http://auth-service:8081";
     }
 
     @Data
