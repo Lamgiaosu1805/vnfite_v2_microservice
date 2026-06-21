@@ -88,6 +88,9 @@ management:
       show-details: always
 
 app:
+  demo:
+    # userId của Apple review account — ẩn khỏi CMS user list và stats
+    excluded-user-ids: ${DEMO_EXCLUDED_USER_IDS:}
   otp:
     mock: false
   vnf-otp:

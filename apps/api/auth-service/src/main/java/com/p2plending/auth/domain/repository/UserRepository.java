@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -29,6 +30,14 @@ public interface UserRepository extends JpaRepository<User, String>, JpaSpecific
 
     @Query("SELECT COUNT(u) FROM User u WHERE u.isDeleted = false AND u.createdAt >= :from AND u.createdAt < :to")
     long countCreatedBetween(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
+
+    @Query("SELECT COUNT(u) FROM User u WHERE u.isDeleted = false AND u.id IN :ids")
+    long countByIdInAndIsDeletedFalse(@Param("ids") Collection<String> ids);
+
+    @Query("SELECT COUNT(u) FROM User u WHERE u.id IN :ids AND u.createdAt >= :from AND u.createdAt < :to")
+    long countByIdInAndCreatedAtBetween(@Param("ids") Collection<String> ids,
+                                        @Param("from") LocalDateTime from,
+                                        @Param("to") LocalDateTime to);
 
     /** Trả về [date_string, count] theo ngày */
     @Query(value = "SELECT DATE(created_at) as d, COUNT(*) as cnt FROM users " +

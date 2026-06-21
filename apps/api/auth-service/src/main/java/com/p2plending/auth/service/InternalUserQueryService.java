@@ -10,6 +10,7 @@ import com.p2plending.auth.dto.response.InternalUserStatsResponse;
 import com.p2plending.auth.dto.response.PagedResponse;
 import com.p2plending.auth.exception.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
@@ -18,10 +19,10 @@ import org.springframework.util.StringUtils;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.LocalTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -29,6 +30,9 @@ public class InternalUserQueryService {
 
     private final UserRepository userRepository;
     private final KycSubmissionRepository kycSubmissionRepository;
+
+    @Value("${app.demo.excluded-user-ids:}")
+    private Set<String> demoExcludedUserIds;
 
     @Transactional(readOnly = true)
     public PagedResponse<InternalUserSummaryResponse> getUsers(
@@ -38,6 +42,9 @@ public class InternalUserQueryService {
             var predicates = cb.conjunction();
             predicates = cb.and(predicates, cb.isFalse(root.get("isDeleted")));
 
+            if (!demoExcludedUserIds.isEmpty()) {
+                predicates = cb.and(predicates, cb.not(root.get("id").in(demoExcludedUserIds)));
+            }
             if (kycStatus != null) {
                 predicates = cb.and(predicates, cb.equal(root.get("kycStatus"), kycStatus));
             }
@@ -71,6 +78,12 @@ public class InternalUserQueryService {
         long pendingKyc    = userRepository.countByKycStatus(KycStatus.PENDING);
         long newUsersToday = userRepository.countCreatedBetween(todayStart, tomorrowStart);
 
+        // Trừ demo accounts khỏi stats — không tính vào số liệu thực
+        long demoCount = demoExcludedUserIds.isEmpty() ? 0L
+                : userRepository.countByIdInAndIsDeletedFalse(demoExcludedUserIds);
+        totalUsers    = Math.max(0, totalUsers - demoCount);
+        newUsersToday = Math.max(0, newUsersToday - countDemoCreatedToday(todayStart, tomorrowStart));
+
         List<Object[]> rows = userRepository.countDailyNewUsers(fromDt);
         List<InternalUserStatsResponse.DailyCount> daily = new ArrayList<>();
         for (Object[] row : rows) {
@@ -85,6 +98,11 @@ public class InternalUserQueryService {
                 .newUsersToday(newUsersToday)
                 .dailyCounts(daily)
                 .build();
+    }
+
+    private long countDemoCreatedToday(LocalDateTime todayStart, LocalDateTime tomorrowStart) {
+        if (demoExcludedUserIds.isEmpty()) return 0L;
+        return userRepository.countByIdInAndCreatedAtBetween(demoExcludedUserIds, todayStart, tomorrowStart);
     }
 
     private InternalUserSummaryResponse toSummary(User user) {
