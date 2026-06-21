@@ -104,6 +104,7 @@ services:
       APP_OTP_MOCK: ${APP_OTP_MOCK:-false}
       VNF_OTP_SERVICE_URL: ${VNF_OTP_SERVICE_URL:-}
       VNF_OTP_SERVICE_PATH: ${VNF_OTP_SERVICE_PATH:-/common/generate-otp-app-v2}
+      DEMO_EXCLUDED_USER_IDS: ${DEMO_EXCLUDED_USER_IDS:-}
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -143,6 +144,7 @@ services:
       RSA_PUBLIC_KEY: ${RSA_PUBLIC_KEY:-}
       APP_REDIS_NAMESPACE: ${APP_REDIS_NAMESPACE:-dev}
       INTERNAL_API_SECRET: ${INTERNAL_API_SECRET:?INTERNAL_API_SECRET is required}
+      DEMO_EXCLUDED_USER_IDS: ${DEMO_EXCLUDED_USER_IDS:-}
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
     extra_hosts:
       - "host.docker.internal:host-gateway"
