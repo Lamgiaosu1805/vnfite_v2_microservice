@@ -252,12 +252,10 @@ Luồng đăng ký bằng số điện thoại, 3 bước:
 | Field | Giá trị | Ghi chú |
 |-------|---------|---------|
 | `phone` | từ request | NOT NULL, dùng để đăng nhập |
-| `password` | bcrypt hash | NOT NULL |
-| `role` | `USER` | mặc định — user có thể vừa vay vừa đầu tư |
+| `password` | bcrypt(md5(password)) | NOT NULL — app MD5 trước khi gửi |
 | `kyc_status` | `NONE` | chưa nộp KYC |
 | `referred_by` | SĐT người giới thiệu hoặc null | optional |
 | `email` | **null** | user tự cập nhật sau |
-| `full_name` | **null** | user tự cập nhật sau |
 
 ### OTP & Redis
 
@@ -325,7 +323,7 @@ Luồng định danh điện tử 2 bước, yêu cầu đăng nhập (JWT):
 
 ### User & Auth
 
-- `users`: phone (login), password (bcrypt), role, kyc_status, referral_code, referred_by, email (nullable), full_name (nullable)
+- `users`: phone (login), password (bcrypt(md5)), kyc_status, referred_by, email (nullable), biometric_public_key (nullable)
 - `kyc_documents`: user_id, doc_type, doc_url, status
 - `refresh_tokens`: user_id, token (unique), expires_at
 - Access token TTL: 15 phút | Refresh token TTL: 24 giờ
@@ -359,15 +357,14 @@ PENDING → ACTIVE → FUNDED → REPAYING → COMPLETED
 |--------|------|----------|-------|
 | `id` | VARCHAR(36) | NO | PK UUID, `@GeneratedValue(strategy = GenerationType.UUID)` |
 | `phone` | VARCHAR(20) | NO | SĐT đăng nhập, unique, format Việt Nam |
-| `password` | VARCHAR(255) | NO | Bcrypt hash |
-| `full_name` | VARCHAR(100) | YES | Null khi mới đăng ký, điền sau khi KYC |
+| `password` | VARCHAR(255) | NO | Bcrypt hash của md5(password) — app MD5 trước khi gửi |
 | `email` | VARCHAR(150) | YES | Null khi mới đăng ký, user cập nhật sau |
-| `role` | ENUM | NO | `USER` (mặc định, vừa vay vừa đầu tư được) \| `ADMIN` |
-| `kyc_status` | ENUM | NO | `NONE` \| `PENDING` \| `APPROVED` \| `REJECTED` |
+| `kyc_status` | ENUM | NO | `NONE` \| `PENDING` \| `APPROVED` \| `REJECTED`, default NONE |
 | `referred_by` | VARCHAR(20) | YES | SĐT người giới thiệu (SĐT chính là mã giới thiệu) |
 | `is_deleted` | TINYINT(1) | NO | Soft delete, default 0 |
 | `created_at` | DATETIME | YES | Thời điểm tạo tài khoản |
 | `updated_at` | DATETIME | YES | |
+| `biometric_public_key` | TEXT | YES | Public key sinh trắc học của thiết bị |
 
 #### kyc_submissions
 | Column | Type | Nullable | Mô tả |
