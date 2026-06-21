@@ -107,7 +107,7 @@ app:
     cron: ${APP_DPD_CRON:0 0 1 * * *}
   funding:
     # Số ngày khoản được phép ở ACTIVE để gọi vốn trước khi hết hạn & hoàn tiền nhà đầu tư
-    window-days: ${APP_FUNDING_WINDOW_DAYS:30}
+    window-days: ${APP_FUNDING_WINDOW_DAYS:180}
     # Số ngày người gọi vốn được phép ký khế ước sau khi FUNDED trước khi hủy & hoàn tiền
     signing-window-days: ${APP_FUNDING_SIGNING_WINDOW_DAYS:7}
     # Cron quét hết hạn gọi vốn / ký khế ước hằng ngày (giờ Việt Nam)
