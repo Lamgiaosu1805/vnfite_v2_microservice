@@ -83,6 +83,9 @@ file-manager:
   base-url: ${FILE_MANAGER_URL:https://service.vnfite.com.vn/file-manager/v2}
 
 app:
+  demo:
+    # userId của Apple review account — trả loan list rỗng, stats = 0
+    excluded-user-ids: ${DEMO_EXCLUDED_USER_IDS:}
   otp:
     mock: ${APP_OTP_MOCK:true}
   redis:

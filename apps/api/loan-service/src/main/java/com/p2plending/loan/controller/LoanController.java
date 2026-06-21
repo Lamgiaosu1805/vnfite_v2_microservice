@@ -25,6 +25,7 @@ import com.p2plending.loan.service.LoanService;
 import com.p2plending.loan.service.RepaymentService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -33,7 +34,9 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.math.BigDecimal;
 import java.util.List;
+import java.util.Set;
 
 @RestController
 @RequestMapping("/api/loans")
@@ -45,6 +48,10 @@ public class LoanController {
     private final RepaymentService repaymentService;
     private final CashflowService cashflowService;
     private final FileManagerUploadService fileManagerUploadService;
+
+    // Danh sách userId bị ẩn loan list (dùng cho Apple review demo account)
+    @Value("${app.demo.excluded-user-ids:}")
+    private Set<String> demoExcludedUserIds;
 
     /**
      * POST /api/loans/request/init
@@ -143,8 +150,12 @@ public class LoanController {
     @GetMapping
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<PagedResponse<LoanPublicResponse>> getLoans(
-            @Valid LoanFilterParams params
+            @Valid LoanFilterParams params,
+            @AuthenticationPrincipal AuthenticatedUser principal
     ) {
+        if (demoExcludedUserIds.contains(principal.userId())) {
+            return ResponseEntity.ok(PagedResponse.empty());
+        }
         return ResponseEntity.ok(loanService.getPublicLoans(params));
     }
 
@@ -154,7 +165,15 @@ public class LoanController {
      */
     @GetMapping("/marketplace/stats")
     @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<MarketplaceStatsResponse> getMarketplaceStats() {
+    public ResponseEntity<MarketplaceStatsResponse> getMarketplaceStats(
+            @AuthenticationPrincipal AuthenticatedUser principal
+    ) {
+        if (demoExcludedUserIds.contains(principal.userId())) {
+            return ResponseEntity.ok(MarketplaceStatsResponse.builder()
+                    .activeLoanCount(0)
+                    .activeFundingVolume(BigDecimal.ZERO)
+                    .build());
+        }
         return ResponseEntity.ok(loanService.getMarketplaceStats());
     }
 
