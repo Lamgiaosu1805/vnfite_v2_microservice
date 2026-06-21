@@ -62,6 +62,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
@@ -87,6 +88,9 @@ public class AuthService {
 
     @Value("${app.otp.mock:false}")
     private boolean mockMode;
+
+    @Value("${app.demo.excluded-user-ids:}")
+    private Set<String> demoExcludedUserIds;
 
     private final UserRepository           userRepository;
     private final KycDocumentRepository    kycDocumentRepository;
@@ -603,6 +607,12 @@ public class AuthService {
      * - Nếu session tồn tại và deviceKey KHÔNG khớp → DEVICE_CONFLICT
      */
     private void checkAndBindDevice(String userId, String phone, String deviceKey, String deviceName, String platform) {
+        // Demo account: bỏ qua device conflict, cho phép đăng nhập song song nhiều thiết bị
+        if (demoExcludedUserIds.contains(userId)) {
+            log.info("Demo account {} — skipping device binding", userId);
+            return;
+        }
+
         String stored = redisTemplate.opsForValue().get(deviceSessionKey(phone));
         String resolvedDeviceKey = StringUtils.hasText(deviceKey) ? deviceKey : UUID.randomUUID().toString();
 
