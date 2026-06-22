@@ -29,29 +29,24 @@ public class DashboardService {
 
     @Cacheable(value = CacheConfig.CACHE_DASHBOARD_STATS)
     public DashboardStatsResponse getStats() {
-        try {
-            LocalDate from = LocalDate.now(TZ).minusDays(1);
-            JsonNode u = sourceServiceClient.getUserStats(from);
-            JsonNode l = sourceServiceClient.getLoanStats(from);
+        LocalDate from = LocalDate.now(TZ).minusDays(1);
+        JsonNode u = sourceServiceClient.getUserStats(from);
+        JsonNode l = sourceServiceClient.getLoanStats(from);
 
-            return DashboardStatsResponse.builder()
-                    .totalUsers(u.path("totalUsers").asLong())
-                    .activeUsers(u.path("totalUsers").asLong())
-                    .pendingKycCount(u.path("pendingKyc").asLong())
-                    .todayNewUsers(u.path("newUsersToday").asLong())
-                    .totalLoans(l.path("totalLoans").asLong())
-                    .pendingLoans(l.path("pendingLoans").asLong())
-                    .activeLoans(l.path("activeLoans").asLong())
-                    .fundedLoans(l.path("fundedLoans").asLong())
-                    .activeFundingVolume(decimal(l, "activeFundingVolume"))
-                    .totalFundedVolume(decimal(l, "totalFundedVolume"))
-                    .todayNewLoans(l.path("newLoansToday").asLong())
-                    .todayLoanVolume(decimal(l, "todayLoanVolume"))
-                    .build();
-        } catch (Exception ex) {
-            log.error("Failed to fetch dashboard stats", ex);
-            return emptyStats();
-        }
+        return DashboardStatsResponse.builder()
+                .totalUsers(u.path("totalUsers").asLong())
+                .activeUsers(u.path("totalUsers").asLong())
+                .pendingKycCount(u.path("pendingKyc").asLong())
+                .todayNewUsers(u.path("newUsersToday").asLong())
+                .totalLoans(l.path("totalLoans").asLong())
+                .pendingLoans(l.path("pendingLoans").asLong())
+                .activeLoans(l.path("activeLoans").asLong())
+                .fundedLoans(l.path("fundedLoans").asLong())
+                .activeFundingVolume(decimal(l, "activeFundingVolume"))
+                .totalFundedVolume(decimal(l, "totalFundedVolume"))
+                .todayNewLoans(l.path("newLoansToday").asLong())
+                .todayLoanVolume(decimal(l, "todayLoanVolume"))
+                .build();
     }
 
     /**
@@ -62,31 +57,25 @@ public class DashboardService {
      */
     @Cacheable(value = CacheConfig.CACHE_DASHBOARD_CHART, key = "#period")
     public ChartDataResponse getChartData(String period) {
-        try {
-            LocalDate today = LocalDate.now(TZ);
+        LocalDate today = LocalDate.now(TZ);
 
-            LocalDate from = switch (period) {
-                case "month" -> today.with(TemporalAdjusters.firstDayOfMonth());
-                case "year"  -> today.with(TemporalAdjusters.firstDayOfYear());
-                default      -> today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY)); // week
-            };
+        LocalDate from = switch (period) {
+            case "month" -> today.with(TemporalAdjusters.firstDayOfMonth());
+            case "year"  -> today.with(TemporalAdjusters.firstDayOfYear());
+            default      -> today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY)); // week
+        };
 
-            JsonNode u = sourceServiceClient.getUserStats(from);
-            JsonNode l = sourceServiceClient.getLoanStats(from);
+        JsonNode u = sourceServiceClient.getUserStats(from);
+        JsonNode l = sourceServiceClient.getLoanStats(from);
 
-            // daily map date-string → data
-            Map<String, long[]>    userMap = buildUserMap(u);
-            Map<String, Object[]>  loanMap = buildLoanMap(l);
+        Map<String, long[]>   userMap = buildUserMap(u);
+        Map<String, Object[]> loanMap = buildLoanMap(l);
 
-            return switch (period) {
-                case "month" -> buildMonthlyByDay(today, userMap, loanMap);
-                case "year"  -> buildYearlyByMonth(today, userMap, loanMap);
-                default      -> buildWeekByDay(from, today, userMap, loanMap); // week
-            };
-        } catch (Exception ex) {
-            log.error("Failed to fetch chart data for period={}", period, ex);
-            return ChartDataResponse.builder().points(Collections.emptyList()).build();
-        }
+        return switch (period) {
+            case "month" -> buildMonthlyByDay(today, userMap, loanMap);
+            case "year"  -> buildYearlyByMonth(today, userMap, loanMap);
+            default      -> buildWeekByDay(from, today, userMap, loanMap);
+        };
     }
 
     // ─── Chart builders ───────────────────────────────────────────────────────
@@ -189,13 +178,4 @@ public class DashboardService {
         return node.hasNonNull(field) ? node.get(field).decimalValue() : BigDecimal.ZERO;
     }
 
-    private DashboardStatsResponse emptyStats() {
-        return DashboardStatsResponse.builder()
-                .totalUsers(0).activeUsers(0).pendingKycCount(0)
-                .totalLoans(0).pendingLoans(0).activeLoans(0).fundedLoans(0)
-                .activeFundingVolume(BigDecimal.ZERO)
-                .totalFundedVolume(BigDecimal.ZERO)
-                .todayNewUsers(0).todayNewLoans(0).todayLoanVolume(BigDecimal.ZERO)
-                .build();
-    }
 }
