@@ -28,6 +28,8 @@ Nền tảng cho vay ngang hàng (P2P Lending) dạng microservices, xây dựng
 
 **Không mirror user/loan vào CMS:** `cms-service` không còn đồng bộ `auth_db.users` hoặc `loan_db.loan_requests` sang DB riêng. `cms_db` chỉ lưu dữ liệu nội bộ CMS như admin users, quyền, cấu hình, audit/ops data. Khi CMS cần dữ liệu khách hàng hoặc khoản gọi vốn, hãy gọi API từ service nguồn (`auth-service`, `loan-service`) thay vì copy bảng.
 
+**CMS giao dịch nạp/rút:** Màn `Giao dịch nạp/rút` lấy dữ liệu trực tiếp từ `payment-service` qua `GET /internal/payment/transactions` rồi proxy tại `GET /cms/transactions`; `cms_db` không mirror giao dịch. `payment_db.wallet_transactions` là source of truth. Dữ liệu VNFITE cũ chỉ được migrate một lần bằng script migration đã kiểm soát vào `payment_db`, không tạo job đồng bộ runtime giữa hai database vì dễ trùng giao dịch và sai số dư.
+
 **Mobile OTP UI:** Tất cả màn nhập OTP trên app mobile VNFITE phải dùng cùng một kiểu giao diện: mỗi số OTP là một ô riêng. Không dùng một ô input dài nhập liền toàn bộ OTP. Ưu tiên component/pattern OTP dùng chung nếu có. Áp dụng cho đăng ký, quên mật khẩu, eKYC, bật/tắt sinh trắc học, reset thiết bị và mọi luồng OTP mới. Input OTP phải numeric-only, fixed length, đồng nhất về khoảng cách/kích thước/trạng thái lỗi. OTP phải được scope theo tính năng/purpose, không dùng OTP của tính năng này để xác thực tính năng khác.
 
 **Mobile file upload:** Mobile app không được gọi trực tiếp `service.vnfite.com.vn/file-manager`. Mọi upload chứng từ/file từ app phải đi qua API proxy của VNFITE, hiện tại là `POST /api/loans/documents/upload`, để app/network whitelist chỉ cần domain API VNFITE. Backend proxy mới là nơi gọi file-manager và trả `fileId` cho mobile.

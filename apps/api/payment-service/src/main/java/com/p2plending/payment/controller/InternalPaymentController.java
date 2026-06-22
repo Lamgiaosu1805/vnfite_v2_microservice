@@ -5,7 +5,10 @@ import com.p2plending.payment.dto.request.AddBankRequest;
 import com.p2plending.payment.dto.request.DepositCallbackRequest;
 import com.p2plending.payment.dto.response.LinkedBankResponse;
 import com.p2plending.payment.dto.response.TransactionResponse;
+import com.p2plending.payment.dto.response.SystemTransactionResponse;
 import com.p2plending.payment.dto.response.WalletResponse;
+import com.p2plending.payment.domain.enums.TransactionStatus;
+import com.p2plending.payment.domain.enums.TransactionType;
 import com.p2plending.payment.service.LinkedBankService;
 import com.p2plending.payment.service.TikluyClient;
 import com.p2plending.payment.service.WalletService;
@@ -16,8 +19,10 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.data.domain.Page;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.format.annotation.DateTimeFormat;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -168,6 +173,35 @@ public class InternalPaymentController {
             return ResponseEntity.status(401).build();
         }
         return ResponseEntity.ok(walletService.getTransactions(userId, page, size));
+    }
+
+    /** CMS xem toàn bộ giao dịch nạp/rút của hệ thống. */
+    @GetMapping("/internal/payment/transactions")
+    public ResponseEntity<Page<SystemTransactionResponse>> getSystemMoneyTransactions(
+            @RequestHeader(value = "X-Internal-Secret", required = false) String secret,
+            @RequestParam(required = false) TransactionType type,
+            @RequestParam(required = false) TransactionStatus status,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(required = false) String search,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        if (!appProperties.getInternal().getSecret().equals(secret)) {
+            return ResponseEntity.status(401).build();
+        }
+        if (type != null && type != TransactionType.DEPOSIT && type != TransactionType.WITHDRAW) {
+            return ResponseEntity.badRequest().build();
+        }
+        int safePage = Math.max(page, 0);
+        int safeSize = Math.min(Math.max(size, 1), 100);
+        return ResponseEntity.ok(walletService.getSystemMoneyTransactions(
+                type,
+                status,
+                from != null ? from.atStartOfDay() : null,
+                to != null ? to.plusDays(1).atStartOfDay() : null,
+                search,
+                safePage,
+                safeSize));
     }
 
     /** Khóa số tiền khi user đặt offer đầu tư */

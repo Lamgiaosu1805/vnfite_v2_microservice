@@ -10,6 +10,7 @@ import com.p2plending.cms.dto.response.PagedResponse;
 import com.p2plending.cms.dto.response.UserSummaryResponse;
 import com.p2plending.cms.dto.response.WalletSummaryResponse;
 import com.p2plending.cms.dto.response.WalletTransactionSummaryResponse;
+import com.p2plending.cms.dto.response.SystemTransactionSummaryResponse;
 import com.p2plending.cms.exception.SourceServiceException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -28,7 +29,9 @@ import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeFormatterBuilder;
 import java.time.temporal.ChronoField;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 @Service
@@ -152,6 +155,71 @@ public class SourceServiceClient {
             log.warn("Could not fetch wallet transactions for customer {}: {}", userId, ex.getMessage());
             return PagedResponse.empty(page, size);
         }
+    }
+
+    public PagedResponse<SystemTransactionSummaryResponse> getSystemMoneyTransactions(
+            String type,
+            String status,
+            LocalDate from,
+            LocalDate to,
+            String search,
+            int page,
+            int size) {
+        URI uri = UriComponentsBuilder.fromHttpUrl(paymentServiceUrl)
+                .path("/internal/payment/transactions")
+                .queryParamIfPresent("type", Optional.ofNullable(type))
+                .queryParamIfPresent("status", Optional.ofNullable(status))
+                .queryParamIfPresent("from", Optional.ofNullable(from).map(LocalDate::toString))
+                .queryParamIfPresent("to", Optional.ofNullable(to).map(LocalDate::toString))
+                .queryParamIfPresent("search", Optional.ofNullable(search).filter(value -> !value.isBlank()))
+                .queryParam("page", page)
+                .queryParam("size", size)
+                .build()
+                .toUri();
+
+        JsonNode pageNode = exchangeForJson(uri, HttpMethod.GET, null);
+        Map<String, UserSummaryResponse> users = new HashMap<>();
+        List<SystemTransactionSummaryResponse> content = new ArrayList<>();
+        pageNode.path("content").forEach(node -> {
+            String userId = text(node, "userId");
+            UserSummaryResponse user = null;
+            if (userId != null) {
+                user = users.computeIfAbsent(userId, id -> {
+                    try {
+                        return getUser(id);
+                    } catch (Exception ex) {
+                        log.warn("Could not resolve customer profile for transaction userId={}: {}", id, ex.getMessage());
+                        return null;
+                    }
+                });
+            }
+            content.add(SystemTransactionSummaryResponse.builder()
+                    .id(text(node, "id"))
+                    .userId(userId)
+                    .customerName(user != null && user.getFullName() != null
+                            ? user.getFullName() : user != null ? user.getPhone() : null)
+                    .customerPhone(user != null ? user.getPhone() : null)
+                    .walletId(text(node, "walletId"))
+                    .vnfAccountNo(text(node, "vnfAccountNo"))
+                    .type(text(node, "type"))
+                    .amount(decimal(node, "amount"))
+                    .status(text(node, "status"))
+                    .description(text(node, "description"))
+                    .referenceId(text(node, "referenceId"))
+                    .externalRef(text(node, "externalRef"))
+                    .balanceAfter(decimal(node, "balanceAfter"))
+                    .createdAt(dateTime(node, "createdAt"))
+                    .build());
+        });
+
+        return PagedResponse.<SystemTransactionSummaryResponse>builder()
+                .content(content)
+                .page(pageNode.has("page") ? pageNode.path("page").asInt() : pageNode.path("number").asInt(page))
+                .size(pageNode.path("size").asInt(size))
+                .totalElements(pageNode.path("totalElements").asLong())
+                .totalPages(pageNode.path("totalPages").asInt())
+                .last(pageNode.path("last").asBoolean(true))
+                .build();
     }
 
     // ─── Stats ────────────────────────────────────────────────────────────────

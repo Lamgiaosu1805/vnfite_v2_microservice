@@ -8,6 +8,7 @@ import com.p2plending.payment.domain.enums.TransactionType;
 import com.p2plending.payment.domain.repository.WalletRepository;
 import com.p2plending.payment.domain.repository.WalletTransactionRepository;
 import com.p2plending.payment.dto.response.TransactionResponse;
+import com.p2plending.payment.dto.response.SystemTransactionResponse;
 import com.p2plending.payment.dto.response.WalletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -22,7 +23,11 @@ import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+import java.time.LocalDateTime;
 
 @Service
 @RequiredArgsConstructor
@@ -124,6 +129,54 @@ public class WalletService {
         int from = Math.min((int) pageable.getOffset(), ledger.size());
         int to = Math.min(from + pageable.getPageSize(), ledger.size());
         return new PageImpl<>(ledger.subList(from, to), pageable, ledger.size());
+    }
+
+    @Transactional(readOnly = true)
+    public Page<SystemTransactionResponse> getSystemMoneyTransactions(
+            TransactionType type,
+            TransactionStatus status,
+            LocalDateTime fromTime,
+            LocalDateTime toTime,
+            String search,
+            int page,
+            int size) {
+        String normalizedSearch = search == null || search.isBlank() ? null : search.trim();
+        PageRequest pageable = PageRequest.of(page, size);
+        Page<WalletTransaction> transactions = transactionRepository.findSystemMoneyTransactions(
+                List.of(TransactionType.DEPOSIT, TransactionType.WITHDRAW),
+                type,
+                status,
+                fromTime,
+                toTime,
+                normalizedSearch,
+                pageable);
+
+        Map<String, Wallet> wallets = walletRepository.findAllById(
+                        transactions.getContent().stream()
+                                .map(WalletTransaction::getWalletId)
+                                .distinct()
+                                .toList())
+                .stream()
+                .filter(wallet -> !wallet.isDeleted())
+                .collect(Collectors.toMap(Wallet::getId, Function.identity()));
+
+        return transactions.map(transaction -> {
+            Wallet wallet = wallets.get(transaction.getWalletId());
+            return SystemTransactionResponse.builder()
+                    .id(transaction.getId())
+                    .userId(wallet != null ? wallet.getUserId() : null)
+                    .walletId(transaction.getWalletId())
+                    .vnfAccountNo(wallet != null ? wallet.getVnfAccountNo() : null)
+                    .type(transaction.getType())
+                    .amount(transaction.getAmount())
+                    .status(transaction.getStatus())
+                    .description(transaction.getDescription())
+                    .referenceId(transaction.getReferenceId())
+                    .externalRef(transaction.getExternalRef())
+                    .balanceAfter(transaction.getBalanceAfter())
+                    .createdAt(transaction.getCreatedAt())
+                    .build();
+        });
     }
 
     // ─── Deposit callback from TIKLUY ────────────────────────────────────────
