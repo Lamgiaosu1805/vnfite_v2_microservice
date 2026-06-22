@@ -52,6 +52,7 @@ INSERT INTO loan_db.loan_requests
    status, funded_amount,
    monthly_income, occupation, current_address,
    ref1_full_name, ref1_relationship, ref1_phone,
+   ref2_full_name, ref2_relationship, ref2_phone,
    loan_seq,
    is_deleted, created_at, updated_at)
 SELECT
@@ -78,9 +79,17 @@ SELECT
   CAST(NULLIF(TRIM(l.MONTHLY_INCOME), '') AS DECIMAL(15,2)),
   NULLIF(TRIM(l.WORK_UNIT), ''),
   NULLIF(TRIM(l.CURRENT_ADDRESS), ''),
-  NULLIF(TRIM(l.SURNAME_AND_NAME_OF_REFERENT), ''),
-  NULLIF(TRIM(l.RELATIONSHIP_WITH_REFERENT), ''),
-  LEFT(NULLIF(TRIM(l.PHONE_OF_REFERENT), ''), 20),
+  -- ref1: lấy phần TRƯỚC dấu " - " đầu tiên (hoặc toàn bộ nếu không có dấu " - ")
+  NULLIF(TRIM(SUBSTRING_INDEX(NULLIF(TRIM(l.SURNAME_AND_NAME_OF_REFERENT), ''), ' - ', 1)), ''),
+  NULLIF(TRIM(SUBSTRING_INDEX(NULLIF(TRIM(l.RELATIONSHIP_WITH_REFERENT), ''), ' - ', 1)), ''),
+  LEFT(NULLIF(TRIM(SUBSTRING_INDEX(NULLIF(TRIM(l.PHONE_OF_REFERENT), ''), ' - ', 1)), ''), 20),
+  -- ref2: lấy phần SAU dấu " - " đầu tiên (NULL nếu không có dấu " - ")
+  CASE WHEN l.SURNAME_AND_NAME_OF_REFERENT   LIKE '% - %'
+    THEN NULLIF(TRIM(SUBSTRING_INDEX(l.SURNAME_AND_NAME_OF_REFERENT, ' - ', -1)), '') END,
+  CASE WHEN l.RELATIONSHIP_WITH_REFERENT LIKE '% - %'
+    THEN NULLIF(TRIM(SUBSTRING_INDEX(l.RELATIONSHIP_WITH_REFERENT,  ' - ', -1)), '') END,
+  CASE WHEN l.PHONE_OF_REFERENT LIKE '% - %'
+    THEN LEFT(NULLIF(TRIM(SUBSTRING_INDEX(l.PHONE_OF_REFERENT, ' - ', -1)), ''), 20) END,
   -- loan_seq: extract số từ LOAN_CODE (VNF000003 → 3)
   CAST(SUBSTR(l.LOAN_CODE, 4) AS UNSIGNED),
   CASE WHEN l.IS_DELETED = 'Y' THEN 1 ELSE 0 END,
@@ -93,9 +102,15 @@ WHERE l.IS_DELETED = 'N'
   AND l.AMOUNT IS NOT NULL
   AND l.PERIOD IS NOT NULL
 ON DUPLICATE KEY UPDATE
-  status        = VALUES(status),
-  funded_amount = VALUES(funded_amount),
-  updated_at    = VALUES(updated_at);
+  status            = VALUES(status),
+  funded_amount     = VALUES(funded_amount),
+  ref1_full_name    = VALUES(ref1_full_name),
+  ref1_relationship = VALUES(ref1_relationship),
+  ref1_phone        = VALUES(ref1_phone),
+  ref2_full_name    = VALUES(ref2_full_name),
+  ref2_relationship = VALUES(ref2_relationship),
+  ref2_phone        = VALUES(ref2_phone),
+  updated_at        = VALUES(updated_at);
 ENDSQL
 
 LOANS=$($MYSQL APP_V2 --skip-column-names -e "SELECT COUNT(*) FROM loan_db.loan_requests;" 2>/dev/null)
