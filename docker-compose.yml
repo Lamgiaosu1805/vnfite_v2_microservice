@@ -88,6 +88,8 @@ services:
       dockerfile: Dockerfile
     container_name: p2p-auth-service
     environment:
+      TZ: Asia/Ho_Chi_Minh
+      JAVA_TOOL_OPTIONS: -Duser.timezone=Asia/Ho_Chi_Minh
       MYSQL_HOST: ${MYSQL_HOST:-mysql}
       MYSQL_PORT: ${MYSQL_PORT:-3306}
       AUTH_DB: ${AUTH_DB:-auth_db}
@@ -135,6 +137,8 @@ services:
       dockerfile: Dockerfile
     container_name: p2p-loan-service
     environment:
+      TZ: Asia/Ho_Chi_Minh
+      JAVA_TOOL_OPTIONS: -Duser.timezone=Asia/Ho_Chi_Minh
       MYSQL_HOST: ${MYSQL_HOST:-mysql}
       MYSQL_PORT: ${MYSQL_PORT:-3306}
       LOAN_DB: ${LOAN_DB:-loan_db}
@@ -175,6 +179,8 @@ services:
       dockerfile: Dockerfile
     container_name: p2p-matching-service
     environment:
+      TZ: Asia/Ho_Chi_Minh
+      JAVA_TOOL_OPTIONS: -Duser.timezone=Asia/Ho_Chi_Minh
       MYSQL_HOST: ${MYSQL_HOST:-mysql}
       MYSQL_PORT: ${MYSQL_PORT:-3306}
       MATCHING_DB: ${MATCHING_DB:-matching_db}
@@ -204,6 +210,8 @@ services:
       dockerfile: Dockerfile
     container_name: p2p-cms-service
     environment:
+      TZ: Asia/Ho_Chi_Minh
+      JAVA_TOOL_OPTIONS: -Duser.timezone=Asia/Ho_Chi_Minh
       MYSQL_HOST: ${MYSQL_HOST:-mysql}
       MYSQL_PORT: ${MYSQL_PORT:-3306}
       CMS_DB: ${CMS_DB:-cms_db}
@@ -240,6 +248,8 @@ services:
       dockerfile: Dockerfile
     container_name: p2p-notification-service
     environment:
+      TZ: Asia/Ho_Chi_Minh
+      JAVA_TOOL_OPTIONS: -Duser.timezone=Asia/Ho_Chi_Minh
       MYSQL_HOST: ${MYSQL_HOST:-mysql}
       MYSQL_PORT: ${MYSQL_PORT:-3306}
       NOTIFICATION_DB: ${NOTIFICATION_DB:-notification_db}
@@ -278,6 +288,8 @@ services:
       dockerfile: Dockerfile
     container_name: p2p-payment-service
     environment:
+      TZ: Asia/Ho_Chi_Minh
+      JAVA_TOOL_OPTIONS: -Duser.timezone=Asia/Ho_Chi_Minh
       MYSQL_HOST: ${MYSQL_HOST:-mysql}
       MYSQL_PORT: ${MYSQL_PORT:-3306}
       PAYMENT_DB: ${PAYMENT_DB:-payment_db}
@@ -318,6 +330,8 @@ services:
       dockerfile: Dockerfile
     container_name: p2p-credit-service
     environment:
+      TZ: Asia/Ho_Chi_Minh
+      JAVA_TOOL_OPTIONS: -Duser.timezone=Asia/Ho_Chi_Minh
       MYSQL_HOST: ${MYSQL_HOST:-mysql}
       MYSQL_PORT: ${MYSQL_PORT:-3306}
       CREDIT_DB: ${CREDIT_DB:-credit_db}

@@ -249,7 +249,7 @@ Seed users in dev/test use password `Test@1234`; see `CLAUDE.md` for the full li
 
 ## Timezone
 
-Use `Asia/Ho_Chi_Minh` consistently.
+Use `Asia/Ho_Chi_Minh` consistently across JVM default timezone, Jackson, Hibernate/JDBC, Docker runtime, scheduler logic, and frontend formatting. Do not depend on the host or device timezone. Display dates as zero-padded `dd/MM/yyyy` (for example `22/01/2021`) and date-times as `HH:mm:ss dd/MM/yyyy` when seconds are required. Treat offset-less backend `LocalDateTime` values as Vietnam time (`+07:00`); format `LocalDate` values directly so timezone conversion cannot shift the calendar date. `Instant`/epoch remains appropriate for JWT, TTL, and signatures, but convert it to Vietnam time for display.
 
 ## Before Finishing Backend Changes
 

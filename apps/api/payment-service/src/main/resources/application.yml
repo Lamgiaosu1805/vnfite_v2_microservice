@@ -2,6 +2,9 @@ spring:
   application:
     name: payment-service
 
+  jackson:
+    time-zone: Asia/Ho_Chi_Minh
+
   datasource:
     url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/${PAYMENT_DB:payment_db}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Ho_Chi_Minh&characterEncoding=UTF-8
     username: ${DB_USERNAME:p2p_user}
