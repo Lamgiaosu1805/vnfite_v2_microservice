@@ -1,0 +1,72 @@
+name: Fix Live — Flyway V26 + restart loan-service
+
+on:
+  workflow_dispatch:
+
+env:
+  SERVER: root@42.113.122.118
+  APP_DIR: /root/p2p-lending
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  fix:
+    name: Fix Flyway V26 on Live
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Setup SSH
+        env:
+          SSH_KEY_B64: ${{ secrets.SSH_PRIVATE_KEY_LIVE }}
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s' "$SSH_KEY_B64" | tr -d ' \n\r' | base64 -d > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H 42.113.122.118 >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Check Flyway V26 status
+        run: |
+          ssh -i ~/.ssh/deploy_key root@42.113.122.118 \
+            'source /root/p2p-lending/.env && mysql -u"${DB_USERNAME}" -p"${DB_PASSWORD}" -h 127.0.0.1 loan_db -e "SELECT version, description, success, installed_on FROM flyway_schema_history WHERE version IN (25,26,27) ORDER BY version;"'
+
+      - name: Check loan_requests columns
+        run: |
+          ssh -i ~/.ssh/deploy_key root@42.113.122.118 \
+            'source /root/p2p-lending/.env && mysql -u"${DB_USERNAME}" -p"${DB_PASSWORD}" -h 127.0.0.1 loan_db -e "SHOW COLUMNS FROM loan_requests LIKE '"'"'appraisal%'"'"';"'
+
+      - name: Fix V26 if needed (add missing columns + mark success)
+        run: |
+          ssh -i ~/.ssh/deploy_key root@42.113.122.118 << 'ENDSSH'
+            source /root/p2p-lending/.env
+            STATUS=$(mysql -u"${DB_USERNAME}" -p"${DB_PASSWORD}" -h 127.0.0.1 loan_db -sN \
+              -e "SELECT success FROM flyway_schema_history WHERE version='26' LIMIT 1;")
+            if [ "$STATUS" = "0" ]; then
+              echo "V26 failed — running repair..."
+              mysql -u"${DB_USERNAME}" -p"${DB_PASSWORD}" -h 127.0.0.1 loan_db << 'SQL'
+          ALTER TABLE loan_requests
+              ADD COLUMN IF NOT EXISTS appraisal_fee    DECIMAL(15,2) NULL AFTER disbursed_by,
+              ADD COLUMN IF NOT EXISTS vat_amount       DECIMAL(15,2) NULL AFTER appraisal_fee,
+              ADD COLUMN IF NOT EXISTS total_fee        DECIMAL(15,2) NULL AFTER vat_amount,
+              ADD COLUMN IF NOT EXISTS net_disbursement DECIMAL(15,2) NULL AFTER total_fee;
+          UPDATE flyway_schema_history SET success = 1 WHERE version = '26';
+          SQL
+              echo "Repair done."
+            elif [ -z "$STATUS" ]; then
+              echo "V26 not found in flyway_schema_history — may not have been attempted yet."
+            else
+              echo "V26 already success=$STATUS — no repair needed."
+            fi
+          ENDSSH
+
+      - name: Restart loan-service
+        run: |
+          ssh -i ~/.ssh/deploy_key root@42.113.122.118 \
+            'cd /root/p2p-lending && docker compose restart loan-service'
+
+      - name: Wait 30s for startup
+        run: sleep 30
+
+      - name: Check loan-service logs
+        run: |
+          ssh -i ~/.ssh/deploy_key root@42.113.122.118 \
+            'cd /root/p2p-lending && docker compose logs loan-service --tail=50'
