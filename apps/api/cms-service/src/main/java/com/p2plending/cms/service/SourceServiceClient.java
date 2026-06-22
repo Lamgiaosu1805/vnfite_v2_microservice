@@ -586,7 +586,7 @@ public class SourceServiceClient {
             log.error("Cannot connect to source service {}: {} — {}", source, ex.getClass().getSimpleName(), ex.getMessage());
             throw new SourceServiceException(
                     org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE,
-                    "Không thể kết nối đến service nguồn (" + ex.getMessage() + ")");
+                    "Không thể kết nối với máy chủ. Vui lòng thử lại.");
         }
 
         String body = response.getBody();
