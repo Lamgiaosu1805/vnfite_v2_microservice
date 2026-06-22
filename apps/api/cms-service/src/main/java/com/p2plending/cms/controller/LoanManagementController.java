@@ -133,10 +133,11 @@ public class LoanManagementController {
 
     /**
      * POST /cms/loans/{loanId}/disburse
-     * OPS giải ngân vốn cho người gọi vốn: AWAITING_DISBURSEMENT → DISBURSED.
+     * ADMIN giải ngân vốn cho người gọi vốn: AWAITING_DISBURSEMENT → DISBURSED.
      * Sinh lịch trả nợ từ ngày giải ngân + bắn loan.disbursed.
      */
     @PostMapping("/{loanId}/disburse")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN')")
     public ResponseEntity<LoanSummaryResponse> disburse(
             @PathVariable String loanId,
             @AuthenticationPrincipal CmsPrincipal operator) {
