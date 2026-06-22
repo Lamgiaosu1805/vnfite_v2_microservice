@@ -28,6 +28,10 @@ public class LoanPublicResponse {
     private LoanStatus status;
     private BigDecimal fundedAmount;
     private BigDecimal remainingAmount;
+    private BigDecimal appraisalFee;
+    private BigDecimal vatAmount;
+    private BigDecimal totalFee;
+    private BigDecimal netDisbursement;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 

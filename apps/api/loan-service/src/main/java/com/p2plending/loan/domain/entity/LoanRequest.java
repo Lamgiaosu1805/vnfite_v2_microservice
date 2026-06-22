@@ -177,6 +177,22 @@ public class LoanRequest {
     @Column(name = "disbursed_by", length = 100)
     private String disbursedBy;
 
+    /** Phí thẩm định hồ sơ — snapshot tại thời điểm giải ngân. */
+    @Column(name = "appraisal_fee", precision = 15, scale = 2)
+    private BigDecimal appraisalFee;
+
+    /** Thuế VAT trên tổng phí. */
+    @Column(name = "vat_amount", precision = 15, scale = 2)
+    private BigDecimal vatAmount;
+
+    /** Tổng phí = appraisal_fee + vat_amount. */
+    @Column(name = "total_fee", precision = 15, scale = 2)
+    private BigDecimal totalFee;
+
+    /** Số tiền thực nhận = amount - total_fee. */
+    @Column(name = "net_disbursement", precision = 15, scale = 2)
+    private BigDecimal netDisbursement;
+
     @Column(nullable = false)
     @Builder.Default
     private boolean isDeleted = false;

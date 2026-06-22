@@ -55,6 +55,10 @@ public class LoanResponse {
     private LocalDateTime reviewedAt;
     private String reviewedBy;
     private LocalDateTime disbursedAt;
+    private BigDecimal appraisalFee;
+    private BigDecimal vatAmount;
+    private BigDecimal totalFee;
+    private BigDecimal netDisbursement;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private List<LoanOfferResponse> offers;

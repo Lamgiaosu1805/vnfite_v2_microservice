@@ -84,6 +84,7 @@ public class LoanService {
     private final ContractService        contractService;
     private final AuthServiceClient      authServiceClient;
     private final PaymentServiceClient   paymentServiceClient;
+    private final LoanFeeConfigService   loanFeeConfigService;
     private final CacheManager           cacheManager;
 
     /** Số ngày một khoản được phép ở trạng thái ACTIVE để gọi vốn trước khi hết hạn & hoàn tiền. */
@@ -324,10 +325,15 @@ public class LoanService {
             totalDisbursed = totalDisbursed.add(offer.getAmount());
         }
 
-        // Credit toàn bộ tiền giải ngân vào ví VNF của người gọi vốn.
+        // Tính và ghi phí thẩm định + VAT vào khoản; credit số tiền sau khi trừ phí.
+        BigDecimal netAmount = loanFeeConfigService.applyFeesToLoan(loan, totalDisbursed);
+        loanRequestRepository.save(loan);
+
+        // Credit tiền sau khi trừ phí vào ví VNF của người gọi vốn.
         // Người gọi vốn sau đó tự rút về tài khoản ngân hàng qua luồng withdraw.
-        paymentServiceClient.creditBorrower(loan.getBorrowerId(), totalDisbursed,
-                "Nhận tiền giải ngân khoản vay " + loan.getLoanCode(),
+        paymentServiceClient.creditBorrower(loan.getBorrowerId(), netAmount,
+                "Nhận tiền giải ngân khoản vay " + loan.getLoanCode()
+                + " (đã trừ phí thẩm định " + loan.getTotalFee() + " VNĐ)",
                 "CREDIT-BORROWER-" + loanId);
 
         List<String> investorIds = acceptedOffers.stream()
@@ -657,6 +663,18 @@ public class LoanService {
             });
         }
 
+        // Nếu chưa giải ngân (appraisalFee còn null), trả về ước tính phí
+        // để người gọi vốn thấy trước khi xác nhận điều khoản (AWAITING_BORROWER_APPROVAL).
+        if (loan.getAppraisalFee() == null && loan.getAmount() != null) {
+            try {
+                var est = loanFeeConfigService.estimateFees(loan.getAmount());
+                response.setAppraisalFee(est.appraisalFee());
+                response.setVatAmount(est.vatAmount());
+                response.setTotalFee(est.totalFee());
+                response.setNetDisbursement(est.netDisbursement());
+            } catch (Exception ignored) { /* không block response nếu fee config lỗi */ }
+        }
+
         if (includeOffers) {
             List<LoanOfferResponse> offers = loanOfferRepository
                     .findByLoanRequestId(loan.getId()).stream()
@@ -690,6 +708,10 @@ public class LoanService {
                 .status(loan.getStatus())
                 .fundedAmount(loan.getFundedAmount())
                 .remainingAmount(loan.getRemainingAmount())
+                .appraisalFee(loan.getAppraisalFee())
+                .vatAmount(loan.getVatAmount())
+                .totalFee(loan.getTotalFee())
+                .netDisbursement(loan.getNetDisbursement())
                 .createdAt(loan.getCreatedAt())
                 .updatedAt(loan.getUpdatedAt())
                 // Người tham chiếu — không chứa PII nhạy cảm, phone được che

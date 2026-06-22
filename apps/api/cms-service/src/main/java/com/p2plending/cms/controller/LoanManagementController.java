@@ -16,6 +16,8 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Map;
+
 @RestController
 @RequestMapping("/cms/loans")
 @RequiredArgsConstructor
@@ -181,5 +183,21 @@ public class LoanManagementController {
             @Valid @RequestBody LoanActionRequest req,
             @AuthenticationPrincipal CmsPrincipal reviewer) {
         return ResponseEntity.ok(loanService.reject(loanId, req, reviewer));
+    }
+
+    // ── Fee Config ────────────────────────────────────────────────────────────
+
+    @GetMapping("/fee-config")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN')")
+    public ResponseEntity<JsonNode> getFeeConfig() {
+        return ResponseEntity.ok(loanService.getFeeConfigs());
+    }
+
+    @PutMapping("/fee-config")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN')")
+    public ResponseEntity<JsonNode> updateFeeConfig(
+            @RequestBody Map<String, Object> body,
+            @AuthenticationPrincipal CmsPrincipal admin) {
+        return ResponseEntity.ok(loanService.upsertFeeConfig(body, admin.username()));
     }
 }

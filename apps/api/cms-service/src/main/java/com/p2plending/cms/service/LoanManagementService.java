@@ -228,4 +228,12 @@ public class LoanManagementService {
             return null;
         }
     }
+
+    public JsonNode getFeeConfigs() {
+        return sourceServiceClient.getFeeConfigs();
+    }
+
+    public JsonNode upsertFeeConfig(java.util.Map<String, Object> body, String cmsUsername) {
+        return sourceServiceClient.upsertFeeConfig(body, cmsUsername);
+    }
 }
