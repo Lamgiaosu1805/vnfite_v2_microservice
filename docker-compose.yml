@@ -105,6 +105,15 @@ services:
       VNF_OTP_SERVICE_URL: ${VNF_OTP_SERVICE_URL:-}
       VNF_OTP_SERVICE_PATH: ${VNF_OTP_SERVICE_PATH:-/common/generate-otp-app-v2}
       DEMO_EXCLUDED_USER_IDS: ${DEMO_EXCLUDED_USER_IDS:-}
+      # VNPT eKYC — backend lấy token, app không giữ username/password
+      VNPT_EKYC_TOKEN_URL: ${VNPT_EKYC_TOKEN_URL:-https://api.idg.vnpt.vn/auth/oauth/token}
+      VNPT_EKYC_USERNAME: ${VNPT_EKYC_USERNAME:-}
+      VNPT_EKYC_PASSWORD: ${VNPT_EKYC_PASSWORD:-}
+      VNPT_EKYC_TOKEN_ID: ${VNPT_EKYC_TOKEN_ID:-}
+      VNPT_EKYC_TOKEN_KEY: ${VNPT_EKYC_TOKEN_KEY:-}
+      # Ảnh KYC: live đặt file-manager để upload thật & lấy fileId
+      APP_IMAGE_STORAGE_PROVIDER: ${APP_IMAGE_STORAGE_PROVIDER:-mock}
+      FILE_MANAGER_URL: ${FILE_MANAGER_URL:-https://service.vnfite.com.vn/file-manager/v2}
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
     extra_hosts:
       - "host.docker.internal:host-gateway"

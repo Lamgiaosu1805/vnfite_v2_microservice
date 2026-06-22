@@ -23,11 +23,13 @@ import com.p2plending.auth.dto.response.DeviceSessionResponse;
 import com.p2plending.auth.dto.response.KycSubmissionResponse;
 import com.p2plending.auth.dto.response.RegisterInitResponse;
 import com.p2plending.auth.dto.response.UserProfileResponse;
+import com.p2plending.auth.dto.response.VnptEkycTokenResponse;
 import com.p2plending.auth.service.AuthService;
 import com.p2plending.auth.service.ChangePasswordService;
 import com.p2plending.auth.service.FcmTokenService;
 import com.p2plending.auth.service.KycService;
 import com.p2plending.auth.service.PasswordResetService;
+import com.p2plending.auth.service.VnptEkycTokenService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -51,6 +53,7 @@ public class AuthController {
     private final PasswordResetService  passwordResetService;
     private final ChangePasswordService changePasswordService;
     private final FcmTokenService       fcmTokenService;
+    private final VnptEkycTokenService  vnptEkycTokenService;
 
     /**
      * POST /api/auth/check-phone
@@ -291,6 +294,17 @@ public class AuthController {
         String userId = authService.getUserIdByPhone(principal.getUsername());
         changePasswordService.verifyChange(userId, principal.getUsername(), request);
         return ResponseEntity.ok(Map.of("message", "Mật khẩu đã được thay đổi thành công. Vui lòng đăng nhập lại."));
+    }
+
+    /**
+     * GET /api/auth/ekyc/vnpt-token
+     * Lấy phiên định danh VNPT (accessToken/tokenId/tokenKey) cho mobile khởi tạo SDK eKYC.
+     * username/password VNPT giữ ở backend, không lộ ra app.
+     */
+    @GetMapping("/ekyc/vnpt-token")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<VnptEkycTokenResponse> vnptEkycToken() {
+        return ResponseEntity.ok(vnptEkycTokenService.getToken());
     }
 
     /**
