@@ -30,4 +30,21 @@ public class LoanPublicResponse {
     private BigDecimal remainingAmount;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+
+    // Thông tin người gọi vốn (đã che một phần để bảo vệ thông tin cá nhân)
+    private String borrowerFullName;
+    private String borrowerPhone;
+    private String borrowerCccd;
+
+    // Người tham chiếu 1
+    private String ref1FullName;
+    private String ref1Relationship;
+    private String ref1Phone;
+    private String ref1Address;
+
+    // Người tham chiếu 2
+    private String ref2FullName;
+    private String ref2Relationship;
+    private String ref2Phone;
+    private String ref2Address;
 }

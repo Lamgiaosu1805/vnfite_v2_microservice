@@ -48,6 +48,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
@@ -302,7 +303,7 @@ public class LoanService {
         }
 
         loan.setStatus(LoanStatus.DISBURSED);
-        loan.setDisbursedAt(LocalDateTime.now());
+        loan.setDisbursedAt(LocalDateTime.now(ZoneId.of("Asia/Ho_Chi_Minh")));
         loan.setDisbursedBy(disbursedBy);
         loanRequestRepository.save(loan);
 
@@ -344,7 +345,7 @@ public class LoanService {
     /** ID các khoản ACTIVE đã quá hạn gọi vốn — đọc riêng để xử lý từng khoản trong transaction độc lập. */
     @Transactional(readOnly = true)
     public List<String> findExpiredActiveLoanIds() {
-        LocalDateTime cutoff = LocalDateTime.now().minusDays(fundingWindowDays);
+        LocalDateTime cutoff = LocalDateTime.now(ZoneId.of("Asia/Ho_Chi_Minh")).minusDays(fundingWindowDays);
         return loanRequestRepository
                 .findByStatusAndActivatedAtBeforeAndIsDeletedFalse(LoanStatus.ACTIVE, cutoff)
                 .stream().map(LoanRequest::getId).toList();
@@ -353,7 +354,7 @@ public class LoanService {
     /** ID các khoản FUNDED kẹt — người gọi vốn không ký khế ước trong thời hạn cho phép. */
     @Transactional(readOnly = true)
     public List<String> findStuckFundedLoanIds() {
-        LocalDateTime cutoff = LocalDateTime.now().minusDays(signingWindowDays);
+        LocalDateTime cutoff = LocalDateTime.now(ZoneId.of("Asia/Ho_Chi_Minh")).minusDays(signingWindowDays);
         return loanRequestRepository
                 .findByStatusAndFundedAtBeforeAndIsDeletedFalse(LoanStatus.FUNDED, cutoff)
                 .stream().map(LoanRequest::getId).toList();
@@ -412,7 +413,7 @@ public class LoanService {
                 .interestRate(interestRate)
                 .rejectionReason(rejectionReason)
                 .reviewedBy(reviewedBy)
-                .reviewedAt(LocalDateTime.now())
+                .reviewedAt(LocalDateTime.now(ZoneId.of("Asia/Ho_Chi_Minh")))
                 .build();
         applyLoanReview(event);
         return getLoanById(loanId);
@@ -427,7 +428,7 @@ public class LoanService {
                         event.getLoanId(), loan.getStatus());
                 return;
             }
-            loan.setReviewedAt(event.getReviewedAt() != null ? event.getReviewedAt() : LocalDateTime.now());
+            loan.setReviewedAt(event.getReviewedAt() != null ? event.getReviewedAt() : LocalDateTime.now(ZoneId.of("Asia/Ho_Chi_Minh")));
             loan.setReviewedBy(event.getReviewedBy());
 
             if ("APPROVE".equalsIgnoreCase(event.getAction())) {
@@ -482,7 +483,7 @@ public class LoanService {
         loan.setProposedAmount(proposedAmount);
         loan.setProposedInterestRate(proposedInterestRate);
         loan.setProposedBy(proposedBy);
-        loan.setProposedAt(LocalDateTime.now());
+        loan.setProposedAt(LocalDateTime.now(ZoneId.of("Asia/Ho_Chi_Minh")));
         loan.setAppraisalNote(note);
         loan.setStatus(LoanStatus.PENDING_APPROVAL);
         loanRequestRepository.save(loan);
@@ -517,7 +518,7 @@ public class LoanService {
         }
 
         loan.setStatus(LoanStatus.ACTIVE);
-        loan.setActivatedAt(LocalDateTime.now());
+        loan.setActivatedAt(LocalDateTime.now(ZoneId.of("Asia/Ho_Chi_Minh")));
         loanRequestRepository.save(loan);
         kafkaProducerService.publishLoanCreated(loan);
 
@@ -691,6 +692,15 @@ public class LoanService {
                 .remainingAmount(loan.getRemainingAmount())
                 .createdAt(loan.getCreatedAt())
                 .updatedAt(loan.getUpdatedAt())
+                // Người tham chiếu — không chứa PII nhạy cảm, phone được che
+                .ref1FullName(loan.getRef1FullName())
+                .ref1Relationship(loan.getRef1Relationship())
+                .ref1Phone(maskPhone(loan.getRef1Phone()))
+                .ref1Address(loan.getRef1Address())
+                .ref2FullName(loan.getRef2FullName())
+                .ref2Relationship(loan.getRef2Relationship())
+                .ref2Phone(maskPhone(loan.getRef2Phone()))
+                .ref2Address(loan.getRef2Address())
                 .build();
 
         if (loan.getProductId() != null) {
@@ -699,7 +709,27 @@ public class LoanService {
                 response.setProductName(product.getName());
             });
         }
+
+        // Thông tin người gọi vốn: lấy từ auth-service, che phone và CCCD
+        authServiceClient.getUserById(loan.getBorrowerId()).ifPresent(user -> {
+            response.setBorrowerFullName(user.getFullName());
+            response.setBorrowerPhone(maskPhone(user.getPhone()));
+            response.setBorrowerCccd(maskCccd(user.getCccdNumber()));
+        });
+
         return response;
+    }
+
+    /** Che số điện thoại: giữ 3 đầu + 2 cuối, ẩn phần giữa. */
+    private static String maskPhone(String phone) {
+        if (phone == null || phone.length() < 6) return phone;
+        return phone.substring(0, 3) + "•••••" + phone.substring(phone.length() - 2);
+    }
+
+    /** Che số CCCD: giữ 3 đầu + 3 cuối, ẩn phần giữa. */
+    private static String maskCccd(String cccd) {
+        if (cccd == null || cccd.length() < 6) return cccd;
+        return cccd.substring(0, 3) + "••••••" + cccd.substring(cccd.length() - 3);
     }
 
     private boolean hasCmsRole(AuthenticatedUser caller) {
