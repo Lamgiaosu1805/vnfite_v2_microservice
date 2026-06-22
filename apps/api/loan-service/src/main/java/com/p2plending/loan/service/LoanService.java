@@ -84,7 +84,6 @@ public class LoanService {
     private final ContractService        contractService;
     private final AuthServiceClient      authServiceClient;
     private final PaymentServiceClient   paymentServiceClient;
-    private final LoanFeeConfigService   loanFeeConfigService;
     private final CacheManager           cacheManager;
 
     /** Số ngày một khoản được phép ở trạng thái ACTIVE để gọi vốn trước khi hết hạn & hoàn tiền. */
@@ -325,8 +324,11 @@ public class LoanService {
             totalDisbursed = totalDisbursed.add(offer.getAmount());
         }
 
-        // Tính và ghi phí thẩm định + VAT vào khoản; credit số tiền sau khi trừ phí.
-        BigDecimal netAmount = loanFeeConfigService.applyFeesToLoan(loan, totalDisbursed);
+        // Phí đã được tính và lưu tại bước propose — dùng trực tiếp.
+        // Nếu loan cũ chưa có fee (null), giải ngân toàn bộ không trừ phí.
+        BigDecimal netAmount = (loan.getNetDisbursement() != null)
+                ? loan.getNetDisbursement()
+                : totalDisbursed;
         loanRequestRepository.save(loan);
 
         // Credit tiền sau khi trừ phí vào ví VNF của người gọi vốn.
@@ -471,7 +473,7 @@ public class LoanService {
         @CacheEvict(value = CacheConfig.CACHE_LOAN_BY_ID, key = "#loanId")
     })
     public LoanResponse proposeLoan(String loanId, BigDecimal proposedAmount, BigDecimal proposedInterestRate,
-                                    String note, String proposedBy) {
+                                    BigDecimal appraisalFeeRate, String note, String proposedBy) {
         LoanRequest loan = findLoanOrThrow(loanId);
 
         if (loan.getStatus() != LoanStatus.PENDING_REVIEW) {
@@ -492,10 +494,25 @@ public class LoanService {
         loan.setProposedAt(LocalDateTime.now(ZoneId.of("Asia/Ho_Chi_Minh")));
         loan.setAppraisalNote(note);
         loan.setStatus(LoanStatus.PENDING_APPROVAL);
+
+        // Tính phí tại bước trình duyệt để hiển thị cho người gọi vốn trước khi xác nhận.
+        BigDecimal rate = (appraisalFeeRate != null && appraisalFeeRate.signum() > 0)
+                ? appraisalFeeRate : BigDecimal.ZERO;
+        loan.setAppraisalFeeRate(rate);
+        BigDecimal appraisalFee = proposedAmount.multiply(rate)
+                .divide(new java.math.BigDecimal("100"), 0, java.math.RoundingMode.HALF_UP);
+        BigDecimal vatAmount    = appraisalFee.multiply(new java.math.BigDecimal("0.10"))
+                .setScale(0, java.math.RoundingMode.HALF_UP);
+        BigDecimal totalFee     = appraisalFee.add(vatAmount);
+        loan.setAppraisalFee(appraisalFee);
+        loan.setVatAmount(vatAmount);
+        loan.setTotalFee(totalFee);
+        loan.setNetDisbursement(proposedAmount.subtract(totalFee).max(BigDecimal.ZERO));
+
         loanRequestRepository.save(loan);
 
-        log.info("Loan {} proposed by {} — amount={}, rate={}% → awaiting leadership approval",
-                loanId, proposedBy, proposedAmount, proposedInterestRate);
+        log.info("Loan {} proposed by {} — amount={}, rate={}%, feeRate={}% → awaiting leadership approval",
+                loanId, proposedBy, proposedAmount, proposedInterestRate, rate);
         return buildResponse(loan, false);
     }
 
@@ -663,17 +680,7 @@ public class LoanService {
             });
         }
 
-        // Nếu chưa giải ngân (appraisalFee còn null), trả về ước tính phí
-        // để người gọi vốn thấy trước khi xác nhận điều khoản (AWAITING_BORROWER_APPROVAL).
-        if (loan.getAppraisalFee() == null && loan.getAmount() != null) {
-            try {
-                var est = loanFeeConfigService.estimateFees(loan.getAmount());
-                response.setAppraisalFee(est.appraisalFee());
-                response.setVatAmount(est.vatAmount());
-                response.setTotalFee(est.totalFee());
-                response.setNetDisbursement(est.netDisbursement());
-            } catch (Exception ignored) { /* không block response nếu fee config lỗi */ }
-        }
+        // Phí được tính tại bước propose và lưu thẳng vào loan_requests.
 
         if (includeOffers) {
             List<LoanOfferResponse> offers = loanOfferRepository

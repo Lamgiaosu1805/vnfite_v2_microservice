@@ -142,7 +142,7 @@ public class LoanManagementService {
                         "Cần nhập kết quả tra CIC trước khi trình ban lãnh đạo."));
 
         return sourceServiceClient.proposeLoan(loanId, req.getProposedAmount(), req.getProposedInterestRate(),
-                req.getNote(), proposer != null ? proposer.username() : null);
+                req.getAppraisalFeeRate(), req.getNote(), proposer != null ? proposer.username() : null);
     }
 
     /**
@@ -229,11 +229,4 @@ public class LoanManagementService {
         }
     }
 
-    public JsonNode getFeeConfigs() {
-        return sourceServiceClient.getFeeConfigs();
-    }
-
-    public JsonNode upsertFeeConfig(java.util.Map<String, Object> body, String cmsUsername) {
-        return sourceServiceClient.upsertFeeConfig(body, cmsUsername);
-    }
 }

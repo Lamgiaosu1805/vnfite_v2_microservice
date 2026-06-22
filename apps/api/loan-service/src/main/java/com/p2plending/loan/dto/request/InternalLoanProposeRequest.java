@@ -23,6 +23,12 @@ public class InternalLoanProposeRequest {
     @Digits(integer = 3, fraction = 2)
     private BigDecimal proposedInterestRate;
 
+    /** % phí thẩm định (vd: 2.00 = 2%). Null hoặc 0 = không tính phí. */
+    @DecimalMin(value = "0.00", message = "Phí thẩm định không được âm")
+    @DecimalMax(value = "100.00", message = "Phí thẩm định không vượt 100%")
+    @Digits(integer = 3, fraction = 2)
+    private BigDecimal appraisalFeeRate;
+
     @Size(max = 1000)
     private String note;
 

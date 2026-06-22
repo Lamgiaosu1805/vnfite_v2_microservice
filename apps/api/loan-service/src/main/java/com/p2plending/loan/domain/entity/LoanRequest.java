@@ -57,6 +57,10 @@ public class LoanRequest {
     @Column(name = "proposed_interest_rate", precision = 5, scale = 2)
     private BigDecimal proposedInterestRate;
 
+    /** % phí thẩm định do thẩm định viên điền (vd: 2.00 = 2%). */
+    @Column(name = "appraisal_fee_rate", precision = 5, scale = 2)
+    private BigDecimal appraisalFeeRate;
+
     /** Username thẩm định viên đã trình. */
     @Column(name = "proposed_by", length = 100)
     private String proposedBy;

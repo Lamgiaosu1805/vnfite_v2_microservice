@@ -26,6 +26,7 @@ public class LoanResponse {
     private BigDecimal interestRate;
     private BigDecimal proposedAmount;
     private BigDecimal proposedInterestRate;
+    private BigDecimal appraisalFeeRate;
     private String proposedBy;
     private LocalDateTime proposedAt;
     private String appraisalNote;

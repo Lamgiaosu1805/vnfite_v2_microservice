@@ -497,7 +497,8 @@ public class SourceServiceClient {
     }
 
     public LoanSummaryResponse proposeLoan(String loanId, BigDecimal proposedAmount,
-                                           BigDecimal proposedInterestRate, String note, String proposedBy) {
+                                           BigDecimal proposedInterestRate, BigDecimal appraisalFeeRate,
+                                           String note, String proposedBy) {
         String url = UriComponentsBuilder.fromHttpUrl(loanServiceUrl)
                 .path("/internal/loans/{loanId}/propose")
                 .buildAndExpand(loanId)
@@ -505,6 +506,7 @@ public class SourceServiceClient {
         var body = new java.util.LinkedHashMap<String, Object>();
         body.put("proposedAmount", proposedAmount);
         body.put("proposedInterestRate", proposedInterestRate);
+        body.put("appraisalFeeRate", appraisalFeeRate);
         body.put("note", note);
         body.put("proposedBy", proposedBy);
         return parseLoan(exchangeForJson(url, HttpMethod.PUT, body));
@@ -819,26 +821,4 @@ public class SourceServiceClient {
         }
     }
 
-    // ── Fee Config ────────────────────────────────────────────────────────────
-
-    public com.fasterxml.jackson.databind.JsonNode getFeeConfigs() {
-        String url = UriComponentsBuilder.fromHttpUrl(loanServiceUrl)
-                .path("/internal/loans/fee-config")
-                .toUriString();
-        return exchangeForJson(url, HttpMethod.GET, null);
-    }
-
-    public com.fasterxml.jackson.databind.JsonNode upsertFeeConfig(
-            java.util.Map<String, Object> body, String cmsUsername) {
-        String url = UriComponentsBuilder.fromHttpUrl(loanServiceUrl)
-                .path("/internal/loans/fee-config")
-                .toUriString();
-        return restTemplate.execute(url, HttpMethod.PUT,
-                request -> {
-                    request.getHeaders().set("X-CMS-Username", cmsUsername);
-                    request.getHeaders().setContentType(org.springframework.http.MediaType.APPLICATION_JSON);
-                    objectMapper.writeValue(request.getBody(), body);
-                },
-                response -> objectMapper.readTree(response.getBody()));
-    }
 }

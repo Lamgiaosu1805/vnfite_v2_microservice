@@ -100,7 +100,7 @@ public class InternalLoanController {
         requireInternalSecret(secret);
         return ResponseEntity.ok(loanService.proposeLoan(loanId,
                 request.getProposedAmount(), request.getProposedInterestRate(),
-                request.getNote(), request.getProposedBy()));
+                request.getAppraisalFeeRate(), request.getNote(), request.getProposedBy()));
     }
 
     /** Cấp 2 — ban lãnh đạo duyệt (có thể sửa lãi suất trước khi duyệt). */
