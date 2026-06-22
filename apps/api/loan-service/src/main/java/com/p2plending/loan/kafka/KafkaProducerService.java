@@ -20,6 +20,7 @@ import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
 
 @Service
@@ -78,7 +79,7 @@ public class KafkaProducerService {
                 .loanId(loan.getId())
                 .borrowerId(loan.getBorrowerId())
                 .totalAmount(loan.getAmount())
-                .fundedAt(LocalDateTime.now())
+                .fundedAt(LocalDateTime.now(ZoneId.of("Asia/Ho_Chi_Minh")))
                 .build();
         send(TOPIC_LOAN_FUNDED, loan.getId(), event);
     }
@@ -92,7 +93,7 @@ public class KafkaProducerService {
                 .approvedInterestRate(loan.getInterestRate())
                 .termMonths(loan.getTermMonths())
                 .reviewedBy(loan.getReviewedBy())
-                .approvedAt(loan.getReviewedAt() != null ? loan.getReviewedAt() : LocalDateTime.now())
+                .approvedAt(loan.getReviewedAt() != null ? loan.getReviewedAt() : LocalDateTime.now(ZoneId.of("Asia/Ho_Chi_Minh")))
                 .build();
         send(TOPIC_LOAN_APPROVED_AWAITING_BORROWER, loan.getId(), event);
     }
@@ -107,7 +108,7 @@ public class KafkaProducerService {
                 .amount(loan.getAmount())
                 .interestRate(loan.getInterestRate())
                 .termMonths(loan.getTermMonths())
-                .issuedAt(contract.getIssuedAt() != null ? contract.getIssuedAt() : LocalDateTime.now())
+                .issuedAt(contract.getIssuedAt() != null ? contract.getIssuedAt() : LocalDateTime.now(ZoneId.of("Asia/Ho_Chi_Minh")))
                 .build();
         send(TOPIC_CONTRACT_READY, loan.getId(), event);
     }
@@ -119,7 +120,7 @@ public class KafkaProducerService {
                 .loanCode(loan.getLoanCode())
                 .borrowerId(loan.getBorrowerId())
                 .amount(loan.getAmount())
-                .disbursedAt(loan.getDisbursedAt() != null ? loan.getDisbursedAt() : LocalDateTime.now())
+                .disbursedAt(loan.getDisbursedAt() != null ? loan.getDisbursedAt() : LocalDateTime.now(ZoneId.of("Asia/Ho_Chi_Minh")))
                 .investorIds(investorIds)
                 .build();
         send(TOPIC_LOAN_DISBURSED, loan.getId(), event);

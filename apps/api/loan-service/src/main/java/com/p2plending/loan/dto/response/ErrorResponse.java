@@ -5,6 +5,7 @@ import lombok.Builder;
 import lombok.Data;
 
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
 
 @Data
@@ -18,11 +19,11 @@ public class ErrorResponse {
 
     public static ErrorResponse of(int status, String message) {
         return ErrorResponse.builder()
-                .status(status).message(message).timestamp(LocalDateTime.now()).build();
+                .status(status).message(message).timestamp(LocalDateTime.now(ZoneId.of("Asia/Ho_Chi_Minh"))).build();
     }
 
     public static ErrorResponse of(int status, String message, List<String> details) {
         return ErrorResponse.builder()
-                .status(status).message(message).details(details).timestamp(LocalDateTime.now()).build();
+                .status(status).message(message).details(details).timestamp(LocalDateTime.now(ZoneId.of("Asia/Ho_Chi_Minh"))).build();
     }
 }

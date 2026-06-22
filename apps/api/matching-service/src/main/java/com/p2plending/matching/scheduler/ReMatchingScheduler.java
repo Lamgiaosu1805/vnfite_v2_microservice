@@ -7,6 +7,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 
 @Component
 @RequiredArgsConstructor
@@ -27,7 +28,7 @@ public class ReMatchingScheduler {
      */
     @Scheduled(cron = "0 */30 * * * *")
     public void reMatchUnfunded() {
-        log.info("Re-matching scheduler triggered at {}", LocalDateTime.now());
+        log.info("Re-matching scheduler triggered at {}", LocalDateTime.now(ZoneId.of("Asia/Ho_Chi_Minh")));
         try {
             matchingService.reMatchUnfundedLoans();
         } catch (Exception e) {

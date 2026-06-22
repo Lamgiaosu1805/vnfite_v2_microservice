@@ -21,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -86,7 +87,7 @@ public class MatchingService {
         int totalNew = 0;
         for (PendingLoan loan : unfunded) {
             totalNew += runMatching(loan);
-            loan.setLastMatchedAt(LocalDateTime.now());
+            loan.setLastMatchedAt(LocalDateTime.now(ZoneId.of("Asia/Ho_Chi_Minh")));
             pendingLoanRepository.save(loan);
         }
         log.info("Re-matching completed: {} new match records created", totalNew);

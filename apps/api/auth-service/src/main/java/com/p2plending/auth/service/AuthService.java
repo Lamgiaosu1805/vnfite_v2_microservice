@@ -55,6 +55,7 @@ import java.security.spec.X509EncodedKeySpec;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.LinkedHashMap;
@@ -625,7 +626,7 @@ public class AuthService {
             }
         }
 
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = LocalDateTime.now(ZoneId.of("Asia/Ho_Chi_Minh"));
 
         // Ghi/cập nhật session data vào Redis (deviceKey khớp hoặc session mới)
         DeviceSessionData data = DeviceSessionData.builder()

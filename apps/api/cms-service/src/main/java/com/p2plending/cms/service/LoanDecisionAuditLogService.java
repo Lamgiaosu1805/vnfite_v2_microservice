@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 
 @Service
 @RequiredArgsConstructor
@@ -81,7 +82,7 @@ public class LoanDecisionAuditLogService {
                 .decision(decision)
                 .rejectionReason(rejectionReason)
                 .decidedBy(decidedBy)
-                .decidedAt(LocalDateTime.now())
+                .decidedAt(LocalDateTime.now(ZoneId.of("Asia/Ho_Chi_Minh")))
                 .deciderRole(deciderRole)
                 .appraiserUsername(loanBefore.getProposedBy())
                 .build();

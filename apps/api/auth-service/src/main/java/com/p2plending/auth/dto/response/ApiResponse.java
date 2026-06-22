@@ -5,6 +5,7 @@ import lombok.Builder;
 import lombok.Data;
 
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
 
 @Data
@@ -24,7 +25,7 @@ public class ApiResponse<T> {
     public static <T> ApiResponse<T> success(String requestId, int status, T data) {
         return ApiResponse.<T>builder()
                 .requestId(requestId)
-                .timestamp(LocalDateTime.now())
+                .timestamp(LocalDateTime.now(ZoneId.of("Asia/Ho_Chi_Minh")))
                 .status(status)
                 .message("Success")
                 .data(data)
@@ -34,7 +35,7 @@ public class ApiResponse<T> {
     public static ApiResponse<Void> error(String requestId, int status, String message) {
         return ApiResponse.<Void>builder()
                 .requestId(requestId)
-                .timestamp(LocalDateTime.now())
+                .timestamp(LocalDateTime.now(ZoneId.of("Asia/Ho_Chi_Minh")))
                 .status(status)
                 .message(message)
                 .build();
@@ -43,7 +44,7 @@ public class ApiResponse<T> {
     public static ApiResponse<Void> error(String requestId, int status, String message, List<String> errors) {
         return ApiResponse.<Void>builder()
                 .requestId(requestId)
-                .timestamp(LocalDateTime.now())
+                .timestamp(LocalDateTime.now(ZoneId.of("Asia/Ho_Chi_Minh")))
                 .status(status)
                 .message(message)
                 .errors(errors)
@@ -53,7 +54,7 @@ public class ApiResponse<T> {
     public static ApiResponse<Void> error(String requestId, int status, String message, String errorCode) {
         return ApiResponse.<Void>builder()
                 .requestId(requestId)
-                .timestamp(LocalDateTime.now())
+                .timestamp(LocalDateTime.now(ZoneId.of("Asia/Ho_Chi_Minh")))
                 .status(status)
                 .message(message)
                 .errorCode(errorCode)

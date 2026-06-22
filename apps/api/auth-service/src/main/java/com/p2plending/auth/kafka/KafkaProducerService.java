@@ -9,6 +9,7 @@ import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 
 @Service
 @RequiredArgsConstructor
@@ -27,7 +28,7 @@ public class KafkaProducerService {
             java.util.Map<String, Object> data = new java.util.HashMap<>();
             data.put("userId", userId);
             data.put("phone", phone);
-            data.put("registeredAt", LocalDateTime.now().toString());
+            data.put("registeredAt", LocalDateTime.now(ZoneId.of("Asia/Ho_Chi_Minh")).toString());
             kafkaTemplate.send(TOPIC_USER_REGISTERED, userId.toString(), objectMapper.writeValueAsString(data))
                     .whenComplete((r, ex) -> {
                         if (ex != null) log.error("Failed to publish user.registered userId={}: {}", userId, ex.getMessage());
@@ -47,7 +48,7 @@ public class KafkaProducerService {
             data.put("userId", userId);
             data.put("fullName", fullName);
             data.put("cccdNumber", cccdNumber);
-            data.put("approvedAt", LocalDateTime.now().toString());
+            data.put("approvedAt", LocalDateTime.now(ZoneId.of("Asia/Ho_Chi_Minh")).toString());
             String payload = objectMapper.writeValueAsString(data);
             kafkaTemplate.send(TOPIC_KYC_APPROVED, userId, payload)
                     .whenComplete((result, ex) -> {
@@ -63,7 +64,7 @@ public class KafkaProducerService {
         KycSubmittedEvent event = KycSubmittedEvent.builder()
                 .userId(userId)
                 .documentId(documentId)
-                .submittedAt(LocalDateTime.now())
+                .submittedAt(LocalDateTime.now(ZoneId.of("Asia/Ho_Chi_Minh")))
                 .build();
         try {
             String payload = objectMapper.writeValueAsString(event);

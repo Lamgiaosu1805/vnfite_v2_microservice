@@ -18,6 +18,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.text.Normalizer;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
 
@@ -196,7 +197,7 @@ public class CreditScoringService {
                 .aiRiskFlags(ai != null ? toJson(ai.riskFlags()) : null)
                 .aiRecommendation(ai != null ? ai.recommendation() : null)
                 .profileAdvisory(toJson(profileAdvisory))
-                .expiresAt(LocalDateTime.now().plusDays(appProperties.getScoring().getScoreTtlDays()))
+                .expiresAt(LocalDateTime.now(ZoneId.of("Asia/Ho_Chi_Minh")).plusDays(appProperties.getScoring().getScoreTtlDays()))
                 .build();
         entity = scoreRepository.save(entity);
 
@@ -265,7 +266,7 @@ public class CreditScoringService {
     public void recordOutcome(String userId, String loanRequestId, String outcome) {
         List<FeatureSnapshot> snapshots =
                 snapshotRepository.findByUserIdAndLoanRequestIdAndIsDeletedFalse(userId, loanRequestId);
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = LocalDateTime.now(ZoneId.of("Asia/Ho_Chi_Minh"));
         snapshots.forEach(s -> {
             s.setLoanOutcome(outcome);
             s.setOutcomeAt(now);
@@ -340,7 +341,7 @@ public class CreditScoringService {
         }
         f.put("PURPOSE_CLARITY", purposeClarity(req.getPurpose()));
         if (req.getAccountCreatedAt() != null) {
-            f.put("ACCOUNT_AGE_MONTHS", (int) ChronoUnit.MONTHS.between(req.getAccountCreatedAt(), LocalDateTime.now()));
+            f.put("ACCOUNT_AGE_MONTHS", (int) ChronoUnit.MONTHS.between(req.getAccountCreatedAt(), LocalDateTime.now(ZoneId.of("Asia/Ho_Chi_Minh"))));
         }
 
         // ── H · Toàn vẹn chứng từ (chống gian lận) ──

@@ -15,10 +15,12 @@ USER spring:spring
 
 COPY --from=builder /build/target/*.jar app.jar
 
+ENV TZ=Asia/Ho_Chi_Minh
 EXPOSE 8087
 
 ENTRYPOINT ["java", \
   "-XX:+UseContainerSupport", \
   "-XX:MaxRAMPercentage=75.0", \
   "-Djava.security.egd=file:/dev/./urandom", \
+  "-Duser.timezone=Asia/Ho_Chi_Minh", \
   "-jar", "app.jar"]

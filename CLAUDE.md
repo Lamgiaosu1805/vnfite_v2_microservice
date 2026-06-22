@@ -38,6 +38,22 @@ Nền tảng cho vay ngang hàng (P2P Lending) dạng microservices, xây dựng
 
 **Redis namespace:** Test/UAT và live đang dùng chung một Redis server, nên mọi Redis key bắt buộc phải có namespace theo môi trường. Ưu tiên dùng `APP_REDIS_NAMESPACE` làm root namespace; nếu chưa set thì fallback theo `SPRING_PROFILES_ACTIVE`, rồi ghép thêm service name trong code, ví dụ `uat:auth-service:*`, `uat:loan-service:*`, `prod:cms-service:*`. Áp dụng cho cả Spring cache lẫn các key Redis viết tay như OTP, refresh token, session thiết bị, rate limit, pending KYC, pending loan. Script reset cache chỉ được xóa theo namespaced pattern, tuyệt đối không scan/xóa pattern trần dễ đụng môi trường khác.
 
+**Timezone và định dạng ngày giờ:** Toàn bộ backend, mobile và CMS bắt buộc dùng múi giờ Việt Nam `Asia/Ho_Chi_Minh` (`UTC+7`). Java service phải giữ JVM default timezone, Jackson, Hibernate/JDBC và Docker runtime đồng nhất ở `Asia/Ho_Chi_Minh`; không dùng UTC hoặc timezone mặc định của host cho `LocalDateTime`, scheduler, timestamp nghiệp vụ hay JSON response. `Instant`/epoch vẫn được dùng cho JWT, TTL và chữ ký vì đây là mốc thời gian tuyệt đối, nhưng khi hiển thị phải quy đổi sang giờ Việt Nam. Frontend phải dùng formatter dùng chung có `timeZone: 'Asia/Ho_Chi_Minh'`, không gọi `toLocaleDateString('vi-VN')` trần. Ngày hiển thị theo `dd/MM/yyyy` và luôn đủ hai chữ số ngày/tháng, ví dụ `22/01/2021`; ngày giờ hiển thị theo `HH:mm:ss dd/MM/yyyy` khi cần giây. Chuỗi `LocalDate` dạng `yyyy-MM-dd` phải được format trực tiếp, không được chuyển timezone làm lệch ngày; chuỗi `LocalDateTime` backend không có offset phải được hiểu là giờ Việt Nam `+07:00`.
+
+**LocalDateTime.now() bắt buộc truyền ZoneId tường minh:** Không bao giờ gọi `LocalDateTime.now()` không tham số trong bất kỳ file Java nào. Luôn phải viết `LocalDateTime.now(ZoneId.of("Asia/Ho_Chi_Minh"))`. Không được phụ thuộc vào JVM default timezone hay `JAVA_TOOL_OPTIONS` để "tự đúng" vì nếu service chạy ngoài docker-compose (Kubernetes, test standalone, CI) sẽ trả về UTC gây lệch timestamp. Áp dụng cho mọi loại timestamp: sentAt, createdAt gán tay, reviewedAt, disbursedAt, audit log, error/API response, Kafka event, scheduler log.
+
+**Dockerfile timezone bắt buộc:** Mọi Dockerfile runtime stage đều phải có `ENV TZ=Asia/Ho_Chi_Minh` và JVM arg `-Duser.timezone=Asia/Ho_Chi_Minh` trong ENTRYPOINT — không phụ thuộc docker-compose inject. Cấu trúc chuẩn:
+```dockerfile
+ENV TZ=Asia/Ho_Chi_Minh
+EXPOSE <port>
+ENTRYPOINT ["java", \
+  "-XX:+UseContainerSupport", \
+  "-XX:MaxRAMPercentage=75.0", \
+  "-Djava.security.egd=file:/dev/./urandom", \
+  "-Duser.timezone=Asia/Ho_Chi_Minh", \
+  "-jar", "app.jar"]
+```
+
 **Luồng duyệt khoản gọi vốn:** Ban lãnh đạo phê duyệt xong **không được đưa khoản gọi vốn lên sàn ngay**. Backend phải chuyển khoản sang `AWAITING_BORROWER_APPROVAL` và thông báo cho người gọi vốn số tiền được phê duyệt, lãi suất, kỳ hạn. Chỉ khi người gọi vốn xác nhận điều kiện qua `POST /api/loans/{id}/confirm`, khoản mới chuyển `ACTIVE` và hiển thị trên sàn cho nhà đầu tư. Không đổi CMS approval thành active trực tiếp trừ khi người dùng yêu cầu đổi nghiệp vụ rõ ràng.
 
 **Credit Score 360:** Chuẩn chấm điểm duy nhất của VNFITE là **Credit Score 360**. Grade gồm `A+`, `A`, `B`, `C`, `D`, `E`, quy đổi về thang 300-850. Engine QĐ-LSGV/rate-card chỉ dùng cho **pricing/tra lãi suất**, không tự chấm điểm hoặc tự quyết định phê duyệt. Mapping pricing: `A+ -> A1`, `A -> A2`, `B -> B1`, `C -> B3`, `D -> C1`, `E -> C3`, sau đó tra `FundingRateCard`.

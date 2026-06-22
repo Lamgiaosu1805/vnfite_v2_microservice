@@ -11,6 +11,7 @@ import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 
 @Service
 @RequiredArgsConstructor
@@ -30,7 +31,7 @@ public class KafkaProducerService {
                 .loanAmount(loan.getAmount())
                 .interestRate(loan.getInterestRate())
                 .termMonths(loan.getTermMonths())
-                .matchedAt(LocalDateTime.now())
+                .matchedAt(LocalDateTime.now(ZoneId.of("Asia/Ho_Chi_Minh")))
                 .build();
         try {
             String payload = objectMapper.writeValueAsString(event);

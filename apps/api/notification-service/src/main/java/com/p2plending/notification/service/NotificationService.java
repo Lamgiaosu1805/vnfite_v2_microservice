@@ -24,6 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.text.NumberFormat;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
 import java.util.Locale;
@@ -83,7 +84,7 @@ public class NotificationService {
                 .channel("LOAN_APPROVAL")
                 .referenceId(event.getLoanId())
                 .referenceType("LOAN")
-                .sentAt(LocalDateTime.now())
+                .sentAt(LocalDateTime.now(ZoneId.of("Asia/Ho_Chi_Minh")))
                 .build();
 
         notificationRepository.save(notification);
@@ -118,7 +119,7 @@ public class NotificationService {
                 .channel("CONTRACT")
                 .referenceId(event.getContractId())
                 .referenceType("CONTRACT")
-                .sentAt(LocalDateTime.now())
+                .sentAt(LocalDateTime.now(ZoneId.of("Asia/Ho_Chi_Minh")))
                 .build();
         notificationRepository.save(notification);
         log.info("Stored contract.ready notification for borrower={} loan={} contract={}",
@@ -151,7 +152,7 @@ public class NotificationService {
                 .channel("DISBURSEMENT")
                 .referenceId(event.getLoanId())
                 .referenceType("LOAN")
-                .sentAt(LocalDateTime.now())
+                .sentAt(LocalDateTime.now(ZoneId.of("Asia/Ho_Chi_Minh")))
                 .build());
         pushClient.pushToUser(event.getBorrowerId(), bTitle,
                 "Khoản gọi vốn %s đã được giải ngân. Nhấn để xem lịch thanh toán.".formatted(code),
@@ -172,7 +173,7 @@ public class NotificationService {
                         .channel("DISBURSEMENT")
                         .referenceId(event.getLoanId())
                         .referenceType("LOAN")
-                        .sentAt(LocalDateTime.now())
+                        .sentAt(LocalDateTime.now(ZoneId.of("Asia/Ho_Chi_Minh")))
                         .build());
                 pushClient.pushToUser(investorId, iTitle,
                         "Khoản %s bạn đầu tư đã được giải ngân.".formatted(code),
@@ -202,7 +203,7 @@ public class NotificationService {
                     .channel("REFUND")
                     .referenceId(event.getLoanId())
                     .referenceType("LOAN")
-                    .sentAt(LocalDateTime.now())
+                    .sentAt(LocalDateTime.now(ZoneId.of("Asia/Ho_Chi_Minh")))
                     .build());
             pushClient.pushToUser(r.getInvestorId(), title,
                     "Khoản %s: đã hoàn %s về ví của bạn.".formatted(code, formatMoney(r.getAmount())),
@@ -250,7 +251,7 @@ public class NotificationService {
                 .channel("REPAYMENT")
                 .referenceId(event.getLoanId())
                 .referenceType("LOAN")
-                .sentAt(LocalDateTime.now())
+                .sentAt(LocalDateTime.now(ZoneId.of("Asia/Ho_Chi_Minh")))
                 .build());
         pushClient.pushToUser(event.getBorrowerId(), bTitle, bMessage,
                 Map.of("action", "OPEN_LOAN_DETAIL", "loanId", event.getLoanId()));
@@ -270,7 +271,7 @@ public class NotificationService {
                         .channel("REPAYMENT")
                         .referenceId(event.getLoanId())
                         .referenceType("LOAN")
-                        .sentAt(LocalDateTime.now())
+                        .sentAt(LocalDateTime.now(ZoneId.of("Asia/Ho_Chi_Minh")))
                         .build());
                 pushClient.pushToUser(p.getInvestorId(), iTitle, iMessage,
                         Map.of("action", "OPEN_WALLET", "loanId", event.getLoanId()));
@@ -306,7 +307,7 @@ public class NotificationService {
                 .channel("REPAYMENT_DUE")
                 .referenceId(event.getLoanId())
                 .referenceType("LOAN")
-                .sentAt(LocalDateTime.now())
+                .sentAt(LocalDateTime.now(ZoneId.of("Asia/Ho_Chi_Minh")))
                 .build());
         pushClient.pushToUser(event.getBorrowerId(), title, message,
                 Map.of("action", "OPEN_WALLET", "loanId", event.getLoanId()));
@@ -331,7 +332,7 @@ public class NotificationService {
                 .channel("REPAYMENT")
                 .referenceId(event.getLoanId())
                 .referenceType("LOAN")
-                .sentAt(LocalDateTime.now())
+                .sentAt(LocalDateTime.now(ZoneId.of("Asia/Ho_Chi_Minh")))
                 .build());
         pushClient.pushToUser(event.getInvestorId(), title, message,
                 Map.of("action", "OPEN_WALLET", "loanId", event.getLoanId()));
@@ -354,7 +355,7 @@ public class NotificationService {
                 .channel("WALLET")
                 .referenceId(event.getTxnId())
                 .referenceType("DEPOSIT")
-                .sentAt(LocalDateTime.now())
+                .sentAt(LocalDateTime.now(ZoneId.of("Asia/Ho_Chi_Minh")))
                 .build());
 
         log.info("Stored deposit notification for userId={} amount={} balance={}",
