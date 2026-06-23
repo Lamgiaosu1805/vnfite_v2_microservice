@@ -313,9 +313,41 @@ public class LoanService {
         List<LoanOffer> acceptedOffers = loanOfferRepository
                 .findByLoanRequestIdAndStatus(loanId, OfferStatus.ACCEPTED);
 
-        // Trừ tiền đã khóa của từng nhà đầu tư (locked → debit thật). Mỗi offer trừ riêng
-        // để xử lý đúng trường hợp một nhà đầu tư có nhiều lệnh trên cùng khoản. referenceId
-        // theo offerId để payment-service idempotent — retry giải ngân không debit trùng.
+        // Tính tổng offer ACCEPTED — phải khớp với loan.amount trước khi debit bất kỳ nhà đầu tư nào.
+        BigDecimal totalAccepted = acceptedOffers.stream()
+                .map(LoanOffer::getAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        if (totalAccepted.compareTo(loan.getAmount()) != 0) {
+            throw new InvalidLoanStateException(
+                    "Tổng offer ACCEPTED (%,.0f VNĐ) không khớp với số tiền khoản gọi vốn %s (%,.0f VNĐ) — dừng giải ngân"
+                    .formatted(totalAccepted, loan.getLoanCode(), loan.getAmount()));
+        }
+
+        // Tính netAmount trước khi debit — không được âm hoặc bằng 0 với khoản mới.
+        boolean isNewLoan = loan.getNetDisbursement() != null;
+        BigDecimal netAmount;
+        if (isNewLoan) {
+            // Khoản mới: phí đã được tính và lưu snapshot tại bước propose.
+            // Đối chiếu snapshot với kết quả thực tế (totalAccepted - totalFee).
+            BigDecimal recalculated = totalAccepted.subtract(loan.getTotalFee());
+            if (loan.getNetDisbursement().compareTo(recalculated) != 0) {
+                throw new InvalidLoanStateException(
+                        "Snapshot netDisbursement (%,.0f VNĐ) lệch với kết quả thực tế (%,.0f VNĐ) — dừng giải ngân khoản %s"
+                        .formatted(loan.getNetDisbursement(), recalculated, loan.getLoanCode()));
+            }
+            netAmount = loan.getNetDisbursement();
+            if (netAmount.compareTo(BigDecimal.ZERO) <= 0) {
+                throw new InvalidLoanStateException(
+                        "Số tiền thực nhận sau phí không hợp lệ (%,.0f VNĐ) — dừng giải ngân khoản %s"
+                        .formatted(netAmount, loan.getLoanCode()));
+            }
+        } else {
+            // Khoản legacy (trước khi có tính năng phí): giải ngân toàn bộ, không thu phí hồi tố.
+            netAmount = totalAccepted;
+        }
+
+        // Debit từng nhà đầu tư sau khi validation hoàn tất. referenceId theo offerId để
+        // payment-service idempotent — retry giải ngân không debit trùng.
         BigDecimal totalDisbursed = BigDecimal.ZERO;
         for (LoanOffer offer : acceptedOffers) {
             paymentServiceClient.debit(offer.getInvestorId(), offer.getAmount(),
@@ -323,19 +355,15 @@ public class LoanService {
                     "DISBURSE-" + offer.getId());
             totalDisbursed = totalDisbursed.add(offer.getAmount());
         }
-
-        // Phí đã được tính và lưu tại bước propose — dùng trực tiếp.
-        // Nếu loan cũ chưa có fee (null), giải ngân toàn bộ không trừ phí.
-        BigDecimal netAmount = (loan.getNetDisbursement() != null)
-                ? loan.getNetDisbursement()
-                : totalDisbursed;
         loanRequestRepository.save(loan);
 
-        // Credit tiền sau khi trừ phí vào ví VNF của người gọi vốn.
+        // Credit tiền thực nhận (đã trừ phí) vào ví VNF của người gọi vốn.
         // Người gọi vốn sau đó tự rút về tài khoản ngân hàng qua luồng withdraw.
+        String feeNote = isNewLoan
+                ? " (đã trừ phí thẩm định %,.0f VNĐ)".formatted(loan.getTotalFee())
+                : "";
         paymentServiceClient.creditBorrower(loan.getBorrowerId(), netAmount,
-                "Nhận tiền giải ngân khoản vay " + loan.getLoanCode()
-                + " (đã trừ phí thẩm định " + loan.getTotalFee() + " VNĐ)",
+                "Nhận tiền giải ngân khoản vay " + loan.getLoanCode() + feeNote,
                 "CREDIT-BORROWER-" + loanId);
 
         List<String> investorIds = acceptedOffers.stream()
@@ -429,22 +457,30 @@ public class LoanService {
 
     private void applyLoanReview(LoanReviewedEvent event) {
         loanRequestRepository.findById(event.getLoanId()).ifPresentOrElse(loan -> {
-            // Ban lãnh đạo duyệt được từ khoản đang chờ thẩm định (duyệt thẳng) hoặc đã có đề xuất.
-            Set<LoanStatus> reviewable = EnumSet.of(LoanStatus.PENDING_REVIEW, LoanStatus.PENDING_APPROVAL);
-            if (!reviewable.contains(loan.getStatus())) {
-                log.warn("loan.reviewed received but loan {} is not reviewable (status={})",
+            // REJECT được phép từ cả PENDING_REVIEW lẫn PENDING_APPROVAL.
+            // APPROVE chỉ được phép từ PENDING_APPROVAL (đã có phí thẩm định từ thẩm định viên).
+            Set<LoanStatus> rejectable = EnumSet.of(LoanStatus.PENDING_REVIEW, LoanStatus.PENDING_APPROVAL);
+            boolean isApprove = "APPROVE".equalsIgnoreCase(event.getAction());
+
+            if (isApprove && loan.getStatus() != LoanStatus.PENDING_APPROVAL) {
+                throw new InvalidLoanStateException(
+                        "Khoản gọi vốn %s chưa qua bước thẩm định — không thể phê duyệt trực tiếp từ trạng thái %s. "
+                        + "Thẩm định viên phải trình đề xuất trước."
+                        .formatted(event.getLoanId(), loan.getStatus()));
+            }
+            if (!isApprove && !rejectable.contains(loan.getStatus())) {
+                log.warn("loan.reviewed received but loan {} is not rejectable (status={})",
                         event.getLoanId(), loan.getStatus());
                 return;
             }
+
             loan.setReviewedAt(event.getReviewedAt() != null ? event.getReviewedAt() : LocalDateTime.now(ZoneId.of("Asia/Ho_Chi_Minh")));
             loan.setReviewedBy(event.getReviewedBy());
 
-            if ("APPROVE".equalsIgnoreCase(event.getAction())) {
-                // Số tiền cuối: ưu tiên số thẩm định viên đã đề xuất (nếu có).
-                if (loan.getProposedAmount() != null) {
-                    loan.setAmount(loan.getProposedAmount());
-                }
-                // Lãi suất cuối: ưu tiên lãi ban lãnh đạo nhập khi duyệt, fallback lãi đề xuất.
+            if (isApprove) {
+                // Số tiền cuối = proposedAmount (thẩm định viên đã xác nhận, phí đã tính theo đó).
+                loan.setAmount(loan.getProposedAmount());
+                // Lãi suất cuối: ban lãnh đạo có thể override khi duyệt, fallback lãi đề xuất.
                 BigDecimal finalRate = event.getInterestRate() != null
                         ? event.getInterestRate()
                         : loan.getProposedInterestRate();
@@ -495,19 +531,25 @@ public class LoanService {
         loan.setAppraisalNote(note);
         loan.setStatus(LoanStatus.PENDING_APPROVAL);
 
-        // Tính phí tại bước trình duyệt để hiển thị cho người gọi vốn trước khi xác nhận.
-        BigDecimal rate = (appraisalFeeRate != null && appraisalFeeRate.signum() > 0)
-                ? appraisalFeeRate : BigDecimal.ZERO;
+        // Tính phí tại bước trình duyệt — snapshot theo điều khoản người gọi vốn sẽ xác nhận.
+        // appraisalFeeRate đã được validate @NotNull ở DTO; 0.00 = chủ động miễn phí.
+        BigDecimal rate = appraisalFeeRate;
         loan.setAppraisalFeeRate(rate);
         BigDecimal appraisalFee = proposedAmount.multiply(rate)
                 .divide(new java.math.BigDecimal("100"), 0, java.math.RoundingMode.HALF_UP);
         BigDecimal vatAmount    = appraisalFee.multiply(new java.math.BigDecimal("0.10"))
                 .setScale(0, java.math.RoundingMode.HALF_UP);
         BigDecimal totalFee     = appraisalFee.add(vatAmount);
+        if (totalFee.compareTo(proposedAmount) >= 0) {
+            throw new InvalidLoanStateException(
+                    "Tổng phí thẩm định (%,.0f VNĐ) không được lớn hơn hoặc bằng số tiền đề xuất (%,.0f VNĐ)"
+                    .formatted(totalFee, proposedAmount));
+        }
+        BigDecimal netDisbursement = proposedAmount.subtract(totalFee);
         loan.setAppraisalFee(appraisalFee);
         loan.setVatAmount(vatAmount);
         loan.setTotalFee(totalFee);
-        loan.setNetDisbursement(proposedAmount.subtract(totalFee).max(BigDecimal.ZERO));
+        loan.setNetDisbursement(netDisbursement);
 
         loanRequestRepository.save(loan);
 

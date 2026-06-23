@@ -181,19 +181,21 @@ public class LoanRequest {
     @Column(name = "disbursed_by", length = 100)
     private String disbursedBy;
 
-    /** Phí thẩm định hồ sơ — snapshot tại thời điểm giải ngân. */
+    /** Phí thẩm định hồ sơ — tính và lưu tại bước thẩm định viên trình đề xuất (proposeLoan). */
     @Column(name = "appraisal_fee", precision = 15, scale = 2)
     private BigDecimal appraisalFee;
 
-    /** Thuế VAT trên tổng phí. */
+    /** Thuế VAT 10% trên phí thẩm định — tính tại bước propose. */
     @Column(name = "vat_amount", precision = 15, scale = 2)
     private BigDecimal vatAmount;
 
-    /** Tổng phí = appraisal_fee + vat_amount. */
+    /** Tổng phí = appraisal_fee + vat_amount — tính tại bước propose. */
     @Column(name = "total_fee", precision = 15, scale = 2)
     private BigDecimal totalFee;
 
-    /** Số tiền thực nhận = amount - total_fee. */
+    /** Số tiền người gọi vốn thực nhận = proposedAmount - totalFee.
+     *  Snapshot theo điều khoản người gọi vốn xác nhận tại AWAITING_BORROWER_APPROVAL.
+     *  NULL với khoản legacy (trước khi có tính năng phí) — giải ngân toàn bộ funded amount. */
     @Column(name = "net_disbursement", precision = 15, scale = 2)
     private BigDecimal netDisbursement;
 
