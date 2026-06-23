@@ -23,7 +23,11 @@ public class FileProxyController {
 
     @GetMapping("/{fileId}")
     public ResponseEntity<byte[]> getFile(@PathVariable String fileId) {
-        String url = fileManagerBaseUrl + "/" + fileId;
+        // Normalize base URL: ensure it ends with /file regardless of how FILE_MANAGER_URL is set
+        String base = fileManagerBaseUrl.endsWith("/file")
+                ? fileManagerBaseUrl
+                : fileManagerBaseUrl.replaceAll("/file/$", "") + "/file";
+        String url = base + "/" + fileId;
         try {
             ResponseEntity<byte[]> response = restTemplate.exchange(
                     url, HttpMethod.GET, null, byte[].class);
