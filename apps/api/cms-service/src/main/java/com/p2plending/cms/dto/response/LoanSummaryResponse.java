@@ -25,6 +25,10 @@ public class LoanSummaryResponse {
     private BigDecimal proposedAmount;
     private BigDecimal proposedInterestRate;
     private BigDecimal appraisalFeeRate;
+    private BigDecimal appraisalFee;
+    private BigDecimal vatAmount;
+    private BigDecimal totalFee;
+    private BigDecimal netDisbursement;
     private String proposedBy;
     private LocalDateTime proposedAt;
     private String appraisalNote;
