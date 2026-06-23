@@ -135,9 +135,10 @@ jobs:
 
       - name: Reset Redis cache
         if: steps.parse.outputs.auth == 'true' || steps.parse.outputs.loan == 'true' || steps.parse.outputs.matching == 'true' || steps.parse.outputs.cms == 'true' || steps.parse.outputs.credit == 'true' || steps.parse.outputs.payment == 'true' || steps.parse.outputs.notification == 'true' || steps.parse.outputs.nginx == 'true'
+        continue-on-error: true
         run: |
-          ssh -i ~/.ssh/deploy_key ${{ env.SERVER }} \
-            'set -e; cd /root/p2p-lending; sh infra/scripts/reset-redis-cache.sh'
+          ssh -i ~/.ssh/deploy_key -o ConnectTimeout=10 -o ServerAliveInterval=15 -o ServerAliveCountMax=3 ${{ env.SERVER }} \
+            'cd /root/p2p-lending; sh infra/scripts/reset-redis-cache.sh'
 
       - name: Cleanup
         if: always()

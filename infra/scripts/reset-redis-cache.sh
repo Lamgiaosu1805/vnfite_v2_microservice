@@ -24,10 +24,10 @@ echo "Resetting Redis cache patterns: ${CACHE_PATTERNS}"
 for pattern in ${CACHE_PATTERNS}; do
   echo "Clearing Redis keys matching: ${pattern}"
   # shellcheck disable=SC2086
-  keys="$(redis-cli -h "${REDIS_HOST}" -p "${REDIS_PORT}" ${AUTH_ARGS} --scan --pattern "${pattern}" 2>/dev/null || true)"
+  keys="$(timeout 30 redis-cli -h "${REDIS_HOST}" -p "${REDIS_PORT}" ${AUTH_ARGS} --scan --pattern "${pattern}" --count 100 2>/dev/null || true)"
   if [ -n "${keys}" ]; then
     # shellcheck disable=SC2086
-    printf '%s\n' "${keys}" | xargs redis-cli -h "${REDIS_HOST}" -p "${REDIS_PORT}" ${AUTH_ARGS} DEL 2>/dev/null >/dev/null
+    printf '%s\n' "${keys}" | xargs timeout 30 redis-cli -h "${REDIS_HOST}" -p "${REDIS_PORT}" ${AUTH_ARGS} DEL 2>/dev/null >/dev/null
     echo "  Cleared $(printf '%s\n' "${keys}" | wc -l | tr -d ' ') key(s)"
   else
     echo "  No keys found"
