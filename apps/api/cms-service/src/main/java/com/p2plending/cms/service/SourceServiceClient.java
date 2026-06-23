@@ -7,10 +7,11 @@ import com.p2plending.cms.dto.request.LoanActionRequest;
 import com.p2plending.cms.dto.response.CustomerDetailResponse;
 import com.p2plending.cms.dto.response.LoanSummaryResponse;
 import com.p2plending.cms.dto.response.PagedResponse;
+import com.p2plending.cms.dto.response.SystemTransactionSummaryResponse;
 import com.p2plending.cms.dto.response.UserSummaryResponse;
 import com.p2plending.cms.dto.response.WalletSummaryResponse;
 import com.p2plending.cms.dto.response.WalletTransactionSummaryResponse;
-import com.p2plending.cms.dto.response.SystemTransactionSummaryResponse;
+import com.p2plending.cms.dto.response.WithdrawalSummaryResponse;
 import com.p2plending.cms.exception.SourceServiceException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -457,6 +458,93 @@ public class SourceServiceClient {
                 .buildAndExpand(id)
                 .toUriString();
         return exchangeForJson(url, HttpMethod.PUT, body);
+    }
+
+    // ─── Withdrawal Management (payment-service) ──────────────────────────────
+
+    /**
+     * Danh sách withdrawal để ops giám sát.
+     * statuses: null → dùng default (TRANSFER_FAILED,FAILED) bên payment-service.
+     */
+    public PagedResponse<WithdrawalSummaryResponse> getWithdrawalsForMonitoring(
+            String statuses, int page, int size) {
+        UriComponentsBuilder builder = UriComponentsBuilder.fromHttpUrl(paymentServiceUrl)
+                .path("/internal/payment/withdrawal/monitoring")
+                .queryParam("page", page)
+                .queryParam("size", size);
+        if (statuses != null && !statuses.isBlank()) {
+            builder.queryParam("statuses", statuses);
+        }
+        URI uri = builder.build().toUri();
+        JsonNode node = exchangeForJson(uri, HttpMethod.GET, null);
+        return parseWithdrawalPage(node, page, size);
+    }
+
+    /** Ops retry chuyển tiền thủ công (sau TRANSFER_FAILED / FAILED). */
+    public void retryWithdrawal(String adminId, String withdrawalId) {
+        String url = UriComponentsBuilder.fromHttpUrl(paymentServiceUrl)
+                .path("/internal/payment/withdrawal/{id}/retry")
+                .buildAndExpand(withdrawalId)
+                .toUriString();
+        HttpHeaders headers = new HttpHeaders();
+        headers.set(INTERNAL_SECRET_HEADER, internalSecret);
+        headers.set("X-Admin-Id", adminId);
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        HttpEntity<Void> entity = new HttpEntity<>(null, headers);
+        exchangeAndParse(url, () -> restTemplate.exchange(url, HttpMethod.POST, entity, String.class));
+    }
+
+    /**
+     * Ops resolve giao dịch kẹt ở PROCESSING sau khi đã xác minh tại TIKLUY/MB.
+     * wasSent=true → đóng là đã chuyển (cần ftNumber); false → hoàn tiền về ví.
+     */
+    public void resolveWithdrawal(String adminId, String withdrawalId,
+                                  boolean wasSent, String ftNumber, String note) {
+        String url = UriComponentsBuilder.fromHttpUrl(paymentServiceUrl)
+                .path("/internal/payment/withdrawal/{id}/resolve")
+                .buildAndExpand(withdrawalId)
+                .toUriString();
+        HttpHeaders headers = new HttpHeaders();
+        headers.set(INTERNAL_SECRET_HEADER, internalSecret);
+        headers.set("X-Admin-Id", adminId);
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        var body = new java.util.LinkedHashMap<String, Object>();
+        body.put("wasSent", wasSent);
+        body.put("ftNumber", ftNumber);
+        body.put("note", note);
+        HttpEntity<Object> entity = new HttpEntity<>(body, headers);
+        exchangeAndParse(url, () -> restTemplate.exchange(url, HttpMethod.POST, entity, String.class));
+    }
+
+    private PagedResponse<WithdrawalSummaryResponse> parseWithdrawalPage(JsonNode pageNode, int fallbackPage, int fallbackSize) {
+        List<WithdrawalSummaryResponse> content = new ArrayList<>();
+        pageNode.path("content").forEach(node -> content.add(parseWithdrawal(node)));
+        return PagedResponse.<WithdrawalSummaryResponse>builder()
+                .content(content)
+                .page(pageNode.has("page") ? pageNode.path("page").asInt() : pageNode.path("number").asInt(fallbackPage))
+                .size(pageNode.path("size").asInt(fallbackSize))
+                .totalElements(pageNode.path("totalElements").asLong())
+                .totalPages(pageNode.path("totalPages").asInt())
+                .last(pageNode.path("last").asBoolean(true))
+                .build();
+    }
+
+    private WithdrawalSummaryResponse parseWithdrawal(JsonNode node) {
+        return WithdrawalSummaryResponse.builder()
+                .id(text(node, "id"))
+                .userId(text(node, "userId"))
+                .amount(decimal(node, "amount"))
+                .status(text(node, "status"))
+                .statusLabel(text(node, "statusLabel"))
+                .bankName(text(node, "bankName"))
+                .bankAccountNo(text(node, "bankAccountNo"))
+                .mbFtNumber(text(node, "mbFtNumber"))
+                .rejectReason(text(node, "rejectReason"))
+                .failureReason(text(node, "failureReason"))
+                .retryCount(node.path("retryCount").asInt(0))
+                .createdAt(dateTime(node, "createdAt"))
+                .updatedAt(dateTime(node, "updatedAt"))
+                .build();
     }
 
     /** Chạy ngay job hết hạn gọi vốn / ký khế ước (CMS bấm tay). Trả về số khoản đã xử lý. */
