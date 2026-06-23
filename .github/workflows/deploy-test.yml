@@ -89,9 +89,7 @@ jobs:
         env:
           ENV_CONTENT: ${{ secrets.ENV_FILE_TEST }}
         run: |
-          printf '%s' "$ENV_CONTENT" > /tmp/.env_test
-          # Normalize: split merged lines (e.g. KEY1=val1KEY2=val2 → two lines)
-          perl -i -pe 's/(?<=\S)([A-Z][A-Z_0-9]{2,}=)/\n$1/g' /tmp/.env_test
+          printf '%s\n' "$ENV_CONTENT" > /tmp/.env_test
           scp -i ~/.ssh/deploy_key /tmp/.env_test ${{ env.SERVER }}:${{ env.APP_DIR }}/.env
           rm -f /tmp/.env_test
 
