@@ -229,6 +229,8 @@ services:
       INTERNAL_API_SECRET: ${INTERNAL_API_SECRET:?INTERNAL_API_SECRET is required}
       PUSH_NOTIFICATION_URL: ${PUSH_NOTIFICATION_URL:-https://service.vnfite.com.vn/push-notification/v2/notification}
       PUSH_NOTIFICATION_ALIAS: ${PUSH_NOTIFICATION_ALIAS:-vnfite}
+      FILE_MANAGER_URL: ${FILE_MANAGER_URL:-https://service.vnfite.com.vn/file-manager/v2/file}
+      APP_TOTP_REQUIRED: ${APP_TOTP_REQUIRED:-true}
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
     extra_hosts:
       - "host.docker.internal:host-gateway"
