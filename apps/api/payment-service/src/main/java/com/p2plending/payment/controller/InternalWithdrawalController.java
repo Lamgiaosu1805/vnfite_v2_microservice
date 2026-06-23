@@ -8,6 +8,7 @@ import com.p2plending.payment.domain.repository.LinkedBankRepository;
 import com.p2plending.payment.domain.repository.WithdrawalRequestRepository;
 import com.p2plending.payment.dto.response.WithdrawalResponse;
 import com.p2plending.payment.service.WithdrawalRequestService;
+import com.p2plending.payment.service.WithdrawalTransferOrchestrator;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
@@ -37,6 +38,7 @@ import java.util.Set;
 public class InternalWithdrawalController {
 
     private final WithdrawalRequestService withdrawalRequestService;
+    private final WithdrawalTransferOrchestrator withdrawalTransferOrchestrator;
     private final WithdrawalRequestRepository withdrawalRepository;
     private final LinkedBankRepository linkedBankRepository;
     private final AppProperties appProperties;
@@ -68,7 +70,7 @@ public class InternalWithdrawalController {
             log.warn("[MB-CALLBACK] FAILED transferRef={} errorCode='{}' — nếu lỗi này cần non-retryable, thêm vào DB: UPDATE withdrawal_transfer_configs SET non_retryable_error_codes='{},...' WHERE active=1",
                     req.getTransferRef(), req.getErrorCode(), req.getErrorCode());
         }
-        withdrawalRequestService.handleTransferCallback(
+        withdrawalTransferOrchestrator.handleTransferCallback(
                 req.getTransferRef(), req.isSuccess(),
                 req.getFtNumber(), req.getErrorCode());
         return ResponseEntity.ok(Map.of("message", "OK"));
@@ -108,7 +110,7 @@ public class InternalWithdrawalController {
         if (!isValidInternalSecret(secret)) {
             return ResponseEntity.status(401).body(Map.of("error", "Unauthorized"));
         }
-        withdrawalRequestService.retryTransfer(adminId, withdrawalId);
+        withdrawalTransferOrchestrator.retryTransfer(adminId, withdrawalId);
         return ResponseEntity.ok(Map.of("message", "Đã khởi động lại chuyển tiền."));
     }
 

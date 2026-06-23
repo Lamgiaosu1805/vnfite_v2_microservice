@@ -480,7 +480,7 @@ public class SourceServiceClient {
         return parseWithdrawalPage(node, page, size);
     }
 
-    /** Ops retry chuyển tiền thủ công (sau TRANSFER_FAILED / FAILED). */
+    /** Ops retry chuyển tiền thủ công khi giao dịch ở TRANSFER_FAILED. */
     public void retryWithdrawal(String adminId, String withdrawalId) {
         String url = UriComponentsBuilder.fromHttpUrl(paymentServiceUrl)
                 .path("/internal/payment/withdrawal/{id}/retry")

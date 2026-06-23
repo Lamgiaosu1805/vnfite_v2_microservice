@@ -16,7 +16,7 @@ public class WithdrawalManagementService {
         return sourceServiceClient.getWithdrawalsForMonitoring(statuses, page, size);
     }
 
-    /** Ops retry chuyển tiền thủ công sau khi giao dịch thất bại. */
+    /** Ops retry chuyển tiền thủ công khi giao dịch ở TRANSFER_FAILED. */
     public void retry(String adminId, String withdrawalId) {
         sourceServiceClient.retryWithdrawal(adminId, withdrawalId);
     }

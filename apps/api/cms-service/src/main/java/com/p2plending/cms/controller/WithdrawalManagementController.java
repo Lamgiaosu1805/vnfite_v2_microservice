@@ -35,8 +35,7 @@ public class WithdrawalManagementController {
     }
 
     /**
-     * Ops retry chuyển tiền thủ công sau TRANSFER_FAILED / FAILED.
-     * Dùng khi reconciliation scheduler không tự xử lý được (ví dụ đã hết retries).
+     * Ops retry chuyển tiền thủ công sau TRANSFER_FAILED.
      */
     @PostMapping("/{withdrawalId}/retry")
     public ResponseEntity<Map<String, String>> retry(

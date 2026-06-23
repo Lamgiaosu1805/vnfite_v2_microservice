@@ -8,10 +8,7 @@ import com.p2plending.payment.domain.enums.WithdrawalStatus;
 import com.p2plending.payment.domain.repository.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Sort;
 import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,6 +17,7 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.util.List;
+import java.util.Optional;
 import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
@@ -44,14 +42,20 @@ public class WithdrawalRequestService {
     private final WithdrawalRequestRepository withdrawalRepository;
     private final WithdrawalAuditLogRepository auditLogRepository;
     private final WithdrawalTransferConfigRepository configRepository;
-    private final TikluyClient tikluyClient;
     private final StringRedisTemplate redisTemplate;
     private final AppProperties appProperties;
 
     private static final String OTP_KEY = "withdrawal_otp:";
     private static final long OTP_TTL_MINUTES = 5;
-    /** Withdrawal kẹt ở TRANSFER_INITIATED / PROCESSING quá thời gian này → reconcile */
-    private static final long STUCK_THRESHOLD_MINUTES = 30;
+
+    public record TransferAttempt(
+            String withdrawalId,
+            String transferRef,
+            String vnfAccountNo,
+            String bankCode,
+            String bankAccountNo,
+            BigDecimal amount) {
+    }
 
     // ─── Bước 1: Tạo withdrawal request, gửi OTP ─────────────────────────────
 
@@ -123,10 +127,10 @@ public class WithdrawalRequestService {
         return wr;
     }
 
-    // ─── Bước 2: Xác nhận OTP, lock tiền, chuyển tiền ngay ──────────────────
+    // ─── Bước 2 / TX1: xác nhận OTP, lock tiền, ghi write-ahead ─────────────
 
     @Transactional
-    public WithdrawalRequest confirmOtp(String userId, String withdrawalId, String otp) {
+    public TransferAttempt prepareConfirmedTransfer(String userId, String withdrawalId, String otp) {
         WithdrawalRequest wr = withdrawalRepository
                 .findByIdAndUserIdAndIsDeletedFalse(withdrawalId, userId)
                 .orElseThrow(() -> new IllegalArgumentException("Yêu cầu rút tiền không tồn tại."));
@@ -184,10 +188,7 @@ public class WithdrawalRequestService {
         transition(wr, WithdrawalStatus.FUNDS_LOCKED, "USER", userId,
                 "OTP xác nhận, đã lock " + wr.getAmount() + " VND");
 
-        // Chuyển tiền ngay lập tức
-        initiateTransfer(wr, "SYSTEM");
-
-        return wr;
+        return prepareTransferAttempt(wr, "SYSTEM", "SYSTEM", "Bắt đầu chuyển tiền qua TIKLUY");
     }
 
     // ─── Huỷ (chỉ được khi chưa lock tiền) ──────────────────────────────────
@@ -213,24 +214,28 @@ public class WithdrawalRequestService {
     // ─── TIKLUY callback ─────────────────────────────────────────────────────
 
     @Transactional
-    public void handleTransferCallback(String transferRef, boolean success,
-                                       String ftNumber, String errorCode) {
+    public Optional<TransferAttempt> processTransferCallback(String transferRef, boolean success,
+                                                             String ftNumber, String errorCode) {
         WithdrawalRequest wr = withdrawalRepository
-                .findByTransferRefAndIsDeletedFalse(transferRef)
+                .findWithLockByTransferRefAndIsDeletedFalse(transferRef)
                 .orElse(null);
 
         if (wr == null) {
             log.warn("withdrawal.callback.notFound transferRef={}", transferRef);
-            return;
+            return Optional.empty();
         }
 
         if (wr.getStatus() != WithdrawalStatus.PROCESSING
                 && wr.getStatus() != WithdrawalStatus.TRANSFER_INITIATED) {
             log.warn("withdrawal.callback.skipped withdrawalId={} status={}", wr.getId(), wr.getStatus());
-            return;
+            return Optional.empty();
         }
 
         if (success) {
+            if (wr.getStatus() == WithdrawalStatus.TRANSFER_INITIATED) {
+                transition(wr, WithdrawalStatus.PROCESSING, "SYSTEM", "TIKLUY",
+                        "Callback thành công đến trước khi ghi nhận phản hồi khởi tạo");
+            }
             wr.setMbFtNumber(ftNumber);
             transition(wr, WithdrawalStatus.COMPLETED, "SYSTEM", "TIKLUY",
                     "Chuyển tiền thành công. FT=" + ftNumber);
@@ -239,6 +244,7 @@ public class WithdrawalRequestService {
             releaseLock(wr.getUserId(), wr.getAmount());
             updateWalletTxnStatus(wr, TransactionStatus.SUCCESS);
             log.info("withdrawal.completed withdrawalId={} transferRef={} FT={}", wr.getId(), transferRef, ftNumber);
+            return Optional.empty();
         } else {
             WithdrawalTransferConfig cfg = activeConfig();
             String note = "Chuyển tiền thất bại. errorCode=" + errorCode
@@ -257,18 +263,21 @@ public class WithdrawalRequestService {
                 log.error("[MB-ERROR] NON-RETRYABLE withdrawalId={} errorCode='{}' amount={} — hoàn tiền về ví, ops cần kiểm tra tài khoản chi VNFITE",
                         wr.getId(), errorCode, wr.getAmount());
                 markFailed(wr, "Lỗi không thể retry (MB errorCode=" + errorCode + "). Tiền đã hoàn về ví.");
-                return;
+                return Optional.empty();
             }
 
             if (wr.canRetry()) {
                 wr.setRetryCount(wr.getRetryCount() + 1);
+                wr.setTransferRef(null);
                 withdrawalRepository.save(wr);
                 log.info("withdrawal.retry withdrawalId={} attempt={}/{}", wr.getId(), wr.getRetryCount(), wr.getMaxRetries());
-                initiateTransfer(wr, "SYSTEM");
+                return Optional.of(prepareTransferAttempt(
+                        wr, "SYSTEM", "SYSTEM", "Retry sau callback thất bại"));
             } else {
                 log.error("[MB-ERROR] MAX-RETRY-EXCEEDED withdrawalId={} lastErrorCode='{}' amount={} — hoàn tiền về ví",
                         wr.getId(), errorCode, wr.getAmount());
                 markFailed(wr, "Transfer thất bại sau " + wr.getMaxRetries() + " lần thử. errorCode=" + errorCode);
+                return Optional.empty();
             }
         }
     }
@@ -276,15 +285,14 @@ public class WithdrawalRequestService {
     // ─── Ops: retry thủ công (sau khi stuck hoặc TRANSFER_FAILED) ────────────
 
     @Transactional
-    public void retryTransfer(String adminId, String withdrawalId) {
+    public TransferAttempt prepareManualRetry(String adminId, String withdrawalId) {
         WithdrawalRequest wr = withdrawalRepository
-                .findByIdAndIsDeletedFalse(withdrawalId)
+                .findWithLockByIdAndIsDeletedFalse(withdrawalId)
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy yêu cầu rút tiền."));
 
-        if (wr.getStatus() != WithdrawalStatus.TRANSFER_FAILED
-                && wr.getStatus() != WithdrawalStatus.FAILED) {
+        if (wr.getStatus() != WithdrawalStatus.TRANSFER_FAILED) {
             throw new IllegalStateException(
-                    "Chỉ có thể retry khi trạng thái là TRANSFER_FAILED hoặc FAILED.");
+                    "Chỉ có thể retry khi trạng thái là TRANSFER_FAILED.");
         }
         if (!wr.canRetry()) {
             throw new IllegalStateException(
@@ -297,12 +305,11 @@ public class WithdrawalRequestService {
         wr.setRetryCount(wr.getRetryCount() + 1);
         wr.setTransferRef(null);
         withdrawalRepository.save(wr);
-        audit(wr, wr.getStatus(), WithdrawalStatus.TRANSFER_INITIATED,
-                "ADMIN", adminId, "Ops retry thủ công lần " + wr.getRetryCount());
-        initiateTransfer(wr, adminId);
         log.info("withdrawal.manualRetry withdrawalId={} adminId={} attempt={}/{} newTxnId={}",
                 withdrawalId, adminId, wr.getRetryCount(), wr.getMaxRetries(),
                 wr.getId() + "-R" + wr.getRetryCount());
+        return prepareTransferAttempt(
+                wr, "ADMIN", adminId, "Ops retry thủ công lần " + wr.getRetryCount());
     }
 
     // ─── Ops: resolve giao dịch kẹt ở PROCESSING/TRANSFER_INITIATED ──────────
@@ -317,7 +324,7 @@ public class WithdrawalRequestService {
     public void resolveProcessing(String adminId, String withdrawalId,
                                   boolean wasSent, String ftNumber, String note) {
         WithdrawalRequest wr = withdrawalRepository
-                .findByIdAndIsDeletedFalse(withdrawalId)
+                .findWithLockByIdAndIsDeletedFalse(withdrawalId)
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy yêu cầu rút tiền."));
 
         if (wr.getStatus() != WithdrawalStatus.PROCESSING
@@ -327,6 +334,10 @@ public class WithdrawalRequestService {
         }
 
         if (wasSent) {
+            if (wr.getStatus() == WithdrawalStatus.TRANSFER_INITIATED) {
+                transition(wr, WithdrawalStatus.PROCESSING, "ADMIN", adminId,
+                        "Ops xác minh kết quả trước khi ghi nhận phản hồi khởi tạo");
+            }
             wr.setMbFtNumber(ftNumber);
             transition(wr, WithdrawalStatus.COMPLETED, "ADMIN", adminId,
                     "Ops xác minh ĐÃ chuyển. FT=" + ftNumber + (note != null ? ". " + note : ""));
@@ -341,38 +352,30 @@ public class WithdrawalRequestService {
         }
     }
 
-    // ─── Reconciliation scheduler — xử lý giao dịch kẹt ─────────────────────
+    // ─── Reconciliation DB steps — scheduler nằm ở orchestrator ──────────────
 
-    /**
-     * Chạy mỗi 5 phút. Tìm các withdrawal kẹt ở TRANSFER_INITIATED / PROCESSING
-     * quá {@value STUCK_THRESHOLD_MINUTES} phút mà không nhận được callback,
-     * đẩy về TRANSFER_FAILED để tự retry hoặc chờ ops xử lý.
-     */
-    @Scheduled(fixedDelay = 5 * 60 * 1000)
-    @Transactional
-    public void reconcileStuck() {
-        LocalDateTime threshold = LocalDateTime.now(ZoneId.of("Asia/Ho_Chi_Minh"))
-                .minusMinutes(STUCK_THRESHOLD_MINUTES);
-
-        List<WithdrawalRequest> stuck = withdrawalRepository
-                .findStuckWithdrawals(List.of(
+    @Transactional(readOnly = true)
+    public List<String> findStuckWithdrawalIds(LocalDateTime threshold) {
+        return withdrawalRepository.findStuckWithdrawals(List.of(
                         WithdrawalStatus.TRANSFER_INITIATED,
-                        WithdrawalStatus.PROCESSING), threshold);
-
-        if (stuck.isEmpty()) return;
-
-        log.warn("withdrawal.reconcile found {} stuck withdrawal(s)", stuck.size());
-
-        for (WithdrawalRequest wr : stuck) {
-            try {
-                processStuck(wr);
-            } catch (Exception ex) {
-                log.error("withdrawal.reconcile error withdrawalId={}: {}", wr.getId(), ex.getMessage(), ex);
-            }
-        }
+                        WithdrawalStatus.PROCESSING), threshold).stream()
+                .map(WithdrawalRequest::getId)
+                .toList();
     }
 
-    private void processStuck(WithdrawalRequest wr) {
+    @Transactional
+    public Optional<TransferAttempt> prepareStuckRetry(String withdrawalId, LocalDateTime threshold) {
+        WithdrawalRequest wr = withdrawalRepository
+                .findWithLockByIdAndIsDeletedFalse(withdrawalId)
+                .orElse(null);
+        if (wr == null
+                || (wr.getStatus() != WithdrawalStatus.TRANSFER_INITIATED
+                    && wr.getStatus() != WithdrawalStatus.PROCESSING)
+                || wr.getUpdatedAt() == null
+                || !wr.getUpdatedAt().isBefore(threshold)) {
+            return Optional.empty();
+        }
+
         log.warn("withdrawal.stuck withdrawalId={} status={} transferRef={} amount={} updatedAt={}",
                 wr.getId(), wr.getStatus(), wr.getTransferRef(), wr.getAmount(), wr.getUpdatedAt());
 
@@ -383,21 +386,22 @@ public class WithdrawalRequestService {
             log.error("[RECONCILE-STUCK] withdrawalId={} transferRef={} amount={} — TIKLUY đã nhận lệnh, chưa có callback. " +
                       "KHÔNG tự retry. Ops cần kiểm tra bên TIKLUY/MB rồi dùng /retry nếu chắc chắn chưa chuyển.",
                     wr.getId(), wr.getTransferRef(), wr.getAmount());
-            // Không làm gì thêm — chờ callback hoặc ops can thiệp
-            return;
+            return Optional.empty();
         }
 
         // transferRef = null → lệnh chưa gửi được sang TIKLUY → an toàn để retry
         transition(wr, WithdrawalStatus.TRANSFER_FAILED, "SYSTEM", "RECONCILER",
-                "Kẹt quá " + STUCK_THRESHOLD_MINUTES + " phút, chưa gửi được lệnh sang TIKLUY");
+                "Kẹt quá ngưỡng đối soát, chưa gửi được lệnh sang TIKLUY");
 
         if (wr.canRetry()) {
             wr.setRetryCount(wr.getRetryCount() + 1);
             withdrawalRepository.save(wr);
             log.info("withdrawal.reconcile.retry withdrawalId={} attempt={}/{}", wr.getId(), wr.getRetryCount(), wr.getMaxRetries());
-            initiateTransfer(wr, "RECONCILER");
+            return Optional.of(prepareTransferAttempt(
+                    wr, "SYSTEM", "RECONCILER", "Reconcile retry khi chưa gửi được lệnh"));
         } else {
-            markFailed(wr, "Kẹt quá " + STUCK_THRESHOLD_MINUTES + " phút, chưa gửi sang TIKLUY, hết lần retry");
+            markFailed(wr, "Giao dịch kẹt, chưa gửi sang TIKLUY và đã hết lần retry");
+            return Optional.empty();
         }
     }
 
@@ -412,29 +416,16 @@ public class WithdrawalRequestService {
 
     // ─── Private helpers ──────────────────────────────────────────────────────
 
-    /**
-     * Thử parse error code từ exception message.
-     * TIKLUY có thể ném RuntimeException("INSUFFICIENT_FUNDS: ...") hoặc tương tự.
-     */
-    private String extractErrorCode(String message) {
-        if (message == null) return null;
-        int colon = message.indexOf(':');
-        String candidate = (colon > 0 ? message.substring(0, colon) : message).trim().toUpperCase();
-        // Chỉ trả về nếu trông giống error code (chữ hoa + gạch dưới, max 50 ký tự)
-        return candidate.matches("[A-Z][A-Z0-9_]{1,49}") ? candidate : null;
-    }
+    private TransferAttempt prepareTransferAttempt(WithdrawalRequest wr, String actorType,
+                                                   String actor, String note) {
+        transition(wr, WithdrawalStatus.TRANSFER_INITIATED, actorType, actor, note);
 
-    private void initiateTransfer(WithdrawalRequest wr, String actor) {
-        transition(wr, WithdrawalStatus.TRANSFER_INITIATED, "SYSTEM", actor,
-                "Bắt đầu chuyển tiền qua TIKLUY");
-
-        WithdrawalTransferConfig cfg = activeConfig();
         Wallet wallet = walletRepository.findById(wr.getWalletId())
                 .orElseThrow(() -> new IllegalStateException("Wallet không tồn tại."));
         LinkedBank bank = linkedBankRepository.findByIdAndIsDeletedFalse(wr.getLinkedBankId())
                 .orElseThrow(() -> new IllegalStateException("Tài khoản ngân hàng không còn hợp lệ."));
 
-        // Idempotency: txnId deterministc theo withdrawalId + retryCount.
+        // Idempotency: txnId deterministic theo withdrawalId + retryCount.
         // Cùng một lần thử luôn dùng cùng txnId → TIKLUY dedup nếu nhận trùng.
         String txnId = wr.getId() + "-R" + wr.getRetryCount();
 
@@ -443,96 +434,81 @@ public class WithdrawalRequestService {
         wr.setTransferRef(txnId);
         withdrawalRepository.save(wr);
 
-        if (appProperties.getPayment().isMock()) {
-            String mockFt = "MOCK_FT_" + wr.getId().substring(0, 8);
-            transition(wr, WithdrawalStatus.PROCESSING, "SYSTEM", "SYSTEM", "Mock transfer initiated");
-            handleTransferCallback(txnId, true, mockFt, null);
+        return new TransferAttempt(
+                wr.getId(), txnId, wallet.getVnfAccountNo(), bank.getBankCode(),
+                bank.getBankAccountNo(), wr.getAmount());
+    }
+
+    @Transactional
+    public void recordTransferAccepted(String withdrawalId, String expectedTransferRef,
+                                       String providerReference) {
+        WithdrawalRequest wr = withdrawalRepository
+                .findWithLockByIdAndIsDeletedFalse(withdrawalId)
+                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy yêu cầu rút tiền."));
+
+        if (wr.getStatus() != WithdrawalStatus.TRANSFER_INITIATED
+                || !expectedTransferRef.equals(wr.getTransferRef())) {
+            log.warn("withdrawal.dispatch.accepted.skipped withdrawalId={} expectedRef={} actualRef={} status={}",
+                    withdrawalId, expectedTransferRef, wr.getTransferRef(), wr.getStatus());
             return;
         }
 
-        try {
-            String externalRef = tikluyClient.fundTransfer(
-                    txnId,
-                    wallet.getVnfAccountNo(),
-                    bank.getBankCode(),
-                    bank.getBankAccountNo(),
-                    wr.getAmount().toPlainString());
-
-            // Cập nhật ref thật từ TIKLUY nếu khác với txnId ta đã lưu
-            if (externalRef != null && !externalRef.equals(txnId)) {
-                wr.setTransferRef(externalRef);
-                withdrawalRepository.save(wr);
-            }
-            transition(wr, WithdrawalStatus.PROCESSING, "SYSTEM", "SYSTEM",
-                    "TIKLUY nhận lệnh. ref=" + wr.getTransferRef());
-
-            log.info("withdrawal.tikluy.sent withdrawalId={} txnId={} ref={} amount={}",
-                    wr.getId(), txnId, wr.getTransferRef(), wr.getAmount());
-
-        } catch (Exception e) {
-            String errorMsg = e.getMessage();
-            wr.setFailureReason(errorMsg);
-
-            // ─── PHÂN LOẠI LỖI để KHÔNG BAO GIỜ chuyển tiền 2 lần ───
-            // Lỗi MƠ HỒ (read-timeout, 5xx, lỗi không rõ): TIKLUY CÓ THỂ đã nhận & xử lý lệnh.
-            // → Tuyệt đối KHÔNG tự retry, KHÔNG hoàn tiền. Giữ khóa + transferRef, đẩy về PROCESSING
-            //   để chờ callback thật hoặc reconciler + ops xác minh tại TIKLUY/MB.
-            if (!isDefinitelyNotSent(e)) {
-                transition(wr, WithdrawalStatus.PROCESSING, "SYSTEM", "SYSTEM",
-                        "TIKLUY timeout/không rõ kết quả — chờ callback/đối soát, KHÔNG tự retry: " + errorMsg);
-                log.error("[TRANSFER-AMBIGUOUS] withdrawalId={} transferRef={} amount={} userId={} — " +
-                          "có thể đã gửi sang MB. Giữ khóa tiền, chờ callback hoặc ops đối soát thủ công.",
-                        wr.getId(), wr.getTransferRef(), wr.getAmount(), wr.getUserId());
-                return;
-            }
-
-            // Lỗi CHẮC CHẮN CHƯA GỬI (connection refused, DNS, 4xx): an toàn để hoàn/retry.
-            // Xóa transferRef để write-ahead lần sau ghi ref mới sạch.
-            wr.setTransferRef(null);
-            transition(wr, WithdrawalStatus.TRANSFER_FAILED, "SYSTEM", "SYSTEM",
-                    "TIKLUY chưa nhận được lệnh: " + errorMsg);
-
-            String errorCode = extractErrorCode(errorMsg);
-            if (errorCode != null && cfg.isNonRetryable(errorCode)) {
-                log.error("withdrawal.nonRetryableError withdrawalId={} errorCode={} amount={} — hoàn tiền về ví",
-                        wr.getId(), errorCode, wr.getAmount());
-                markFailed(wr, "Lỗi không thể retry: " + errorCode + ". Vui lòng kiểm tra tài khoản chi VNFITE.");
-                return;
-            }
-
-            if (wr.canRetry()) {
-                wr.setRetryCount(wr.getRetryCount() + 1);
-                withdrawalRepository.save(wr);
-                log.warn("withdrawal.tikluy.notSent.retry withdrawalId={} attempt={}/{}: {}",
-                        wr.getId(), wr.getRetryCount(), wr.getMaxRetries(), errorMsg);
-                initiateTransfer(wr, "SYSTEM");
-            } else {
-                markFailed(wr, "TIKLUY chưa nhận lệnh sau " + wr.getMaxRetries() + " lần: " + errorMsg);
-            }
-        }
+        wr.setFailureReason(null);
+        transition(wr, WithdrawalStatus.PROCESSING, "SYSTEM", "SYSTEM",
+                "TIKLUY nhận lệnh. providerRef=" + providerReference);
+        log.info("withdrawal.tikluy.sent withdrawalId={} txnId={} providerRef={} amount={}",
+                wr.getId(), expectedTransferRef, providerReference, wr.getAmount());
     }
 
-    /**
-     * Phân biệt lỗi "chắc chắn lệnh chưa rời hệ thống" với lỗi "mơ hồ (có thể đã gửi)".
-     * Chỉ trả true khi CHẮC CHẮN TIKLUY chưa nhận được request:
-     *   - ConnectException / NoRouteToHost / UnknownHostException → chưa kết nối được.
-     *   - HttpClientErrorException (4xx) → TIKLUY từ chối request, chưa thực hiện chuyển.
-     * Read-timeout (SocketTimeoutException) và 5xx được coi là MƠ HỒ → trả false (không retry).
-     */
-    private boolean isDefinitelyNotSent(Throwable e) {
-        Throwable t = e;
-        while (t != null) {
-            if (t instanceof java.net.ConnectException
-                    || t instanceof java.net.NoRouteToHostException
-                    || t instanceof java.net.UnknownHostException) {
-                return true;
-            }
-            if (t instanceof org.springframework.web.client.HttpClientErrorException) {
-                return true;
-            }
-            t = t.getCause();
+    @Transactional
+    public Optional<TransferAttempt> recordTransferDispatchFailure(
+            String withdrawalId, String expectedTransferRef, String errorMessage,
+            boolean definitelyNotSent, String errorCode) {
+        WithdrawalRequest wr = withdrawalRepository
+                .findWithLockByIdAndIsDeletedFalse(withdrawalId)
+                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy yêu cầu rút tiền."));
+
+        if (wr.getStatus() != WithdrawalStatus.TRANSFER_INITIATED
+                || !expectedTransferRef.equals(wr.getTransferRef())) {
+            log.warn("withdrawal.dispatch.failure.skipped withdrawalId={} expectedRef={} actualRef={} status={}",
+                    withdrawalId, expectedTransferRef, wr.getTransferRef(), wr.getStatus());
+            return Optional.empty();
         }
-        return false;
+
+        wr.setFailureReason(errorMessage);
+        if (!definitelyNotSent) {
+            transition(wr, WithdrawalStatus.PROCESSING, "SYSTEM", "SYSTEM",
+                    "TIKLUY timeout/không rõ kết quả — chờ callback/đối soát, KHÔNG tự retry: "
+                            + errorMessage);
+            log.error("[TRANSFER-AMBIGUOUS] withdrawalId={} transferRef={} amount={} userId={} — "
+                            + "có thể đã gửi sang MB. Giữ khóa tiền, chờ callback hoặc ops đối soát thủ công.",
+                    wr.getId(), wr.getTransferRef(), wr.getAmount(), wr.getUserId());
+            return Optional.empty();
+        }
+
+        wr.setTransferRef(null);
+        transition(wr, WithdrawalStatus.TRANSFER_FAILED, "SYSTEM", "SYSTEM",
+                "TIKLUY chưa nhận được lệnh: " + errorMessage);
+
+        WithdrawalTransferConfig cfg = activeConfig();
+        if (errorCode != null && cfg.isNonRetryable(errorCode)) {
+            log.error("withdrawal.nonRetryableError withdrawalId={} errorCode={} amount={} — hoàn tiền về ví",
+                    wr.getId(), errorCode, wr.getAmount());
+            markFailed(wr, "Lỗi không thể retry: " + errorCode + ". Vui lòng kiểm tra tài khoản chi VNFITE.");
+            return Optional.empty();
+        }
+
+        if (wr.canRetry()) {
+            wr.setRetryCount(wr.getRetryCount() + 1);
+            withdrawalRepository.save(wr);
+            log.warn("withdrawal.tikluy.notSent.retry withdrawalId={} attempt={}/{}: {}",
+                    wr.getId(), wr.getRetryCount(), wr.getMaxRetries(), errorMessage);
+            return Optional.of(prepareTransferAttempt(
+                    wr, "SYSTEM", "SYSTEM", "Retry sau lỗi chắc chắn chưa gửi"));
+        }
+
+        markFailed(wr, "TIKLUY chưa nhận lệnh sau " + wr.getMaxRetries() + " lần: " + errorMessage);
+        return Optional.empty();
     }
 
     private void markFailed(WithdrawalRequest wr, String reason) {
@@ -568,8 +544,6 @@ public class WithdrawalRequestService {
             txn.setStatus(status);
             if (status == TransactionStatus.SUCCESS) {
                 txn.setDescription("Rút tiền thành công. FT=" + wr.getMbFtNumber());
-                txn.setBalanceAfter(walletService.computeAvailable(
-                        walletRepository.findById(wr.getWalletId()).orElseThrow()));
             } else {
                 txn.setDescription("Rút tiền thất bại — tiền đã được hoàn về ví.");
             }

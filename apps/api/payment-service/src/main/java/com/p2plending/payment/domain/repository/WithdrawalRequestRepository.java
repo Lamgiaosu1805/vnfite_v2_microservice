@@ -2,9 +2,11 @@ package com.p2plending.payment.domain.repository;
 
 import com.p2plending.payment.domain.entity.WithdrawalRequest;
 import com.p2plending.payment.domain.enums.WithdrawalStatus;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -24,6 +26,15 @@ public interface WithdrawalRequestRepository extends JpaRepository<WithdrawalReq
     Optional<WithdrawalRequest> findByIdAndIsDeletedFalse(String id);
 
     Optional<WithdrawalRequest> findByTransferRefAndIsDeletedFalse(String transferRef);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT w FROM WithdrawalRequest w WHERE w.id = :id AND w.isDeleted = false")
+    Optional<WithdrawalRequest> findWithLockByIdAndIsDeletedFalse(@Param("id") String id);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT w FROM WithdrawalRequest w WHERE w.transferRef = :transferRef AND w.isDeleted = false")
+    Optional<WithdrawalRequest> findWithLockByTransferRefAndIsDeletedFalse(
+            @Param("transferRef") String transferRef);
 
     /** CMS/Ops: xem danh sách theo trạng thái (monitoring) */
     Page<WithdrawalRequest> findByStatusInAndIsDeletedFalseOrderByCreatedAtDesc(

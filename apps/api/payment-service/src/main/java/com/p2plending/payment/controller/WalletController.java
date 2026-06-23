@@ -14,6 +14,7 @@ import com.p2plending.payment.security.AuthenticatedUser;
 import com.p2plending.payment.service.WalletService;
 import com.p2plending.payment.service.WithdrawService;
 import com.p2plending.payment.service.WithdrawalRequestService;
+import com.p2plending.payment.service.WithdrawalTransferOrchestrator;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -31,6 +32,7 @@ public class WalletController {
     private final WalletService walletService;
     private final WithdrawService withdrawService;
     private final WithdrawalRequestService withdrawalRequestService;
+    private final WithdrawalTransferOrchestrator withdrawalTransferOrchestrator;
     private final LinkedBankRepository linkedBankRepository;
 
     /** Lấy thông tin ví + số dư */
@@ -96,7 +98,7 @@ public class WalletController {
             @AuthenticationPrincipal AuthenticatedUser user,
             @PathVariable String withdrawalId,
             @RequestBody @Valid WithdrawalConfirmOtpRequest req) {
-        WithdrawalRequest wr = withdrawalRequestService.confirmOtp(
+        WithdrawalRequest wr = withdrawalTransferOrchestrator.confirmOtp(
                 user.userId(), withdrawalId, req.getOtp());
         return ResponseEntity.ok(toWithdrawalResponse(wr));
     }
@@ -126,7 +128,6 @@ public class WalletController {
     private WithdrawalResponse toWithdrawalResponse(WithdrawalRequest wr) {
         String bankName = "";
         String bankAccountNo = "";
-        linkedBankRepository.findByIdAndIsDeletedFalse(wr.getLinkedBankId()).ifPresent(b -> {});
         var bank = linkedBankRepository.findByIdAndIsDeletedFalse(wr.getLinkedBankId());
         if (bank.isPresent()) {
             bankName = bank.get().getBankName();
