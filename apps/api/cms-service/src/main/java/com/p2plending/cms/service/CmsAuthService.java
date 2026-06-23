@@ -9,6 +9,7 @@ import com.p2plending.cms.dto.response.TotpPendingResponse;
 import com.p2plending.cms.dto.response.TotpSetupResponse;
 import com.p2plending.cms.exception.InvalidCredentialsException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,6 +23,9 @@ public class CmsAuthService {
     private final CmsJwtService jwtService;
     private final TotpService totpService;
 
+    @Value("${app.totp.required:true}")
+    private boolean totpRequired;
+
     // ─── Bước 1: xác thực mật khẩu → trả pendingToken ────────────────────────
 
     @Transactional(readOnly = true)
@@ -32,6 +36,15 @@ public class CmsAuthService {
 
         if (!passwordEncoder.matches(request.getPassword(), admin.getPassword())) {
             throw new InvalidCredentialsException("Tên đăng nhập hoặc mật khẩu không đúng");
+        }
+
+        if (!totpRequired) {
+            CmsAuthResponse auth = buildAuthResponse(admin);
+            return TotpPendingResponse.builder()
+                    .accessToken(auth.getAccessToken())
+                    .admin(auth.getAdmin())
+                    .mustChangePassword(auth.isMustChangePassword())
+                    .build();
         }
 
         return TotpPendingResponse.builder()
