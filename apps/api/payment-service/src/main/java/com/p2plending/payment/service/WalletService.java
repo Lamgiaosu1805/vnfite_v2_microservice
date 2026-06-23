@@ -461,27 +461,54 @@ public class WalletService {
 
     /** Số dư thực từ TIKLUY (MB Bank). Mock mode trả 0. */
     public BigDecimal getTikluyBalance(Wallet wallet) {
+        return getTikluyAccountInfo(wallet).getTotalMoney();
+    }
+
+    private TikluyClient.TikluyAccountInfo getTikluyAccountInfo(Wallet wallet) {
         if (appProperties.getPayment().isMock()) {
-            return BigDecimal.ZERO;
+            return TikluyClient.TikluyAccountInfo.builder()
+                    .totalMoney(BigDecimal.ZERO)
+                    .lockedMoney(BigDecimal.ZERO)
+                    .build();
         }
         try {
-            return tikluyClient.getAccount("BAL-" + wallet.getId().substring(0, 8), wallet.getVnfAccountNo())
-                    .getTotalMoney();
+            return tikluyClient.getAccount(
+                    "BAL-" + wallet.getId().substring(0, 8), wallet.getVnfAccountNo());
         } catch (Exception e) {
             log.warn("Không lấy được balance từ TIKLUY accNo={}: {}", wallet.getVnfAccountNo(), e.getMessage());
-            return BigDecimal.ZERO;
+            return TikluyClient.TikluyAccountInfo.builder()
+                    .totalMoney(BigDecimal.ZERO)
+                    .lockedMoney(BigDecimal.ZERO)
+                    .build();
         }
     }
 
-    /** Số dư khả dụng = TIKLUY.totalMoney - local.lockedBalance (≥ 0). */
+    /**
+     * Trong thời gian 6666 và hệ thống mới chạy song song, dữ liệu migrate có thể làm
+     * provider lockedMoney và local lockedBalance cùng biểu diễn một khoản khóa cũ.
+     * Dùng max thay vì cộng để không double-count, đồng thời vẫn tôn trọng khóa mới nhất
+     * ở một trong hai hệ thống.
+     */
     public BigDecimal computeAvailable(Wallet wallet) {
-        return computeAvailableFromTotal(getTikluyBalance(wallet), wallet);
+        TikluyClient.TikluyAccountInfo info = getTikluyAccountInfo(wallet);
+        return computeAvailableFromProvider(info, wallet);
     }
 
     private BigDecimal computeAvailableFromTotal(BigDecimal totalBalance, Wallet wallet) {
         BigDecimal total = totalBalance != null ? totalBalance : BigDecimal.ZERO;
         BigDecimal locked = wallet.getLockedBalance() != null ? wallet.getLockedBalance() : BigDecimal.ZERO;
         return total.subtract(locked).max(BigDecimal.ZERO);
+    }
+
+    private BigDecimal computeAvailableFromProvider(TikluyClient.TikluyAccountInfo info,
+                                                    Wallet wallet) {
+        BigDecimal total = info.getTotalMoney() != null
+                ? info.getTotalMoney() : BigDecimal.ZERO;
+        BigDecimal providerLocked = info.getLockedMoney() != null
+                ? info.getLockedMoney() : BigDecimal.ZERO;
+        BigDecimal localLocked = wallet.getLockedBalance() != null
+                ? wallet.getLockedBalance() : BigDecimal.ZERO;
+        return total.subtract(providerLocked.max(localLocked)).max(BigDecimal.ZERO);
     }
 
     private void publishDepositEvent(String userId, BigDecimal amount, BigDecimal balance, String txnId) {
@@ -496,8 +523,10 @@ public class WalletService {
     }
 
     private WalletResponse toResponse(Wallet w) {
-        BigDecimal total     = getTikluyBalance(w);
-        BigDecimal available = total.subtract(w.getLockedBalance()).max(BigDecimal.ZERO);
+        TikluyClient.TikluyAccountInfo info = getTikluyAccountInfo(w);
+        BigDecimal total = info.getTotalMoney() != null
+                ? info.getTotalMoney() : BigDecimal.ZERO;
+        BigDecimal available = computeAvailableFromProvider(info, w);
         return WalletResponse.builder()
                 .walletId(w.getId())
                 .vnfAccountNo(w.getVnfAccountNo())

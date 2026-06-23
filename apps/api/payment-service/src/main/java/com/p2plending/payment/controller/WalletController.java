@@ -3,8 +3,6 @@ package com.p2plending.payment.controller;
 import com.p2plending.payment.domain.entity.LinkedBank;
 import com.p2plending.payment.domain.entity.WithdrawalRequest;
 import com.p2plending.payment.domain.repository.LinkedBankRepository;
-import com.p2plending.payment.dto.request.WithdrawConfirmRequest;
-import com.p2plending.payment.dto.request.WithdrawRequest;
 import com.p2plending.payment.dto.request.WithdrawalConfirmOtpRequest;
 import com.p2plending.payment.dto.request.WithdrawalInitiateRequest;
 import com.p2plending.payment.dto.response.TransactionResponse;
@@ -12,7 +10,6 @@ import com.p2plending.payment.dto.response.WalletResponse;
 import com.p2plending.payment.dto.response.WithdrawalResponse;
 import com.p2plending.payment.security.AuthenticatedUser;
 import com.p2plending.payment.service.WalletService;
-import com.p2plending.payment.service.WithdrawService;
 import com.p2plending.payment.service.WithdrawalRequestService;
 import com.p2plending.payment.service.WithdrawalTransferOrchestrator;
 import jakarta.validation.Valid;
@@ -30,7 +27,6 @@ import java.util.Map;
 public class WalletController {
 
     private final WalletService walletService;
-    private final WithdrawService withdrawService;
     private final WithdrawalRequestService withdrawalRequestService;
     private final WithdrawalTransferOrchestrator withdrawalTransferOrchestrator;
     private final LinkedBankRepository linkedBankRepository;
@@ -50,33 +46,10 @@ public class WalletController {
         return ResponseEntity.ok(walletService.getTransactions(user.userId(), page, size));
     }
 
-    /**
-     * Bước 1 rút tiền: kiểm tra số dư, lưu pending vào Redis, gửi OTP.
-     * Response 200 = OTP đã gửi.
-     */
-    @PostMapping("/wallet/withdraw")
-    public ResponseEntity<Map<String, String>> initiateWithdraw(
-            @AuthenticationPrincipal AuthenticatedUser user,
-            @RequestBody @Valid WithdrawRequest req) {
-        withdrawService.initiateWithdraw(user.userId(), req);
-        return ResponseEntity.ok(Map.of("message", "OTP đã được gửi. Vui lòng xác nhận trong 5 phút."));
-    }
+    // ─── Luồng rút tiền state machine ────────────────────────────────────────
 
     /**
-     * Bước 2 rút tiền: xác thực OTP, thực hiện chuyển tiền.
-     */
-    @PostMapping("/wallet/withdraw/confirm")
-    public ResponseEntity<Map<String, String>> confirmWithdraw(
-            @AuthenticationPrincipal AuthenticatedUser user,
-            @RequestBody @Valid WithdrawConfirmRequest req) {
-        withdrawService.confirmWithdraw(user.userId(), req.getOtp());
-        return ResponseEntity.ok(Map.of("message", "Yêu cầu rút tiền đã được ghi nhận. Tiền sẽ về tài khoản trong vài phút."));
-    }
-
-    // ─── Luồng rút tiền mới (v2) ──────────────────────────────────────────────
-
-    /**
-     * [v2] Bước 1: Tạo withdrawal request, gửi OTP.
+     * Bước 1: Tạo withdrawal request, gửi OTP.
      * Response trả về withdrawalId để dùng ở bước tiếp theo.
      */
     @PostMapping("/wallet/withdrawal/initiate")
@@ -91,7 +64,7 @@ public class WalletController {
     }
 
     /**
-     * [v2] Bước 2: Xác nhận OTP, lock tiền, xác định bước tiếp theo.
+     * Bước 2: Xác nhận OTP, lock tiền, xác định bước tiếp theo.
      */
     @PostMapping("/wallet/withdrawal/{withdrawalId}/confirm-otp")
     public ResponseEntity<WithdrawalResponse> confirmWithdrawalOtp(
@@ -104,7 +77,7 @@ public class WalletController {
     }
 
     /**
-     * [v2] Lấy trạng thái withdrawal.
+     * Lấy trạng thái withdrawal.
      */
     @GetMapping("/wallet/withdrawal/{withdrawalId}")
     public ResponseEntity<WithdrawalResponse> getWithdrawal(
@@ -115,7 +88,7 @@ public class WalletController {
     }
 
     /**
-     * [v2] Huỷ withdrawal (chỉ khi chưa lock tiền).
+     * Huỷ withdrawal (chỉ khi chưa lock tiền).
      */
     @DeleteMapping("/wallet/withdrawal/{withdrawalId}/cancel")
     public ResponseEntity<Map<String, String>> cancelWithdrawal(

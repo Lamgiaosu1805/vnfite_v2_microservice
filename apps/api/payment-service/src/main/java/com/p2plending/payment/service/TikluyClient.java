@@ -13,6 +13,8 @@ import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Base64;
+import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -147,32 +149,149 @@ public class TikluyClient {
      * Yêu cầu TIKLUY chuyển tiền từ TK công ty ra ngân hàng của user.
      * @return transactionId TIKLUY phản hồi (để track trạng thái)
      */
-    public String fundTransfer(String txnId, String accNo,
-                               String bankCode, String creditAccount, String amount) {
-        Map<String, Object> fundTransferReq = Map.of(
-                "bankCode", bankCode,
-                "creditAccount", creditAccount,
-                "transferAmount", amount
-        );
-        Map<String, Object> body = Map.of("fundTransferRequest", fundTransferReq);
+    public TransferInitiation fundTransfer(String txnId, String accNo,
+                                           String bankCode, String creditAccount, String amount) {
+        return fundTransfer(txnId, accNo, bankCode, creditAccount, amount, props.getSource());
+    }
+
+    /**
+     * Gửi lệnh rút tiền với source tường minh. TIKLUY 8888 đọc source trong JSON body
+     * để chọn đúng tài khoản chi/kênh MB: VNFITE -> 6966638888/YFCH;
+     * VNFFITE_CAPITAL -> nhánh 6RCH cũ.
+     */
+    public TransferInitiation fundTransfer(String txnId, String accNo,
+                                           String bankCode, String creditAccount, String amount,
+                                           String source) {
+        Map<String, Object> body = buildFundTransferBody(bankCode, creditAccount, amount, source);
+        body.put("accNo", accNo);
+        body.put("clientReference", txnId);
 
         try {
             ResponseEntity<JsonNode> resp = restTemplate.exchange(
-                    props.getBaseUrl() + "/api/v2/account/" + accNo,
-                    HttpMethod.PUT,
+                    props.getBaseUrl() + "/api/v1/transfer-money",
+                    HttpMethod.POST,
                     new HttpEntity<>(body, authHeaders(txnId)),
                     JsonNode.class);
 
-            JsonNode data = extractData(resp.getBody(), "fundTransfer");
-            // TIKLUY trả về object chứa transactionId trong response
-            if (data.has("transactionId")) {
-                return data.get("transactionId").asText();
-            }
-            return txnId; // fallback
+            JsonNode data = extractData(resp.getBody(), "fundTransfer", true);
+            return parseTransferInitiation(data);
 
         } catch (Exception e) {
-            log.error("txnId={} TIKLUY fundTransfer failed: {}", txnId, e.getMessage());
+            log.error("txnId={} source={} TIKLUY fundTransfer failed: {}", txnId, source, e.getMessage());
             throw new RuntimeException("Chuyển tiền TIKLUY thất bại: " + e.getMessage(), e);
+        }
+    }
+
+    static TransferInitiation parseTransferInitiation(JsonNode data) {
+        JsonNode transfer = data.path("data");
+        String providerReference = transfer.path("transactionId").asText("");
+        if (providerReference.isBlank()) {
+            throw new RuntimeException(
+                    "fundTransfer: TIKLUY không trả mã giao dịch YFCH để đối soát");
+        }
+        String rawStatus = transfer.path("status").asText("")
+                .trim().toUpperCase(Locale.ROOT);
+        String ftNumber = transfer.path("ftNumber").asText("");
+        String errorCode = data.path("errorCode").asText("");
+        TransferState state = parseState(rawStatus, errorCode);
+        return new TransferInitiation(
+                providerReference, state, rawStatus, ftNumber, errorCode);
+    }
+
+    static Map<String, Object> buildFundTransferBody(
+            String bankCode, String creditAccount, String amount, String source) {
+        if (source == null || source.isBlank()) {
+            throw new IllegalStateException(
+                    "Thiếu source chuyển tiền TIKLUY; từ chối gửi để tránh chọn sai tài khoản chi.");
+        }
+        String normalizedSource = source.trim().toUpperCase();
+        if (!"VNFITE".equals(normalizedSource)
+                && !"VNFFITE_CAPITAL".equals(normalizedSource)) {
+            throw new IllegalStateException(
+                    "Source chuyển tiền TIKLUY không hợp lệ: " + source);
+        }
+        Map<String, Object> body = new HashMap<>();
+        body.put("bankCode", bankCode);
+        body.put("creditResourceNumber", creditAccount);
+        body.put("transferAmount", amount);
+        body.put("source", normalizedSource);
+        return body;
+    }
+
+    /**
+     * Query trạng thái cuối của mã YFCH tại MB qua TIKLUY. Chỉ trạng thái terminal
+     * mới làm payment-service hoàn tất hoặc hoàn khóa; trạng thái lạ giữ PROCESSING.
+     */
+    public TransferQueryResult getTransferStatus(String txnId, String providerReference) {
+        try {
+            String url = props.getBaseUrl() + "/api/v1/get-transaction?transactionCode="
+                    + providerReference;
+            ResponseEntity<JsonNode> resp = restTemplate.exchange(
+                    url, HttpMethod.GET,
+                    new HttpEntity<>(authHeaders(txnId)),
+                    JsonNode.class);
+
+            JsonNode mbResponse = extractData(resp.getBody(), "getTransferStatus", true);
+            return parseTransferStatus(mbResponse);
+        } catch (Exception e) {
+            log.error("txnId={} providerRef={} TIKLUY getTransferStatus failed: {}",
+                    txnId, providerReference, e.getMessage());
+            throw new RuntimeException("Đối soát trạng thái chuyển tiền TIKLUY thất bại: "
+                    + e.getMessage(), e);
+        }
+    }
+
+    static TransferQueryResult parseTransferStatus(JsonNode mbResponse) {
+        String errorCode = mbResponse.path("errorCode").asText("");
+        JsonNode detail = mbResponse.path("data");
+        String rawStatus = detail.path("transStatus").asText("")
+                .trim().toUpperCase(Locale.ROOT);
+        String ftNumber = detail.path("ft").asText("");
+
+        TransferState state = parseState(rawStatus, errorCode);
+        return new TransferQueryResult(state, rawStatus, ftNumber, errorCode);
+    }
+
+    private static TransferState parseState(String rawStatus, String errorCode) {
+        if ("SUCCESS".equals(rawStatus) || "COMPLETED".equals(rawStatus)) {
+            return TransferState.SUCCESS;
+        } else if ("FAILED".equals(rawStatus)
+                || "FAIL".equals(rawStatus)
+                || "REJECTED".equals(rawStatus)
+                || "CANCELLED".equals(rawStatus)
+                || "ERROR".equals(rawStatus)) {
+            return TransferState.FAILED;
+        } else if (!errorCode.isBlank() && !"000".equals(errorCode)) {
+            return TransferState.FAILED;
+        }
+        return TransferState.PROCESSING;
+    }
+
+    /**
+     * Trừ số dư VA sau khi MB xác nhận chuyển thành công. Endpoint này là additive
+     * và idempotent theo txnId ở TIKLUY; gọi lại không được trừ tiền lần hai.
+     */
+    public void settleWithdrawal(String txnId, String accNo, BigDecimal amount) {
+        Map<String, Object> body = Map.of(
+                "amount", amount,
+                "plus", false,
+                "content", "Rút tiền khỏi ví VNFITE");
+        HttpHeaders headers = authHeaders(txnId);
+        headers.set("source", "VNFITE");
+        try {
+            ResponseEntity<JsonNode> resp = restTemplate.exchange(
+                    props.getBaseUrl() + "/api/v2/account/" + accNo + "/balance-adjustment",
+                    HttpMethod.PUT,
+                    new HttpEntity<>(body, headers),
+                    JsonNode.class);
+            extractData(resp.getBody(), "settleWithdrawal", true);
+            log.info("txnId={} TIKLUY settled withdrawal accNo={} amount={}",
+                    txnId, accNo, amount);
+        } catch (Exception e) {
+            log.error("txnId={} TIKLUY settle withdrawal failed accNo={}: {}",
+                    txnId, accNo, e.getMessage());
+            throw new RuntimeException("Không thể quyết toán số dư rút tiền tại TIKLUY: "
+                    + e.getMessage(), e);
         }
     }
 
@@ -192,19 +311,21 @@ public class TikluyClient {
         adjustBalance(txnId, accNo, amount, false, true);
     }
 
-    /**
-     * PUT /api/v2/account/{accNo} { fluctuatedAmount, plus } để cộng/trừ TOTAL_MONEY.
-     * TIKLUY DTO dùng `boolean isPlus` → Lombok getter isPlus() → Jackson property "plus".
-     * plus=true cộng, plus=false trừ (xem AccountService.java của TIKLUY).
-     */
+    /** Điều chỉnh VA qua endpoint additive, idempotent theo txnId của hệ thống mới. */
     private void adjustBalance(String txnId, String accNo, BigDecimal amount, boolean plus, boolean throwOnError) {
-        Map<String, Object> body = Map.of("fluctuatedAmount", amount, "plus", plus);
+        Map<String, Object> body = Map.of(
+                "amount", amount,
+                "plus", plus,
+                "content", plus ? "Cộng tiền ví VNFITE" : "Trừ tiền ví VNFITE");
+        HttpHeaders headers = authHeaders(txnId);
+        headers.set("source", "VNFITE");
         try {
-            restTemplate.exchange(
-                    props.getBaseUrl() + "/api/v2/account/" + accNo,
+            ResponseEntity<JsonNode> resp = restTemplate.exchange(
+                    props.getBaseUrl() + "/api/v2/account/" + accNo + "/balance-adjustment",
                     HttpMethod.PUT,
-                    new HttpEntity<>(body, authHeaders(txnId)),
+                    new HttpEntity<>(body, headers),
                     JsonNode.class);
+            extractData(resp.getBody(), "adjustBalance", true);
             log.info("txnId={} TIKLUY adjust accNo={} amount={} plus={}", txnId, accNo, amount, plus);
         } catch (Exception e) {
             log.warn("txnId={} TIKLUY adjust failed accNo={} plus={}: {}", txnId, accNo, plus, e.getMessage());
@@ -241,10 +362,29 @@ public class TikluyClient {
     }
 
     private JsonNode extractData(JsonNode body, String op) {
+        return extractData(body, op, false);
+    }
+
+    private JsonNode extractData(JsonNode body, String op, boolean requireSuccess) {
         if (body == null) throw new RuntimeException(op + ": empty response");
         // TIKLUY BaseResponse: { result: {isOK, responseCode, responseMessage}, data: {...} }
+        JsonNode result = body.path("result");
+        if (requireSuccess && !result.isMissingNode()) {
+            boolean hasOk = result.has("isOK") || result.has("ok");
+            boolean ok = result.has("isOK")
+                    ? result.path("isOK").asBoolean()
+                    : result.path("ok").asBoolean();
+            if (hasOk && !ok) {
+                String code = result.path("responseCode").asText("TIKLUY_ERROR");
+                String message = result.path("responseMessage").asText("TIKLUY từ chối yêu cầu");
+                throw new TikluyBusinessException(code, message);
+            }
+        }
         if (body.has("data") && !body.get("data").isNull()) {
             return body.get("data");
+        }
+        if (requireSuccess) {
+            throw new RuntimeException(op + ": response không có data");
         }
         return body;
     }
@@ -258,5 +398,39 @@ public class TikluyClient {
         private String accName;
         private BigDecimal totalMoney;
         private BigDecimal lockedMoney;
+    }
+
+    public enum TransferState {
+        PROCESSING,
+        SUCCESS,
+        FAILED
+    }
+
+    public record TransferQueryResult(
+            TransferState state,
+            String rawStatus,
+            String ftNumber,
+            String errorCode) {
+    }
+
+    public record TransferInitiation(
+            String providerReference,
+            TransferState state,
+            String rawStatus,
+            String ftNumber,
+            String errorCode) {
+    }
+
+    public static class TikluyBusinessException extends RuntimeException {
+        private final String errorCode;
+
+        public TikluyBusinessException(String errorCode, String message) {
+            super(errorCode + ": " + message);
+            this.errorCode = errorCode;
+        }
+
+        public String getErrorCode() {
+            return errorCode;
+        }
     }
 }

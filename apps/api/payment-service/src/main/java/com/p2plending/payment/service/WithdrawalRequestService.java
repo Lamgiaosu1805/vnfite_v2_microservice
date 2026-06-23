@@ -54,6 +54,15 @@ public class WithdrawalRequestService {
             String vnfAccountNo,
             String bankCode,
             String bankAccountNo,
+            BigDecimal amount,
+            String source) {
+    }
+
+    public record PendingTransfer(
+            String withdrawalId,
+            String transferRef,
+            String providerTransferRef,
+            String vnfAccountNo,
             BigDecimal amount) {
     }
 
@@ -217,7 +226,9 @@ public class WithdrawalRequestService {
     public Optional<TransferAttempt> processTransferCallback(String transferRef, boolean success,
                                                              String ftNumber, String errorCode) {
         WithdrawalRequest wr = withdrawalRepository
-                .findWithLockByTransferRefAndIsDeletedFalse(transferRef)
+                .findWithLockByProviderTransferRefAndIsDeletedFalse(transferRef)
+                .or(() -> withdrawalRepository
+                        .findWithLockByTransferRefAndIsDeletedFalse(transferRef))
                 .orElse(null);
 
         if (wr == null) {
@@ -269,6 +280,7 @@ public class WithdrawalRequestService {
             if (wr.canRetry()) {
                 wr.setRetryCount(wr.getRetryCount() + 1);
                 wr.setTransferRef(null);
+                wr.setProviderTransferRef(null);
                 withdrawalRepository.save(wr);
                 log.info("withdrawal.retry withdrawalId={} attempt={}/{}", wr.getId(), wr.getRetryCount(), wr.getMaxRetries());
                 return Optional.of(prepareTransferAttempt(
@@ -304,6 +316,7 @@ public class WithdrawalRequestService {
         // Ops cần xác nhận bên TIKLUY/MB rằng lần trước CHƯA chuyển tiền trước khi nhấn retry.
         wr.setRetryCount(wr.getRetryCount() + 1);
         wr.setTransferRef(null);
+        wr.setProviderTransferRef(null);
         withdrawalRepository.save(wr);
         log.info("withdrawal.manualRetry withdrawalId={} adminId={} attempt={}/{} newTxnId={}",
                 withdrawalId, adminId, wr.getRetryCount(), wr.getMaxRetries(),
@@ -361,6 +374,52 @@ public class WithdrawalRequestService {
                         WithdrawalStatus.PROCESSING), threshold).stream()
                 .map(WithdrawalRequest::getId)
                 .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<PendingTransfer> findPendingProviderTransfers(LocalDateTime threshold) {
+        return withdrawalRepository.findStuckWithdrawals(List.of(
+                        WithdrawalStatus.TRANSFER_INITIATED,
+                        WithdrawalStatus.PROCESSING), threshold).stream()
+                .filter(wr -> wr.getProviderTransferRef() != null
+                        && !wr.getProviderTransferRef().isBlank())
+                .map(this::toPendingTransfer)
+                .flatMap(Optional::stream)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<PendingTransfer> findPendingTransferByReference(String reference) {
+        return withdrawalRepository.findByProviderTransferRefAndIsDeletedFalse(reference)
+                .or(() -> withdrawalRepository.findByTransferRefAndIsDeletedFalse(reference))
+                .filter(wr -> wr.getStatus() == WithdrawalStatus.TRANSFER_INITIATED
+                        || wr.getStatus() == WithdrawalStatus.PROCESSING)
+                .flatMap(this::toPendingTransfer);
+    }
+
+    @Transactional
+    public void attachProviderReference(String transferRef, String providerTransferRef) {
+        if (providerTransferRef == null || providerTransferRef.isBlank()) {
+            return;
+        }
+        WithdrawalRequest wr = withdrawalRepository
+                .findWithLockByTransferRefAndIsDeletedFalse(transferRef)
+                .orElse(null);
+        if (wr == null || (wr.getStatus() != WithdrawalStatus.TRANSFER_INITIATED
+                && wr.getStatus() != WithdrawalStatus.PROCESSING)) {
+            return;
+        }
+        if (wr.getProviderTransferRef() != null
+                && !wr.getProviderTransferRef().equals(providerTransferRef)) {
+            throw new IllegalStateException(
+                    "Mã giao dịch TIKLUY không khớp với yêu cầu rút tiền hiện tại.");
+        }
+        if (wr.getProviderTransferRef() == null) {
+            wr.setProviderTransferRef(providerTransferRef);
+            withdrawalRepository.save(wr);
+            log.info("withdrawal.providerRef.attached withdrawalId={} transferRef={} providerRef={}",
+                    wr.getId(), transferRef, providerTransferRef);
+        }
     }
 
     @Transactional
@@ -428,15 +487,21 @@ public class WithdrawalRequestService {
         // Idempotency: txnId deterministic theo withdrawalId + retryCount.
         // Cùng một lần thử luôn dùng cùng txnId → TIKLUY dedup nếu nhận trùng.
         String txnId = wr.getId() + "-R" + wr.getRetryCount();
+        String source = activeConfig().getSourceLabel();
+        if (source == null || !"VNFITE".equalsIgnoreCase(source.trim())) {
+            throw new IllegalStateException(
+                    "Cấu hình source_label của luồng rút VNFITE phải là VNFITE; từ chối gửi sang TIKLUY.");
+        }
 
         // Write-ahead: lưu transferRef vào DB TRƯỚC khi gọi TIKLUY.
         // Nếu sau đó bị timeout, ta biết TIKLUY đã nhận lệnh → không retry mù.
         wr.setTransferRef(txnId);
+        wr.setProviderTransferRef(null);
         withdrawalRepository.save(wr);
 
         return new TransferAttempt(
                 wr.getId(), txnId, wallet.getVnfAccountNo(), bank.getBankCode(),
-                bank.getBankAccountNo(), wr.getAmount());
+                bank.getBankAccountNo(), wr.getAmount(), "VNFITE");
     }
 
     @Transactional
@@ -454,6 +519,7 @@ public class WithdrawalRequestService {
         }
 
         wr.setFailureReason(null);
+        wr.setProviderTransferRef(providerReference);
         transition(wr, WithdrawalStatus.PROCESSING, "SYSTEM", "SYSTEM",
                 "TIKLUY nhận lệnh. providerRef=" + providerReference);
         log.info("withdrawal.tikluy.sent withdrawalId={} txnId={} providerRef={} amount={}",
@@ -487,6 +553,7 @@ public class WithdrawalRequestService {
         }
 
         wr.setTransferRef(null);
+        wr.setProviderTransferRef(null);
         transition(wr, WithdrawalStatus.TRANSFER_FAILED, "SYSTEM", "SYSTEM",
                 "TIKLUY chưa nhận được lệnh: " + errorMessage);
 
@@ -549,6 +616,18 @@ public class WithdrawalRequestService {
             }
             walletTransactionRepository.save(txn);
         });
+    }
+
+    private Optional<PendingTransfer> toPendingTransfer(WithdrawalRequest wr) {
+        return walletRepository.findById(wr.getWalletId())
+                .filter(wallet -> wallet.getVnfAccountNo() != null
+                        && !wallet.getVnfAccountNo().isBlank())
+                .map(wallet -> new PendingTransfer(
+                        wr.getId(),
+                        wr.getTransferRef(),
+                        wr.getProviderTransferRef(),
+                        wallet.getVnfAccountNo(),
+                        wr.getAmount()));
     }
 
     private void transition(WithdrawalRequest wr, WithdrawalStatus next,

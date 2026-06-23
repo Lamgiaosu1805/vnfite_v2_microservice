@@ -65,13 +65,14 @@ public class InternalWithdrawalController {
 
         // Log toàn bộ payload raw từ MB/TIKLUY — ops cần xem errorCode thật để cấu hình non_retryable_error_codes
         if (req.isSuccess()) {
-            log.info("[MB-CALLBACK] SUCCESS transferRef={} ftNumber={}", req.getTransferRef(), req.getFtNumber());
+            log.info("[MB-CALLBACK] SUCCESS transferRef={} providerRef={} ftNumber={}",
+                    req.getTransferRef(), req.getProviderTransferRef(), req.getFtNumber());
         } else {
             log.warn("[MB-CALLBACK] FAILED transferRef={} errorCode='{}' — nếu lỗi này cần non-retryable, thêm vào DB: UPDATE withdrawal_transfer_configs SET non_retryable_error_codes='{},...' WHERE active=1",
                     req.getTransferRef(), req.getErrorCode(), req.getErrorCode());
         }
         withdrawalTransferOrchestrator.handleTransferCallback(
-                req.getTransferRef(), req.isSuccess(),
+                req.getTransferRef(), req.getProviderTransferRef(), req.isSuccess(),
                 req.getFtNumber(), req.getErrorCode());
         return ResponseEntity.ok(Map.of("message", "OK"));
     }
@@ -189,6 +190,7 @@ public class InternalWithdrawalController {
     @Data
     public static class TransferCallbackRequest {
         private String transferRef;
+        private String providerTransferRef;
         private boolean success;
         private String ftNumber;
         private String errorCode;

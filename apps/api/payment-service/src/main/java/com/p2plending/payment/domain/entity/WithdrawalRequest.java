@@ -43,6 +43,10 @@ public class WithdrawalRequest {
     @Column(name = "transfer_ref", length = 100)
     private String transferRef;
 
+    /** Mã YFCH do TIKLUY sinh, dùng để query trạng thái giao dịch tại MB. */
+    @Column(name = "provider_transfer_ref", length = 100)
+    private String providerTransferRef;
+
     /** FT number từ MB Bank, có trong callback thành công */
     @Column(name = "mb_ft_number", length = 50)
     private String mbFtNumber;

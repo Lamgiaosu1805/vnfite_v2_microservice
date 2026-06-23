@@ -539,6 +539,7 @@ public class SourceServiceClient {
                 .bankName(text(node, "bankName"))
                 .bankAccountNo(text(node, "bankAccountNo"))
                 .mbFtNumber(text(node, "mbFtNumber"))
+                .providerTransferRef(text(node, "providerTransferRef"))
                 .rejectReason(text(node, "rejectReason"))
                 .failureReason(text(node, "failureReason"))
                 .retryCount(node.path("retryCount").asInt(0))

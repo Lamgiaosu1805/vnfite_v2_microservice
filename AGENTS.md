@@ -43,10 +43,22 @@ Current important internal flows:
 - `cms-service` gets loan data and sends loan review actions to `loan-service` internal loan APIs.
 - `notification-service` calls `GET /internal/users/{userId}/fcm-token` on `auth-service` to retrieve the FCM push token before sending push notifications.
 - Mobile apps must not call `service.vnfite.com.vn/file-manager` directly. Upload supporting documents through VNFITE API proxy endpoints, currently `POST /api/loans/documents/upload`, so app/network whitelisting only needs VNFITE API domains.
+- During the parallel cutover, legacy VNFITE remains on `42.113.122.155:6666`; do not route new calls through it or change its runtime behavior. The account-service instance on `42.113.122.155:8888` is the MB-whitelisted gateway for the new `payment-service` on server `118`.
+- New withdrawals call `8888` with body `source=VNFITE`; `8888` selects debit account `6966638888`, channel `YFCH`, and VNFITE transfer remarks. The `6RCH`/TIKLUY path must remain unchanged.
+- MB withdrawal callbacks land on `8888`; only the `8888` instance is configured with `VNFITE_NEW_PAYMENT_URL` and `VNFITE_NEW_CALLBACK_SECRET` to relay terminal `YFCH` results carrying the new system's `clientReference` asynchronously to `/internal/payment/withdrawal/transfer-callback`. Legacy `6666` transactions have no `clientReference` and are not relayed. Keep these variables empty on `6666`.
+- Callback relay failure must not alter the response sent to MB. `payment-service` polls `GET /api/v1/get-transaction` through `8888` as reconciliation fallback and never blindly resends an ambiguous transfer.
 - `cms-service` calls `credit-service` for Credit Score 360 and AI document appraisal where configured.
 - Internal APIs must be protected with `INTERNAL_API_SECRET` / `X-Internal-Secret`.
 - Prefer source-of-truth service APIs over copying tables between databases.
 - Use service DNS names inside Docker, e.g. `http://auth-service:8081` and `http://loan-service:8082`, unless nginx/internal proxy config says otherwise.
+
+## Legacy VNFITE And TIKLUY Boundary
+
+- VNFITE cũ tại `42.113.122.155:6666` sắp ngừng hoạt động. Không thêm dependency runtime hoặc API call mới tới port `6666`; thay các luồng cũ bằng microservice VNFITE mới.
+- TIKLUY production tại `42.113.122.155:8888` là gateway MB Bank đang chạy. Giữ nguyên contract và hành vi production của cổng `8888` trừ khi người dùng yêu cầu một kế hoạch thay đổi/cutover riêng.
+- VNFITE mới là source of truth cho ví, ledger, giao dịch, withdrawal state machine, idempotency và audit. TIKLUY `8888` chỉ là biên tích hợp ngân hàng cho VA, xác minh tài khoản, chuyển tiền và callback.
+- “Không sửa luồng TIKLUY 8888” không có nghĩa là giữ backend/luồng VNFITE cũ ở `6666`.
+- Khi gọi `PUT /api/v2/account/{accNo}` để rút tiền, phải đặt `source: "VNFITE"` trong JSON body. TIKLUY 8888 dùng field này để chọn tài khoản chi `6966638888`, channel `YFCH` và remark VNFITE; thiếu source có thể rơi vào nhánh `6RCH/TIKLUY` nên bắt buộc fail-closed.
 
 **FCM token rules:**
 - `auth_db.user_fcm_tokens` stores one active FCM token per user (PK = `user_id`).

@@ -18,6 +18,7 @@ public class WithdrawalSummaryResponse {
     private String bankName;
     private String bankAccountNo;
     private String mbFtNumber;
+    private String providerTransferRef;
     private String rejectReason;
     private String failureReason;
     private int retryCount;

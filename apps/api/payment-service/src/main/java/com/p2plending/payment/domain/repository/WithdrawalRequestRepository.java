@@ -27,6 +27,8 @@ public interface WithdrawalRequestRepository extends JpaRepository<WithdrawalReq
 
     Optional<WithdrawalRequest> findByTransferRefAndIsDeletedFalse(String transferRef);
 
+    Optional<WithdrawalRequest> findByProviderTransferRefAndIsDeletedFalse(String providerTransferRef);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT w FROM WithdrawalRequest w WHERE w.id = :id AND w.isDeleted = false")
     Optional<WithdrawalRequest> findWithLockByIdAndIsDeletedFalse(@Param("id") String id);
@@ -35,6 +37,11 @@ public interface WithdrawalRequestRepository extends JpaRepository<WithdrawalReq
     @Query("SELECT w FROM WithdrawalRequest w WHERE w.transferRef = :transferRef AND w.isDeleted = false")
     Optional<WithdrawalRequest> findWithLockByTransferRefAndIsDeletedFalse(
             @Param("transferRef") String transferRef);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT w FROM WithdrawalRequest w WHERE w.providerTransferRef = :providerTransferRef AND w.isDeleted = false")
+    Optional<WithdrawalRequest> findWithLockByProviderTransferRefAndIsDeletedFalse(
+            @Param("providerTransferRef") String providerTransferRef);
 
     /** CMS/Ops: xem danh sách theo trạng thái (monitoring) */
     Page<WithdrawalRequest> findByStatusInAndIsDeletedFalseOrderByCreatedAtDesc(

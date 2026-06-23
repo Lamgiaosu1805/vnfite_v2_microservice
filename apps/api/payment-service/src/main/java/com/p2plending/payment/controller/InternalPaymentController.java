@@ -12,7 +12,6 @@ import com.p2plending.payment.domain.enums.TransactionType;
 import com.p2plending.payment.service.LinkedBankService;
 import com.p2plending.payment.service.TikluyClient;
 import com.p2plending.payment.service.WalletService;
-import com.p2plending.payment.service.WithdrawService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -40,7 +39,6 @@ import java.util.Map;
 public class InternalPaymentController {
 
     private final WalletService walletService;
-    private final WithdrawService withdrawService;
     private final LinkedBankService linkedBankService;
     private final AppProperties appProperties;
     private final TikluyClient tikluyClient;
@@ -125,26 +123,6 @@ public class InternalPaymentController {
             log.error("txnId={} Error processing deposit callback: {}", txnId, e.getMessage(), e);
             return ResponseEntity.ok(Map.of("status", "ERROR", "message", e.getMessage()));
         }
-    }
-
-    // ─── Withdraw callback từ TIKLUY (khi MB xử lý xong) ────────────────────
-
-    /**
-     * TIKLUY có thể gọi endpoint này sau khi MB Bank phản hồi kết quả chuyển tiền.
-     * (Nếu TIKLUY được cấu hình để forward withdraw result về đây)
-     */
-    @PostMapping("/internal/payment/withdraw-callback")
-    public ResponseEntity<Map<String, String>> handleWithdrawCallback(
-            @RequestHeader(value = "X-Internal-Secret", required = false) String secret,
-            @RequestParam String tikluyTxnId,
-            @RequestParam(defaultValue = "true") boolean success) {
-
-        if (!appProperties.getInternal().getSecret().equals(secret)) {
-            return ResponseEntity.status(401).body(Map.of("error", "Unauthorized"));
-        }
-
-        withdrawService.handleWithdrawCallback(tikluyTxnId, success);
-        return ResponseEntity.ok(Map.of("status", "OK"));
     }
 
     // ─── Wallet operations cho loan-service ──────────────────────────────────

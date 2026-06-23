@@ -20,6 +20,7 @@ public class WithdrawalResponse {
     private String bankName;
     private String bankAccountNo;
     private String mbFtNumber;
+    private String providerTransferRef;
     private String rejectReason;
     private String failureReason;
     private int retryCount;
@@ -37,6 +38,7 @@ public class WithdrawalResponse {
                 .bankName(bankName)
                 .bankAccountNo(bankAccountNo)
                 .mbFtNumber(wr.getMbFtNumber())
+                .providerTransferRef(wr.getProviderTransferRef())
                 .rejectReason(wr.getRejectReason())
                 .failureReason(wr.getFailureReason())
                 .retryCount(wr.getRetryCount())
