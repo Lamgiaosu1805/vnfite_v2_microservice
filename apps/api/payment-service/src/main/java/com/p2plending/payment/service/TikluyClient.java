@@ -278,6 +278,7 @@ public class TikluyClient {
                 "content", "Rút tiền khỏi ví VNFITE");
         HttpHeaders headers = authHeaders(txnId);
         headers.set("source", "VNFITE");
+        addInternalSecretHeader(headers);
         try {
             ResponseEntity<JsonNode> resp = restTemplate.exchange(
                     props.getBaseUrl() + "/api/v2/account/" + accNo + "/balance-adjustment",
@@ -319,6 +320,7 @@ public class TikluyClient {
                 "content", plus ? "Cộng tiền ví VNFITE" : "Trừ tiền ví VNFITE");
         HttpHeaders headers = authHeaders(txnId);
         headers.set("source", "VNFITE");
+        addInternalSecretHeader(headers);
         try {
             ResponseEntity<JsonNode> resp = restTemplate.exchange(
                     props.getBaseUrl() + "/api/v2/account/" + accNo + "/balance-adjustment",
@@ -358,6 +360,14 @@ public class TikluyClient {
         } catch (Exception e) {
             log.error("txnId={} TIKLUY verifyBankAccount failed: {}", txnId, e.getMessage());
             throw new RuntimeException("Xác minh tài khoản ngân hàng thất bại: " + e.getMessage(), e);
+        }
+    }
+
+    /** Thêm X-VNFITE-Internal-Secret vào header nếu đã cấu hình; TIKLUY 8888 yêu cầu header này. */
+    private void addInternalSecretHeader(HttpHeaders headers) {
+        String secret = props.getInternalSecret();
+        if (secret != null && !secret.isBlank()) {
+            headers.set("X-VNFITE-Internal-Secret", secret);
         }
     }
 

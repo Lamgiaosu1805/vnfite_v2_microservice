@@ -24,6 +24,24 @@ public class AuthServiceClient {
      * Trả null nếu không tìm thấy hoặc user chưa có fullName.
      */
     public String getUserFullName(String userId) {
+        JsonNode body = fetchUser(userId);
+        if (body == null) return null;
+        JsonNode nameNode = body.path("fullName");
+        return nameNode.isNull() || nameNode.isMissingNode() ? null : nameNode.asText();
+    }
+
+    /**
+     * Lấy số điện thoại của user từ auth-service để gửi OTP rút tiền.
+     * Trả null nếu không tìm thấy.
+     */
+    public String getUserPhone(String userId) {
+        JsonNode body = fetchUser(userId);
+        if (body == null) return null;
+        JsonNode phoneNode = body.path("phone");
+        return phoneNode.isNull() || phoneNode.isMissingNode() ? null : phoneNode.asText();
+    }
+
+    private JsonNode fetchUser(String userId) {
         try {
             HttpHeaders headers = new HttpHeaders();
             headers.set("X-Internal-Secret", appProperties.getInternal().getSecret());
@@ -34,13 +52,9 @@ public class AuthServiceClient {
                     new HttpEntity<>(headers),
                     JsonNode.class);
 
-            JsonNode body = resp.getBody();
-            if (body == null) return null;
-            JsonNode nameNode = body.path("fullName");
-            return nameNode.isNull() || nameNode.isMissingNode() ? null : nameNode.asText();
-
+            return resp.getBody();
         } catch (Exception e) {
-            log.error("Failed to get fullName for userId={}: {}", userId, e.getMessage());
+            log.error("Failed to fetch user userId={}: {}", userId, e.getMessage());
             return null;
         }
     }

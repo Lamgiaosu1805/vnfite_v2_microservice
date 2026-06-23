@@ -12,4 +12,6 @@ public class TikluyProperties {
     private String clientId;
     private String clientSecret;
     private String source = "VNFITE";
+    /** Secret gửi trong X-VNFITE-Internal-Secret header khi gọi TIKLUY balance-adjustment. */
+    private String internalSecret = "";
 }

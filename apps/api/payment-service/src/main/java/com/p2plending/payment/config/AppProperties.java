@@ -15,6 +15,7 @@ public class AppProperties {
     private Payment payment = new Payment();
     private Tikluy tikluy = new Tikluy();
     private Auth auth = new Auth();
+    private VnfOtp vnfOtp = new VnfOtp();
 
     @Data
     public static class Redis {
@@ -29,6 +30,13 @@ public class AppProperties {
     @Data
     public static class Otp {
         private boolean mock = true;
+        private int maxFailAttempts = 5;
+    }
+
+    @Data
+    public static class VnfOtp {
+        private String url = "";
+        private int withdrawalFunctionType = 2;
     }
 
     @Data
@@ -45,6 +53,8 @@ public class AppProperties {
     @Data
     public static class Tikluy {
         private Callback callback = new Callback();
+        /** Secret gửi trong header X-VNFITE-Internal-Secret khi gọi TIKLUY balance-adjustment và transfer-money. */
+        private String internalSecret = "";
 
         @Data
         public static class Callback {

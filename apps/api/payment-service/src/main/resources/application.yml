@@ -76,12 +76,17 @@ app:
     secret: ${INTERNAL_API_SECRET}
   otp:
     mock: ${APP_OTP_MOCK:true}
+    max-fail-attempts: 5
   payment:
     # mock=true: bỏ qua TIKLUY, dùng dữ liệu giả cho môi trường dev/test
     mock: ${APP_PAYMENT_MOCK:true}
   auth:
     service-url: ${AUTH_SERVICE_URL:http://auth-service:8081}
+  vnf-otp:
+    url: ${VNF_OTP_SERVICE_URL:}
+    withdrawal-function-type: 2
   tikluy:
+    internal-secret: ${TIKLUY_INTERNAL_SECRET:}
     callback:
       secret: ${TIKLUY_CALLBACK_SECRET:}
       allowed-ips: ${TIKLUY_CALLBACK_ALLOWED_IPS:}

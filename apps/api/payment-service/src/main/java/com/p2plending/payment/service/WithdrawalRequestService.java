@@ -13,12 +13,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
-import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
@@ -44,9 +44,13 @@ public class WithdrawalRequestService {
     private final WithdrawalTransferConfigRepository configRepository;
     private final StringRedisTemplate redisTemplate;
     private final AppProperties appProperties;
+    private final VnfOtpSenderService vnfOtpSenderService;
+    private final AuthServiceClient authServiceClient;
 
     private static final String OTP_KEY = "withdrawal_otp:";
+    private static final String OTP_FAIL_KEY = "withdrawal_otp_fail:";
     private static final long OTP_TTL_MINUTES = 5;
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
     public record TransferAttempt(
             String withdrawalId,
@@ -149,17 +153,43 @@ public class WithdrawalRequestService {
                     "Trạng thái không hợp lệ để xác nhận OTP: " + wr.getStatus());
         }
 
-        // Xác thực OTP
+        // Xác thực OTP — kiểm tra số lần sai trước
         String ns = appProperties.getRedis().getNamespace();
         String otpKey = ns + ":" + OTP_KEY + withdrawalId;
+        String failKey = ns + ":" + OTP_FAIL_KEY + withdrawalId;
+        String failCountStr = redisTemplate.opsForValue().get(failKey);
+        int failCount = failCountStr == null ? 0 : Integer.parseInt(failCountStr);
+        int maxFail = appProperties.getOtp().getMaxFailAttempts();
+        if (failCount >= maxFail) {
+            redisTemplate.delete(otpKey);
+            transition(wr, WithdrawalStatus.CANCELLED, "SYSTEM", "SYSTEM",
+                    "Nhập sai OTP quá " + maxFail + " lần — tự động huỷ");
+            log.warn("withdrawal.otp.maxFail withdrawalId={} userId={}", withdrawalId, userId);
+            throw new IllegalStateException(
+                    "Đã nhập sai OTP quá " + maxFail + " lần. Yêu cầu rút tiền đã bị huỷ tự động.");
+        }
+
         String storedOtp = redisTemplate.opsForValue().get(otpKey);
         if (storedOtp == null) {
             throw new IllegalStateException("OTP đã hết hạn. Vui lòng tạo lại yêu cầu rút tiền.");
         }
         if (!storedOtp.equals(otp)) {
-            throw new IllegalStateException("OTP không chính xác.");
+            long newFail = redisTemplate.opsForValue().increment(failKey);
+            redisTemplate.expire(failKey, OTP_TTL_MINUTES, TimeUnit.MINUTES);
+            int remaining = maxFail - (int) newFail;
+            if (remaining <= 0) {
+                redisTemplate.delete(otpKey);
+                transition(wr, WithdrawalStatus.CANCELLED, "SYSTEM", "SYSTEM",
+                        "Nhập sai OTP quá " + maxFail + " lần — tự động huỷ");
+                log.warn("withdrawal.otp.maxFail withdrawalId={} userId={}", withdrawalId, userId);
+                throw new IllegalStateException(
+                        "Đã nhập sai OTP quá " + maxFail + " lần. Yêu cầu rút tiền đã bị huỷ tự động.");
+            }
+            throw new IllegalStateException(
+                    "OTP không chính xác. Còn " + remaining + " lần thử.");
         }
         redisTemplate.delete(otpKey);
+        redisTemplate.delete(failKey);
 
         // Khóa ví bằng PESSIMISTIC_WRITE — cùng cơ chế với luồng đầu tư (lockAmount),
         // để rút tiền và đầu tư cùng nối hàng đợi khóa, chống lost-update làm lệch lockedBalance.
@@ -654,18 +684,42 @@ public class WithdrawalRequestService {
     }
 
     private void sendOtp(String withdrawalId, String userId) {
-        String otp = appProperties.getOtp().isMock() ? "000000"
-                : String.format("%06d", new Random().nextInt(1_000_000));
         String ns = appProperties.getRedis().getNamespace();
-        redisTemplate.opsForValue().set(
-                ns + ":" + OTP_KEY + withdrawalId,
-                otp, OTP_TTL_MINUTES, TimeUnit.MINUTES);
+        String otpKey = ns + ":" + OTP_KEY + withdrawalId;
+
         if (appProperties.getOtp().isMock()) {
-            log.info("withdrawal.otp.mock withdrawalId={} userId={} otp={}", withdrawalId, userId, otp);
-        } else {
-            // TODO: gọi notification-service gửi OTP qua SMS/push
-            log.info("withdrawal.otp.sent withdrawalId={} userId={}", withdrawalId, userId);
+            redisTemplate.opsForValue().set(otpKey, "000000", OTP_TTL_MINUTES, TimeUnit.MINUTES);
+            log.info("withdrawal.otp.mock withdrawalId={} userId={} otp=000000", withdrawalId, userId);
+            return;
         }
+
+        // Lấy số điện thoại để gửi OTP
+        String phone = authServiceClient.getUserPhone(userId);
+        if (phone == null || phone.isBlank()) {
+            throw new IllegalStateException(
+                    "Không lấy được số điện thoại để gửi OTP. Vui lòng thử lại.");
+        }
+
+        // Gửi OTP qua VNF OTP service
+        int functionType = appProperties.getVnfOtp().getWithdrawalFunctionType();
+        String sentOtp = vnfOtpSenderService.sendOtp(phone, functionType);
+        if (sentOtp == null || sentOtp.isBlank()) {
+            throw new IllegalStateException(
+                    "Gửi OTP thất bại. Vui lòng thử lại sau ít phút.");
+        }
+
+        redisTemplate.opsForValue().set(otpKey, sentOtp, OTP_TTL_MINUTES, TimeUnit.MINUTES);
+        log.info("withdrawal.otp.sent withdrawalId={} userId={}", withdrawalId, userId);
+    }
+
+    /**
+     * Lấy withdrawal request đang active (chưa kết thúc) của user để khôi phục trạng thái trên app.
+     * Trả empty nếu không có lệnh nào đang xử lý.
+     */
+    @Transactional(readOnly = true)
+    public Optional<WithdrawalRequest> getActiveForUser(String userId) {
+        return withdrawalRepository.findFirstByUserIdAndStatusInAndIsDeletedFalse(
+                userId, WithdrawalStatus.ACTIVE);
     }
 
     private WithdrawalTransferConfig activeConfig() {

@@ -77,6 +77,18 @@ public class WalletController {
     }
 
     /**
+     * Lấy withdrawal đang active (nếu có) — dùng để khôi phục trạng thái khi app mở lại.
+     * Trả 204 No Content nếu không có lệnh nào đang xử lý.
+     */
+    @GetMapping("/wallet/withdrawal/active")
+    public ResponseEntity<WithdrawalResponse> getActiveWithdrawal(
+            @AuthenticationPrincipal AuthenticatedUser user) {
+        return withdrawalRequestService.getActiveForUser(user.userId())
+                .map(wr -> ResponseEntity.ok(toWithdrawalResponse(wr)))
+                .orElse(ResponseEntity.noContent().build());
+    }
+
+    /**
      * Lấy trạng thái withdrawal.
      */
     @GetMapping("/wallet/withdrawal/{withdrawalId}")

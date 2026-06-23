@@ -21,6 +21,10 @@ public interface WithdrawalRequestRepository extends JpaRepository<WithdrawalReq
     /** Kiểm tra user có đang có withdrawal chưa kết thúc không */
     boolean existsByUserIdAndStatusInAndIsDeletedFalse(String userId, Set<WithdrawalStatus> statuses);
 
+    /** Lấy withdrawal đang active của user (nếu có) — dùng để khôi phục trạng thái trên app */
+    Optional<WithdrawalRequest> findFirstByUserIdAndStatusInAndIsDeletedFalse(
+            String userId, Set<WithdrawalStatus> statuses);
+
     Optional<WithdrawalRequest> findByIdAndUserIdAndIsDeletedFalse(String id, String userId);
 
     Optional<WithdrawalRequest> findByIdAndIsDeletedFalse(String id);

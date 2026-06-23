@@ -150,11 +150,12 @@ public class InternalWithdrawalController {
     }
 
     /**
-     * Fail-closed: callback chỉ được chấp nhận nếu khớp một trong:
-     *   - X-Internal-Secret == app.internal.secret (gọi nội bộ/relay), hoặc
-     *   - X-Callback-Secret == app.tikluy.callback.secret (nếu đã cấu hình), hoặc
-     *   - IP nguồn nằm trong app.tikluy.callback.allowedIps (nếu đã cấu hình).
-     * Nếu KHÔNG cấu hình secret/allowlist nào → từ chối (buộc ops cấu hình trước khi go-live).
+     * Fail-closed: callback chỉ được chấp nhận nếu:
+     *   - X-Internal-Secret == app.internal.secret (gọi nội bộ/relay từ TIKLUY relay service), HOẶC
+     *   - Khi CẢ HAI secret VÀ allowedIps đều được cấu hình → phải khớp CẢ HAI.
+     *   - Khi chỉ cấu hình secret (không IP) → chỉ cần secret khớp.
+     *   - Khi chỉ cấu hình IP (không secret) → chỉ cần IP khớp.
+     * Nếu KHÔNG cấu hình gì → từ chối (buộc ops cấu hình trước khi go-live).
      */
     private boolean isAuthorizedCallback(String internalSecret, String callbackSecret,
                                          String forwardedFor, String remoteAddr) {
@@ -162,20 +163,31 @@ public class InternalWithdrawalController {
             return true;
         }
         String expectedCallbackSecret = appProperties.getTikluy().getCallback().getSecret();
-        if (StringUtils.hasText(expectedCallbackSecret) && expectedCallbackSecret.equals(callbackSecret)) {
-            return true;
-        }
         String allowedIps = appProperties.getTikluy().getCallback().getAllowedIps();
-        if (StringUtils.hasText(allowedIps)) {
-            String clientIp = resolveClientIp(forwardedFor, remoteAddr);
-            return Arrays.stream(allowedIps.split(","))
-                    .map(String::trim)
-                    .filter(StringUtils::hasText)
-                    .anyMatch(clientIp::equals);
+
+        boolean hasSecretConfig = StringUtils.hasText(expectedCallbackSecret);
+        boolean hasIpConfig = StringUtils.hasText(allowedIps);
+
+        if (!hasSecretConfig && !hasIpConfig) {
+            log.error("[MB-CALLBACK] Chưa cấu hình app.tikluy.callback.secret/allowedIps — callback bị từ chối. Ops cần cấu hình trước khi go-live.");
+            return false;
         }
-        // Không có credential nào được cấu hình → fail-closed (khác deposit callback fail-open).
-        log.error("[MB-CALLBACK] Chưa cấu hình app.tikluy.callback.secret/allowedIps — withdrawal callback bị từ chối. Ops cần cấu hình trước khi go-live.");
-        return false;
+
+        boolean secretOk = !hasSecretConfig || expectedCallbackSecret.equals(callbackSecret);
+        boolean ipOk = !hasIpConfig || isAllowedIp(resolveClientIp(forwardedFor, remoteAddr), allowedIps);
+
+        if (hasSecretConfig && hasIpConfig) {
+            // Cả hai cấu hình → bắt buộc cả hai khớp
+            return secretOk && ipOk;
+        }
+        return secretOk && ipOk;
+    }
+
+    private boolean isAllowedIp(String clientIp, String allowedIps) {
+        return Arrays.stream(allowedIps.split(","))
+                .map(String::trim)
+                .filter(StringUtils::hasText)
+                .anyMatch(clientIp::equals);
     }
 
     private String resolveClientIp(String forwardedFor, String remoteAddr) {
