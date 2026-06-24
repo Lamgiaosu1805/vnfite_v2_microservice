@@ -23,7 +23,9 @@ public final class LoanSpecification {
         return (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
 
-            if (params.getStatus() != null) {
+            if (params.getStatuses() != null && !params.getStatuses().isEmpty()) {
+                predicates.add(root.get("status").in(params.getStatuses()));
+            } else if (params.getStatus() != null) {
                 predicates.add(cb.equal(root.get("status"), params.getStatus()));
             }
             if (params.getBorrowerId() != null) {

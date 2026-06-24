@@ -167,6 +167,9 @@ public class LoanService {
     @Transactional(readOnly = true)
     @Cacheable(value = CacheConfig.CACHE_LOANS, key = "'public:' + #params.cacheKey()")
     public PagedResponse<LoanPublicResponse> getPublicLoans(LoanFilterParams params) {
+        if (params.getStatus() == null && (params.getStatuses() == null || params.getStatuses().isEmpty())) {
+            params.setStatuses(List.of(LoanStatus.PENDING_REVIEW, LoanStatus.AWAITING_BORROWER_APPROVAL, LoanStatus.ACTIVE));
+        }
         Page<LoanPublicResponse> page = loanRequestRepository
                 .findAll(LoanSpecification.withFilters(params), params.toPageable())
                 .map(this::buildPublicResponse);
@@ -856,7 +859,7 @@ public class LoanService {
 
     @Transactional(readOnly = true)
     public MarketplaceStatsResponse getMarketplaceStats() {
-        List<LoanStatus> activeStatuses = List.of(LoanStatus.ACTIVE);
+        List<LoanStatus> activeStatuses = List.of(LoanStatus.PENDING_REVIEW, LoanStatus.AWAITING_BORROWER_APPROVAL, LoanStatus.ACTIVE);
         BigDecimal activeFundingVolume = loanRequestRepository.sumAmountByStatusIn(activeStatuses);
         return MarketplaceStatsResponse.builder()
                 .activeLoanCount(loanRequestRepository.countByStatusIn(activeStatuses))

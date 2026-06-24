@@ -9,11 +9,14 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 @Data
 public class LoanFilterParams {
 
     private LoanStatus status;
+    /** Lọc theo nhiều trạng thái — ưu tiên hơn status khi được set. */
+    private List<LoanStatus> statuses;
     private String borrowerId;
     /** Lọc theo tỉnh/thành phố — hỗ trợ dữ liệu mới ở province và dữ liệu cũ còn trong currentAddress. */
     private String province;
