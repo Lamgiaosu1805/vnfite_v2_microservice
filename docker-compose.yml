@@ -305,6 +305,7 @@ services:
       APP_REDIS_NAMESPACE: ${APP_REDIS_NAMESPACE:-dev}
       APP_PAYMENT_MOCK: ${APP_PAYMENT_MOCK:-true}
       APP_OTP_MOCK: ${APP_OTP_MOCK:-true}
+      VNF_OTP_SERVICE_URL: ${VNF_OTP_SERVICE_URL:-}
       # ⚠️ Mặc định TEST (119:9999, MB sandbox) để tránh chạm tiền thật; live = 155:8888
       TIKLUY_BASE_URL: ${TIKLUY_BASE_URL:-http://42.113.122.119:9999}
       TIKLUY_CLIENT_ID: ${TIKLUY_CLIENT_ID:-VF-NSK3SDF}
