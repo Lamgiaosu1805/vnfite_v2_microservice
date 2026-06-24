@@ -75,6 +75,10 @@ public interface WithdrawalRequestRepository extends JpaRepository<WithdrawalReq
     long countCompletedToday(@Param("userId") String userId,
                              @Param("startOfDay") LocalDateTime startOfDay);
 
+    /** Reconciliation: tìm withdrawal của ngày tra soát có providerTransferRef để kiểm tra vs MB */
+    List<WithdrawalRequest> findByCreatedAtBetweenAndProviderTransferRefIsNotNullAndIsDeletedFalse(
+            LocalDateTime start, LocalDateTime end);
+
     /** Reconciliation: withdrawal kẹt ở trạng thái đang xử lý quá lâu */
     @Query("""
         SELECT w

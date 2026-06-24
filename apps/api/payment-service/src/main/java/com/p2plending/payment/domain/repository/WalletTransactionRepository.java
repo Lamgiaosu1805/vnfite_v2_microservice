@@ -45,6 +45,10 @@ public interface WalletTransactionRepository extends JpaRepository<WalletTransac
                   )
             ORDER BY tx.createdAt DESC
             """)
+    /** Reconciliation: nạp tiền kẹt PENDING quá ngưỡng */
+    List<WalletTransaction> findByStatusAndTypeAndCreatedAtBeforeAndIsDeletedFalse(
+            TransactionStatus status, TransactionType type, LocalDateTime before);
+
     Page<WalletTransaction> findSystemMoneyTransactions(
             @Param("types") List<TransactionType> types,
             @Param("statuses") List<TransactionStatus> statuses,
