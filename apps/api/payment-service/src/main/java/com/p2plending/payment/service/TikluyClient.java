@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Base64;
@@ -215,9 +216,24 @@ public class TikluyClient {
         Map<String, Object> body = new HashMap<>();
         body.put("bankCode", bankCode);
         body.put("creditResourceNumber", creditAccount);
-        body.put("transferAmount", amount);
+        body.put("transferAmount", normalizeVndAmount(amount));
         body.put("source", normalizedSource);
         return body;
+    }
+
+    static String normalizeVndAmount(String amount) {
+        if (amount == null || amount.isBlank()) {
+            throw new IllegalArgumentException("Số tiền chuyển không được để trống");
+        }
+        try {
+            BigDecimal parsed = new BigDecimal(amount.trim());
+            if (parsed.signum() <= 0) {
+                throw new IllegalArgumentException("Số tiền chuyển phải lớn hơn 0");
+            }
+            return parsed.setScale(0, RoundingMode.UNNECESSARY).toPlainString();
+        } catch (NumberFormatException | ArithmeticException ex) {
+            throw new IllegalArgumentException("Số tiền VND phải là số nguyên", ex);
+        }
     }
 
     /**

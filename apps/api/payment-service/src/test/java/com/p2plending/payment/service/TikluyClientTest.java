@@ -13,12 +13,19 @@ class TikluyClientTest {
     @Test
     void fundTransferBodyCarriesVnfiteSourceForYfchRouting() {
         Map<String, Object> body = TikluyClient.buildFundTransferBody(
-                "MB", "0123456789", "100000", "VNFITE");
+                "MB", "0123456789", "100000.00", "VNFITE");
 
         assertEquals("VNFITE", body.get("source"));
         assertEquals("MB", body.get("bankCode"));
         assertEquals("0123456789", body.get("creditResourceNumber"));
         assertEquals("100000", body.get("transferAmount"));
+    }
+
+    @Test
+    void fundTransferBodyRejectsFractionalVndAmount() {
+        assertThrows(IllegalArgumentException.class,
+                () -> TikluyClient.buildFundTransferBody(
+                        "MB", "0123456789", "100000.50", "VNFITE"));
     }
 
     @Test
