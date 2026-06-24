@@ -37,8 +37,8 @@ public class LinkedBankService {
 
     @Transactional
     public LinkedBankResponse addBank(String userId, AddBankRequest req) {
-        if (linkedBankRepository.existsByUserIdAndBankAccountNoAndIsDeletedFalse(
-                userId, req.getBankAccountNo())) {
+        if (linkedBankRepository.existsByUserIdAndBankCodeAndBankAccountNoAndIsDeletedFalse(
+                userId, req.getBankCode(), req.getBankAccountNo())) {
             throw new IllegalStateException("Tài khoản ngân hàng này đã được liên kết");
         }
 
