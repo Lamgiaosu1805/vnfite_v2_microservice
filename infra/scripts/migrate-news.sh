@@ -12,7 +12,10 @@ SELECT
     n.SUB_TITLE,
     CASE
         WHEN n.IMAGE IS NOT NULL AND n.IMAGE != ''
-        THEN CONCAT('/images', n.IMAGE)
+        THEN CASE
+            WHEN TRIM(n.IMAGE) LIKE '/images/%' THEN TRIM(n.IMAGE)
+            ELSE CONCAT('/images/', TRIM(LEADING '/' FROM TRIM(n.IMAGE)))
+        END
         ELSE NULL
     END,
     CAST(n.CONTENT AS CHAR CHARACTER SET utf8mb4),
