@@ -7,6 +7,7 @@ import com.p2plending.payment.domain.enums.WithdrawalStatus;
 import com.p2plending.payment.domain.repository.LinkedBankRepository;
 import com.p2plending.payment.domain.repository.WithdrawalRequestRepository;
 import com.p2plending.payment.dto.response.WithdrawalResponse;
+import com.p2plending.payment.service.AuthServiceClient;
 import com.p2plending.payment.service.WithdrawalRequestService;
 import com.p2plending.payment.service.WithdrawalTransferOrchestrator;
 import jakarta.servlet.http.HttpServletRequest;
@@ -41,6 +42,7 @@ public class InternalWithdrawalController {
     private final WithdrawalTransferOrchestrator withdrawalTransferOrchestrator;
     private final WithdrawalRequestRepository withdrawalRepository;
     private final LinkedBankRepository linkedBankRepository;
+    private final AuthServiceClient authServiceClient;
     private final AppProperties appProperties;
 
     // ─── TIKLUY Callback ─────────────────────────────────────────────────────
@@ -137,11 +139,19 @@ public class InternalWithdrawalController {
 
     // ─── Helpers ─────────────────────────────────────────────────────────────
 
+    /** Monitoring endpoint: enrich với customerPhone + customerName từ auth-service */
     private WithdrawalResponse toResponse(WithdrawalRequest wr) {
         Optional<LinkedBank> bank = linkedBankRepository.findByIdAndIsDeletedFalse(wr.getLinkedBankId());
-        return WithdrawalResponse.from(wr,
+        WithdrawalResponse resp = WithdrawalResponse.from(wr,
                 bank.map(LinkedBank::getBankName).orElse(null),
                 bank.map(LinkedBank::getBankAccountNo).orElse(null));
+        try {
+            resp.setCustomerPhone(authServiceClient.getUserPhone(wr.getUserId()));
+            resp.setCustomerName(authServiceClient.getUserFullName(wr.getUserId()));
+        } catch (Exception e) {
+            log.debug("withdrawal.monitoring.enrich userId={} err={}", wr.getUserId(), e.getMessage());
+        }
+        return resp;
     }
 
     private boolean isValidInternalSecret(String secret) {

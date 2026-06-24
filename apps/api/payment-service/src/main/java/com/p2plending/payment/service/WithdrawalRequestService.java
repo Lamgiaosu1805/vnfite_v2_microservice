@@ -713,6 +713,41 @@ public class WithdrawalRequestService {
     }
 
     /**
+     * Gửi lại OTP cho withdrawal đang ở trạng thái OTP_PENDING.
+     * Rate limit: tối đa 1 lần/60 giây (Redis key TTL 60s).
+     */
+    @Transactional
+    public void resendOtp(String userId, String withdrawalId) {
+        WithdrawalRequest wr = withdrawalRepository
+                .findByIdAndUserIdAndIsDeletedFalse(withdrawalId, userId)
+                .orElseThrow(() -> new IllegalArgumentException("Yêu cầu rút tiền không tồn tại."));
+
+        if (wr.getStatus() != WithdrawalStatus.OTP_PENDING) {
+            throw new IllegalStateException(
+                    "Chỉ có thể gửi lại OTP khi yêu cầu đang chờ xác nhận OTP.");
+        }
+
+        String ns = appProperties.getRedis().getNamespace();
+        String rateLimitKey = ns + ":withdrawal_otp_resend:" + withdrawalId;
+        if (Boolean.TRUE.equals(redisTemplate.hasKey(rateLimitKey))) {
+            throw new IllegalStateException(
+                    "Vui lòng chờ 60 giây trước khi gửi lại OTP.");
+        }
+
+        // Xoá OTP + fail counter cũ, gửi OTP mới
+        String failKey = ns + ":" + OTP_FAIL_KEY + withdrawalId;
+        redisTemplate.delete(ns + ":" + OTP_KEY + withdrawalId);
+        redisTemplate.delete(failKey);
+
+        sendOtp(withdrawalId, userId);
+
+        // Đặt rate limit 60s sau khi gửi thành công
+        redisTemplate.opsForValue().set(rateLimitKey, "1", 60, TimeUnit.SECONDS);
+        audit(wr, null, wr.getStatus(), "USER", userId, "Gửi lại OTP");
+        log.info("withdrawal.otp.resent withdrawalId={} userId={}", withdrawalId, userId);
+    }
+
+    /**
      * Lấy withdrawal request đang active (chưa kết thúc) của user để khôi phục trạng thái trên app.
      * Trả empty nếu không có lệnh nào đang xử lý.
      */

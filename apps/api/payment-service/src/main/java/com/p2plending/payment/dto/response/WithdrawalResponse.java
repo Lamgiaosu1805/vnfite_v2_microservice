@@ -14,16 +14,22 @@ public class WithdrawalResponse {
 
     private String id;
     private String userId;
+    /** Số điện thoại khách hàng — chỉ có trong monitoring endpoint (enriched từ auth-service) */
+    private String customerPhone;
+    /** Họ tên khách hàng — chỉ có trong monitoring endpoint */
+    private String customerName;
     private BigDecimal amount;
     private WithdrawalStatus status;
     private String statusLabel;
     private String bankName;
     private String bankAccountNo;
+    private String transferRef;
     private String mbFtNumber;
     private String providerTransferRef;
     private String rejectReason;
     private String failureReason;
     private int retryCount;
+    private int maxRetries;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
@@ -37,11 +43,13 @@ public class WithdrawalResponse {
                 .statusLabel(toLabel(wr.getStatus()))
                 .bankName(bankName)
                 .bankAccountNo(bankAccountNo)
+                .transferRef(wr.getTransferRef())
                 .mbFtNumber(wr.getMbFtNumber())
                 .providerTransferRef(wr.getProviderTransferRef())
                 .rejectReason(wr.getRejectReason())
                 .failureReason(wr.getFailureReason())
                 .retryCount(wr.getRetryCount())
+                .maxRetries(wr.getMaxRetries())
                 .createdAt(wr.getCreatedAt())
                 .updatedAt(wr.getUpdatedAt())
                 .build();

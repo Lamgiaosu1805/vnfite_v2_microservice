@@ -464,16 +464,18 @@ public class SourceServiceClient {
 
     /**
      * Danh sách withdrawal để ops giám sát.
-     * statuses: null → dùng default (TRANSFER_FAILED,FAILED) bên payment-service.
+     * statuses: null/empty → dùng default (TRANSFER_FAILED,FAILED) bên payment-service.
      */
     public PagedResponse<WithdrawalSummaryResponse> getWithdrawalsForMonitoring(
-            String statuses, int page, int size) {
+            List<String> statuses, int page, int size) {
         UriComponentsBuilder builder = UriComponentsBuilder.fromHttpUrl(paymentServiceUrl)
                 .path("/internal/payment/withdrawal/monitoring")
                 .queryParam("page", page)
                 .queryParam("size", size);
-        if (statuses != null && !statuses.isBlank()) {
-            builder.queryParam("statuses", statuses);
+        if (statuses != null && !statuses.isEmpty()) {
+            // Gửi multi-value: statuses=A&statuses=B để Spring Set<Enum> parse được
+            statuses.stream().filter(s -> s != null && !s.isBlank())
+                    .forEach(s -> builder.queryParam("statuses", s));
         }
         URI uri = builder.build().toUri();
         JsonNode node = exchangeForJson(uri, HttpMethod.GET, null);
@@ -533,16 +535,20 @@ public class SourceServiceClient {
         return WithdrawalSummaryResponse.builder()
                 .id(text(node, "id"))
                 .userId(text(node, "userId"))
+                .customerPhone(text(node, "customerPhone"))
+                .customerName(text(node, "customerName"))
                 .amount(decimal(node, "amount"))
                 .status(text(node, "status"))
                 .statusLabel(text(node, "statusLabel"))
                 .bankName(text(node, "bankName"))
                 .bankAccountNo(text(node, "bankAccountNo"))
+                .transferRef(text(node, "transferRef"))
                 .mbFtNumber(text(node, "mbFtNumber"))
                 .providerTransferRef(text(node, "providerTransferRef"))
                 .rejectReason(text(node, "rejectReason"))
                 .failureReason(text(node, "failureReason"))
                 .retryCount(node.path("retryCount").asInt(0))
+                .maxRetries(node.path("maxRetries").asInt(3))
                 .createdAt(dateTime(node, "createdAt"))
                 .updatedAt(dateTime(node, "updatedAt"))
                 .build();

@@ -5,6 +5,8 @@ import com.p2plending.cms.dto.response.WithdrawalSummaryResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
+
 @Service
 @RequiredArgsConstructor
 public class WithdrawalManagementService {
@@ -12,7 +14,7 @@ public class WithdrawalManagementService {
     private final SourceServiceClient sourceServiceClient;
 
     /** Danh sách withdrawal đang xử lý / thất bại để ops giám sát. */
-    public PagedResponse<WithdrawalSummaryResponse> getForMonitoring(String statuses, int page, int size) {
+    public PagedResponse<WithdrawalSummaryResponse> getForMonitoring(List<String> statuses, int page, int size) {
         return sourceServiceClient.getWithdrawalsForMonitoring(statuses, page, size);
     }
 

@@ -100,6 +100,18 @@ public class WalletController {
     }
 
     /**
+     * Gửi lại OTP — chỉ khi withdrawal ở trạng thái OTP_PENDING.
+     * Rate limit 60s (kiểm tra trong service).
+     */
+    @PostMapping("/wallet/withdrawal/{withdrawalId}/resend-otp")
+    public ResponseEntity<Map<String, String>> resendOtp(
+            @AuthenticationPrincipal AuthenticatedUser user,
+            @PathVariable String withdrawalId) {
+        withdrawalRequestService.resendOtp(user.userId(), withdrawalId);
+        return ResponseEntity.ok(Map.of("message", "OTP đã được gửi lại. Vui lòng kiểm tra điện thoại."));
+    }
+
+    /**
      * Huỷ withdrawal (chỉ khi chưa lock tiền).
      */
     @DeleteMapping("/wallet/withdrawal/{withdrawalId}/cancel")

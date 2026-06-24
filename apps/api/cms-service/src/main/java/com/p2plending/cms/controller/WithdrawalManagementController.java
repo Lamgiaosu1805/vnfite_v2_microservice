@@ -10,6 +10,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -27,7 +28,7 @@ public class WithdrawalManagementController {
      */
     @GetMapping("/monitoring")
     public ResponseEntity<PagedResponse<WithdrawalSummaryResponse>> getForMonitoring(
-            @RequestParam(required = false) String statuses,
+            @RequestParam(required = false) List<String> statuses,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
         return ResponseEntity.ok(withdrawalManagementService.getForMonitoring(
