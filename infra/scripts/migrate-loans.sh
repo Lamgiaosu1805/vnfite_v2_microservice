@@ -44,11 +44,17 @@ MYSQL="mysql -u${DB_USER} -p${DB_PASS} -h${DB_HOST} --default-character-set=utf8
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
 
+# Sản phẩm phải được migrate trước để mọi loan giữ đúng quan hệ product_id.
+# Script sản phẩm idempotent và đồng thời backfill product_id cho các loan cũ.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+log "Step 0: Đồng bộ sản phẩm gọi vốn trước khi migrate khoản gọi vốn..."
+bash "${SCRIPT_DIR}/migrate-products.sh"
+
 # ── Step 1: Migrate loan_db.loan_requests ────────────────────────────────────
 log "Step 1: Migrate tbl_user_loan → loan_db.loan_requests..."
 $MYSQL APP_V2 <<'ENDSQL'
 INSERT INTO loan_db.loan_requests
-  (id, borrower_id, amount, interest_rate, term_months, purpose,
+  (id, borrower_id, product_id, amount, interest_rate, term_months, purpose,
    status, funded_amount,
    monthly_income, occupation, current_address,
    ref1_full_name, ref1_relationship, ref1_phone,
@@ -58,6 +64,7 @@ INSERT INTO loan_db.loan_requests
 SELECT
   l.ID,
   l.USER_ID,
+  NULLIF(TRIM(l.LOAN_PRODUCT_PACKAGE_ID), ''),
   CAST(NULLIF(TRIM(l.AMOUNT), '') AS DECIMAL(15,2)),
   CAST(NULLIF(TRIM(l.LOAN_INTEREST_RATE), '') AS DECIMAL(5,2)),
   l.PERIOD,
@@ -102,6 +109,7 @@ WHERE l.IS_DELETED = 'N'
   AND l.AMOUNT IS NOT NULL
   AND l.PERIOD IS NOT NULL
 ON DUPLICATE KEY UPDATE
+  product_id        = COALESCE(VALUES(product_id), product_id),
   status            = VALUES(status),
   funded_amount     = VALUES(funded_amount),
   ref1_full_name    = VALUES(ref1_full_name),
