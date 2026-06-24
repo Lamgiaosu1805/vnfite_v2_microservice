@@ -382,6 +382,7 @@ services:
       - "7080:80"  # API gateway — mobile app & host nginx forward vào đây
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - /var/www/html/images:/var/www/html/images:ro
     depends_on:
       - auth-service
       - loan-service

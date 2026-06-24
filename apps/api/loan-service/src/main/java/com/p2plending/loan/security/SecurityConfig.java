@@ -30,6 +30,7 @@ public class SecurityConfig {
                         .requestMatchers("/internal/**").permitAll()
                         // Public endpoints
                         .requestMatchers("/api/loans/products").permitAll()
+                        .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/news", "/api/news/**").permitAll()
                         // Everything else requires authentication
                         .anyRequest().authenticated()
                 )
