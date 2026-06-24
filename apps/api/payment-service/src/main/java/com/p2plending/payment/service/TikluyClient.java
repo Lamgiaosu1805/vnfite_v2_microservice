@@ -167,10 +167,12 @@ public class TikluyClient {
         body.put("clientReference", txnId);
 
         try {
+            HttpHeaders headers = authHeaders(txnId);
+            addInternalSecretHeader(headers);
             ResponseEntity<JsonNode> resp = restTemplate.exchange(
                     props.getBaseUrl() + "/api/v1/transfer-money",
                     HttpMethod.POST,
-                    new HttpEntity<>(body, authHeaders(txnId)),
+                    new HttpEntity<>(body, headers),
                     JsonNode.class);
 
             JsonNode data = extractData(resp.getBody(), "fundTransfer", true);
