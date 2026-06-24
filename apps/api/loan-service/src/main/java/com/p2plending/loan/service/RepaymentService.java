@@ -20,6 +20,7 @@ import com.p2plending.loan.domain.repository.RepaymentScheduleRepository;
 import com.p2plending.loan.domain.repository.RepaymentTransactionRepository;
 import com.p2plending.loan.dto.request.RecordPaymentRequest;
 import com.p2plending.loan.dto.response.RepaymentScheduleResponse;
+import com.p2plending.loan.dto.response.RepaymentMonitoringResponse;
 import com.p2plending.loan.exception.InvalidLoanStateException;
 import com.p2plending.loan.exception.LoanNotFoundException;
 import com.p2plending.loan.kafka.KafkaProducerService;
@@ -40,9 +41,12 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 @Service
@@ -78,6 +82,109 @@ public class RepaymentService {
     /** Bật/tắt tính phí phạt trả chậm (kill-switch cho tính năng tiền). */
     @Value("${app.late-fee.enabled:true}")
     private boolean lateFeeEnabled;
+
+    @Transactional(readOnly = true)
+    public RepaymentMonitoringResponse getMonitoring(int dueWithinDays) {
+        int normalizedWindow = Math.max(0, Math.min(dueWithinDays, 30));
+        LocalDate today = LocalDate.now(TZ);
+        LocalDate dueCutoff = today.plusDays(normalizedWindow);
+        List<RepaymentSchedule> schedules = scheduleRepository
+                .findByStatusNotAndIsDeletedFalseOrderByDueDateAscPeriodNumberAsc(RepaymentStatus.PAID);
+
+        Set<String> loanIds = schedules.stream()
+                .map(RepaymentSchedule::getLoanId)
+                .collect(java.util.stream.Collectors.toSet());
+        Map<String, LoanRequest> loansById = new HashMap<>();
+        loanRequestRepository.findAllById(loanIds)
+                .forEach(loan -> loansById.put(loan.getId(), loan));
+
+        BigDecimal principalTotal = BigDecimal.ZERO;
+        BigDecimal interestTotal = BigDecimal.ZERO;
+        BigDecimal lateFeeTotal = BigDecimal.ZERO;
+        long dueSoonInstallments = 0;
+        long overdueInstallments = 0;
+        Set<String> dueSoonBorrowers = new HashSet<>();
+        Set<String> overdueBorrowers = new HashSet<>();
+        List<RepaymentMonitoringResponse.RepaymentAttentionItem> attentionItems = new java.util.ArrayList<>();
+
+        for (RepaymentSchedule schedule : schedules) {
+            LoanRequest loan = loansById.get(schedule.getLoanId());
+            if (loan == null || loan.isDeleted() || !PAYABLE_STATUSES.contains(loan.getStatus())) {
+                continue;
+            }
+
+            BigDecimal paid = schedule.getPaidAmount() != null
+                    ? schedule.getPaidAmount().max(BigDecimal.ZERO)
+                    : BigDecimal.ZERO;
+            BigDecimal interestDue = schedule.getInterestDue() != null
+                    ? schedule.getInterestDue()
+                    : BigDecimal.ZERO;
+            BigDecimal principalDue = schedule.getPrincipalDue() != null
+                    ? schedule.getPrincipalDue()
+                    : BigDecimal.ZERO;
+
+            // Phân bổ phần đã thanh toán theo thứ tự lãi trước, sau đó tới gốc.
+            BigDecimal interestOutstanding = interestDue.subtract(paid.min(interestDue)).max(BigDecimal.ZERO);
+            BigDecimal paidAfterInterest = paid.subtract(interestDue).max(BigDecimal.ZERO);
+            BigDecimal principalOutstanding = principalDue
+                    .subtract(paidAfterInterest.min(principalDue))
+                    .max(BigDecimal.ZERO);
+            BigDecimal lateFeeOutstanding = schedule.getLateFeeOutstanding();
+            BigDecimal itemTotal = principalOutstanding.add(interestOutstanding).add(lateFeeOutstanding);
+
+            principalTotal = principalTotal.add(principalOutstanding);
+            interestTotal = interestTotal.add(interestOutstanding);
+            lateFeeTotal = lateFeeTotal.add(lateFeeOutstanding);
+
+            boolean overdue = schedule.getDueDate().isBefore(today);
+            boolean dueSoon = !overdue && !schedule.getDueDate().isAfter(dueCutoff);
+            if (overdue) {
+                overdueInstallments++;
+                overdueBorrowers.add(loan.getBorrowerId());
+            } else if (dueSoon) {
+                dueSoonInstallments++;
+                dueSoonBorrowers.add(loan.getBorrowerId());
+            }
+
+            if (overdue || dueSoon) {
+                int calculatedDpd = overdue
+                        ? Math.toIntExact(ChronoUnit.DAYS.between(schedule.getDueDate(), today))
+                        : 0;
+                attentionItems.add(RepaymentMonitoringResponse.RepaymentAttentionItem.builder()
+                        .loanId(loan.getId())
+                        .loanCode(loan.getLoanCode())
+                        .borrowerId(loan.getBorrowerId())
+                        .periodNumber(schedule.getPeriodNumber())
+                        .dueDate(schedule.getDueDate())
+                        .dpd(calculatedDpd)
+                        .status(overdue ? "OVERDUE" : "DUE_SOON")
+                        .principalOutstanding(principalOutstanding)
+                        .interestOutstanding(interestOutstanding)
+                        .lateFeeOutstanding(lateFeeOutstanding)
+                        .totalOutstanding(itemTotal)
+                        .build());
+            }
+        }
+
+        attentionItems.sort(java.util.Comparator
+                .comparing((RepaymentMonitoringResponse.RepaymentAttentionItem item) ->
+                        "OVERDUE".equals(item.getStatus()) ? 0 : 1)
+                .thenComparing(RepaymentMonitoringResponse.RepaymentAttentionItem::getDueDate));
+
+        return RepaymentMonitoringResponse.builder()
+                .asOfDate(today)
+                .dueWithinDays(normalizedWindow)
+                .dueSoonInstallments(dueSoonInstallments)
+                .dueSoonCustomers(dueSoonBorrowers.size())
+                .overdueInstallments(overdueInstallments)
+                .overdueCustomers(overdueBorrowers.size())
+                .outstandingPrincipal(principalTotal)
+                .outstandingInterest(interestTotal)
+                .outstandingLateFee(lateFeeTotal)
+                .totalOutstanding(principalTotal.add(interestTotal).add(lateFeeTotal))
+                .attentionItems(attentionItems.stream().limit(50).toList())
+                .build();
+    }
 
     private static final BigDecimal HUNDRED = new BigDecimal("100");
     private static final BigDecimal DAYS_PER_YEAR = new BigDecimal("365");

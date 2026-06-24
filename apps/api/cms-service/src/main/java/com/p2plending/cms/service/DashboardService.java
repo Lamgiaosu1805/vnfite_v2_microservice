@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.p2plending.cms.config.CacheConfig;
 import com.p2plending.cms.dto.response.ChartDataResponse;
 import com.p2plending.cms.dto.response.DashboardStatsResponse;
+import com.p2plending.cms.dto.response.UserSummaryResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.Cacheable;
@@ -32,6 +33,7 @@ public class DashboardService {
         LocalDate from = LocalDate.now(TZ).minusDays(1);
         JsonNode u = sourceServiceClient.getUserStats(from);
         JsonNode l = sourceServiceClient.getLoanStats(from);
+        JsonNode debt = sourceServiceClient.getRepaymentMonitoring(7);
 
         return DashboardStatsResponse.builder()
                 .totalUsers(u.path("totalUsers").asLong())
@@ -46,6 +48,17 @@ public class DashboardService {
                 .totalFundedVolume(decimal(l, "totalFundedVolume"))
                 .todayNewLoans(l.path("newLoansToday").asLong())
                 .todayLoanVolume(decimal(l, "todayLoanVolume"))
+                .debtAsOfDate(localDate(debt, "asOfDate"))
+                .dueWithinDays(debt.path("dueWithinDays").asInt(7))
+                .dueSoonInstallments(debt.path("dueSoonInstallments").asLong())
+                .dueSoonCustomers(debt.path("dueSoonCustomers").asLong())
+                .overdueInstallments(debt.path("overdueInstallments").asLong())
+                .overdueCustomers(debt.path("overdueCustomers").asLong())
+                .outstandingPrincipal(decimal(debt, "outstandingPrincipal"))
+                .outstandingInterest(decimal(debt, "outstandingInterest"))
+                .outstandingLateFee(decimal(debt, "outstandingLateFee"))
+                .totalOutstanding(decimal(debt, "totalOutstanding"))
+                .repaymentAttentionItems(buildRepaymentItems(debt.path("attentionItems")))
                 .build();
     }
 
@@ -176,6 +189,55 @@ public class DashboardService {
 
     private BigDecimal decimal(JsonNode node, String field) {
         return node.hasNonNull(field) ? node.get(field).decimalValue() : BigDecimal.ZERO;
+    }
+
+    private LocalDate localDate(JsonNode node, String field) {
+        return node.hasNonNull(field) ? LocalDate.parse(node.get(field).asText()) : null;
+    }
+
+    private List<DashboardStatsResponse.RepaymentAttentionItem> buildRepaymentItems(JsonNode nodes) {
+        List<DashboardStatsResponse.RepaymentAttentionItem> items = new ArrayList<>();
+        Map<String, UserSummaryResponse> users = new HashMap<>();
+        for (JsonNode node : nodes) {
+            String borrowerId = node.path("borrowerId").asText(null);
+            UserSummaryResponse borrower = null;
+            if (borrowerId != null) {
+                borrower = users.get(borrowerId);
+                if (!users.containsKey(borrowerId)) {
+                    try {
+                        borrower = sourceServiceClient.getUser(borrowerId);
+                    } catch (Exception ex) {
+                        log.warn("Không lấy được khách hàng {} cho Dashboard công nợ: {}",
+                                borrowerId, ex.getMessage());
+                    }
+                    users.put(borrowerId, borrower);
+                }
+            }
+            items.add(DashboardStatsResponse.RepaymentAttentionItem.builder()
+                    .loanId(node.path("loanId").asText())
+                    .loanCode(node.path("loanCode").asText(null))
+                    .borrowerId(borrowerId)
+                    .borrowerName(resolveBorrowerName(borrower, borrowerId))
+                    .borrowerPhone(borrower != null ? borrower.getPhone() : null)
+                    .periodNumber(node.path("periodNumber").isNumber() ? node.path("periodNumber").asInt() : null)
+                    .dueDate(localDate(node, "dueDate"))
+                    .dpd(node.path("dpd").asInt())
+                    .status(node.path("status").asText())
+                    .principalOutstanding(decimal(node, "principalOutstanding"))
+                    .interestOutstanding(decimal(node, "interestOutstanding"))
+                    .lateFeeOutstanding(decimal(node, "lateFeeOutstanding"))
+                    .totalOutstanding(decimal(node, "totalOutstanding"))
+                    .build());
+        }
+        return items;
+    }
+
+    private String resolveBorrowerName(UserSummaryResponse borrower, String borrowerId) {
+        if (borrower == null) return borrowerId;
+        if (borrower.getFullName() != null && !borrower.getFullName().isBlank()) {
+            return borrower.getFullName();
+        }
+        return borrower.getPhone() != null ? borrower.getPhone() : borrowerId;
     }
 
 }

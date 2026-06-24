@@ -16,6 +16,7 @@ import com.p2plending.loan.dto.response.LoanProductResponse;
 import com.p2plending.loan.dto.response.LoanResponse;
 import com.p2plending.loan.dto.response.PagedResponse;
 import com.p2plending.loan.dto.response.RepaymentScheduleResponse;
+import com.p2plending.loan.dto.response.RepaymentMonitoringResponse;
 import com.p2plending.loan.service.AppraisalSuggestionService;
 import com.p2plending.loan.service.ContractService;
 import com.p2plending.loan.service.FundingExpiryService;
@@ -75,6 +76,15 @@ public class InternalLoanController {
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from) {
         requireInternalSecret(secret);
         return ResponseEntity.ok(loanService.getLoanStats(from));
+    }
+
+    /** Tổng hợp dư nợ, kỳ sắp đến hạn và quá hạn cho Dashboard CMS. */
+    @GetMapping("/repayment-monitoring")
+    public ResponseEntity<RepaymentMonitoringResponse> getRepaymentMonitoring(
+            @RequestHeader(INTERNAL_SECRET_HEADER) String secret,
+            @RequestParam(defaultValue = "7") int dueWithinDays) {
+        requireInternalSecret(secret);
+        return ResponseEntity.ok(repaymentService.getMonitoring(dueWithinDays));
     }
 
     /**

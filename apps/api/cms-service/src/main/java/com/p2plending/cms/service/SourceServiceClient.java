@@ -241,6 +241,14 @@ public class SourceServiceClient {
         return exchangeForJson(url, HttpMethod.GET, null);
     }
 
+    public JsonNode getRepaymentMonitoring(int dueWithinDays) {
+        String url = UriComponentsBuilder.fromHttpUrl(loanServiceUrl)
+                .path("/internal/loans/repayment-monitoring")
+                .queryParam("dueWithinDays", dueWithinDays)
+                .toUriString();
+        return exchangeForJson(url, HttpMethod.GET, null);
+    }
+
     /**
      * Gợi ý hỗ trợ thẩm định — passthrough JSON nguyên bản từ loan-service.
      * creditGrade (hạng Credit 360) dùng để định giá lãi suất/hạn mức; null = chưa chấm điểm.
@@ -882,6 +890,61 @@ public class SourceServiceClient {
     private String resolveBorrowerName(UserSummaryResponse borrower) {
         if (borrower == null) return null;
         return borrower.getFullName() != null ? borrower.getFullName() : borrower.getPhone();
+    }
+
+    // ─── Reconciliation ───────────────────────────────────────────────────────
+
+    public JsonNode runReconciliation(LocalDate date, String runBy) {
+        URI uri = UriComponentsBuilder.fromHttpUrl(paymentServiceUrl)
+                .path("/internal/reconciliation/run")
+                .queryParam("date", date.toString())
+                .queryParam("runBy", runBy)
+                .build()
+                .toUri();
+        return exchangeForJson(uri, HttpMethod.POST, null);
+    }
+
+    public JsonNode getReconciliationSessions(int page, int size) {
+        URI uri = UriComponentsBuilder.fromHttpUrl(paymentServiceUrl)
+                .path("/internal/reconciliation/sessions")
+                .queryParam("page", page)
+                .queryParam("size", size)
+                .build()
+                .toUri();
+        return exchangeForJson(uri, HttpMethod.GET, null);
+    }
+
+    public JsonNode getReconciliationItems(String sessionId, String status, int page, int size) {
+        UriComponentsBuilder builder = UriComponentsBuilder.fromHttpUrl(paymentServiceUrl)
+                .path("/internal/reconciliation/sessions/{sessionId}/items")
+                .queryParam("page", page)
+                .queryParam("size", size);
+        if (status != null && !status.isBlank()) {
+            builder.queryParam("status", status);
+        }
+        URI uri = builder.buildAndExpand(sessionId).toUri();
+        return exchangeForJson(uri, HttpMethod.GET, null);
+    }
+
+    public void resolveReconciliationItem(String itemId, String resolvedBy, String notes) {
+        URI uri = UriComponentsBuilder.fromHttpUrl(paymentServiceUrl)
+                .path("/internal/reconciliation/items/{itemId}/resolve")
+                .buildAndExpand(itemId)
+                .toUri();
+        var body = new java.util.LinkedHashMap<String, String>();
+        body.put("resolvedBy", resolvedBy);
+        if (notes != null) body.put("notes", notes);
+        exchangeForJson(uri, HttpMethod.PUT, body);
+    }
+
+    public void markReconciliationItemInvestigating(String itemId, String updatedBy) {
+        URI uri = UriComponentsBuilder.fromHttpUrl(paymentServiceUrl)
+                .path("/internal/reconciliation/items/{itemId}/investigate")
+                .buildAndExpand(itemId)
+                .toUri();
+        var body = new java.util.LinkedHashMap<String, String>();
+        body.put("updatedBy", updatedBy);
+        exchangeForJson(uri, HttpMethod.PUT, body);
     }
 
     private UserAccountStatus parseAccountStatus(String value) {
