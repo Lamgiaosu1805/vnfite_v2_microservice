@@ -1,13 +1,13 @@
 package com.p2plending.cms.controller;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.p2plending.cms.security.CmsPrincipal;
 import com.p2plending.cms.service.SourceServiceClient;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
@@ -24,9 +24,9 @@ public class ReconciliationController {
     @PostMapping("/run")
     public ResponseEntity<JsonNode> run(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
-            @AuthenticationPrincipal UserDetails principal) {
+            @AuthenticationPrincipal CmsPrincipal principal) {
         LocalDate reconDate = date != null ? date : LocalDate.now(java.time.ZoneId.of("Asia/Ho_Chi_Minh"));
-        String runBy = principal != null ? principal.getUsername() : "ops";
+        String runBy = principal != null ? principal.username() : "ops";
         return ResponseEntity.ok(sourceServiceClient.runReconciliation(reconDate, runBy));
     }
 
@@ -50,8 +50,8 @@ public class ReconciliationController {
     public ResponseEntity<Void> resolve(
             @PathVariable String itemId,
             @RequestBody Map<String, String> body,
-            @AuthenticationPrincipal UserDetails principal) {
-        String resolvedBy = principal != null ? principal.getUsername() : "ops";
+            @AuthenticationPrincipal CmsPrincipal principal) {
+        String resolvedBy = principal != null ? principal.username() : "ops";
         sourceServiceClient.resolveReconciliationItem(itemId, resolvedBy, body.get("notes"));
         return ResponseEntity.ok().build();
     }
@@ -59,8 +59,8 @@ public class ReconciliationController {
     @PutMapping("/items/{itemId}/investigate")
     public ResponseEntity<Void> investigate(
             @PathVariable String itemId,
-            @AuthenticationPrincipal UserDetails principal) {
-        String updatedBy = principal != null ? principal.getUsername() : "ops";
+            @AuthenticationPrincipal CmsPrincipal principal) {
+        String updatedBy = principal != null ? principal.username() : "ops";
         sourceServiceClient.markReconciliationItemInvestigating(itemId, updatedBy);
         return ResponseEntity.ok().build();
     }
