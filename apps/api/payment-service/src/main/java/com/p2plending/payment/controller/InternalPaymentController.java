@@ -116,7 +116,8 @@ public class InternalPaymentController {
                     req.getAccountNo(),
                     amount,
                     effectiveTxnId,
-                    runningBalance
+                    runningBalance,
+                    req.getDescription()
             );
             return ResponseEntity.ok(Map.of("status", "OK"));
         } catch (Exception e) {
@@ -356,7 +357,7 @@ public class InternalPaymentController {
         tikluyClient.topUpAccount(txnId, wallet.getVnfAccountNo(), amount);
 
         // 2. Ghi nhận giao dịch vào payment-service (dedup theo txnId)
-        walletService.processDeposit(txnId, wallet.getVnfAccountNo(), amount, txnId, amount);
+        walletService.processDeposit(txnId, wallet.getVnfAccountNo(), amount, txnId, amount, null);
 
         return ResponseEntity.ok(Map.of(
                 "status", "OK",

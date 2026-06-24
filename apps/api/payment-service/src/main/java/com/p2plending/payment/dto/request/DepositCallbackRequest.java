@@ -38,4 +38,7 @@ public class DepositCallbackRequest {
     /** Nội dung chuyển khoản dòng 2 — TIKLUY gửi key "content_2" (snake_case) */
     @JsonProperty("content_2")
     private String content2;
+
+    /** Nội dung giao dịch thực từ MB Bank (remark của lệnh chuyển khoản) */
+    private String description;
 }

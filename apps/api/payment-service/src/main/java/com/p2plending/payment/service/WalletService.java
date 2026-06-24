@@ -142,10 +142,16 @@ public class WalletService {
             int size) {
         String normalizedSearch = search == null || search.isBlank() ? null : search.trim();
         PageRequest pageable = PageRequest.of(page, size);
+        // Dùng IN list thay vì (:param IS NULL OR ...) để tránh bug Hibernate 6 với nullable enum parameter
+        List<TransactionType> types = type != null
+                ? List.of(type)
+                : List.of(TransactionType.DEPOSIT, TransactionType.WITHDRAW);
+        List<TransactionStatus> statuses = status != null
+                ? List.of(status)
+                : List.of(TransactionStatus.PENDING, TransactionStatus.SUCCESS, TransactionStatus.FAILED);
         Page<WalletTransaction> transactions = transactionRepository.findSystemMoneyTransactions(
-                List.of(TransactionType.DEPOSIT, TransactionType.WITHDRAW),
-                type,
-                status,
+                types,
+                statuses,
                 fromTime,
                 toTime,
                 normalizedSearch,
@@ -189,7 +195,7 @@ public class WalletService {
      */
     @Transactional
     public void processDeposit(String txnId, String accNo, BigDecimal amount, String referenceId,
-                               BigDecimal runningBalance) {
+                               BigDecimal runningBalance, String description) {
         if (referenceId != null && transactionRepository.existsByReferenceId(referenceId)) {
             log.warn("txnId={} Duplicate deposit referenceId={}, skip", txnId, referenceId);
             return;
@@ -212,7 +218,7 @@ public class WalletService {
                 .amount(amount)
                 .status(TransactionStatus.SUCCESS)
                 .referenceId(referenceId)
-                .description("Nạp tiền vào ví VNFITE")
+                .description(description != null && !description.isBlank() ? description : "Nạp tiền vào ví VNFITE")
                 .balanceAfter(availableAfter)
                 .build());
 

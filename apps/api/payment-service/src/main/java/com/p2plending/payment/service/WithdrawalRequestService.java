@@ -641,6 +641,9 @@ public class WithdrawalRequestService {
             txn.setStatus(status);
             if (status == TransactionStatus.SUCCESS) {
                 txn.setDescription("Rút tiền thành công. FT=" + wr.getMbFtNumber());
+                if (wr.getMbFtNumber() != null && !wr.getMbFtNumber().isBlank()) {
+                    txn.setReferenceId(wr.getMbFtNumber());
+                }
             } else {
                 txn.setDescription("Rút tiền thất bại — tiền đã được hoàn về ví.");
             }

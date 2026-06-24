@@ -23,9 +23,8 @@ public interface WalletTransactionRepository extends JpaRepository<WalletTransac
             SELECT tx
             FROM WalletTransaction tx
             WHERE tx.isDeleted = false
-              AND tx.type IN :allowedTypes
-              AND (:type IS NULL OR tx.type = :type)
-              AND (:status IS NULL OR tx.status = :status)
+              AND tx.type IN :types
+              AND tx.status IN :statuses
               AND (:fromTime IS NULL OR tx.createdAt >= :fromTime)
               AND (:toTime IS NULL OR tx.createdAt < :toTime)
               AND (
@@ -47,9 +46,8 @@ public interface WalletTransactionRepository extends JpaRepository<WalletTransac
             ORDER BY tx.createdAt DESC
             """)
     Page<WalletTransaction> findSystemMoneyTransactions(
-            @Param("allowedTypes") List<TransactionType> allowedTypes,
-            @Param("type") TransactionType type,
-            @Param("status") TransactionStatus status,
+            @Param("types") List<TransactionType> types,
+            @Param("statuses") List<TransactionStatus> statuses,
             @Param("fromTime") LocalDateTime fromTime,
             @Param("toTime") LocalDateTime toTime,
             @Param("search") String search,
