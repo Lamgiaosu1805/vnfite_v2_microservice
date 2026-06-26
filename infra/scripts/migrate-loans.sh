@@ -124,8 +124,51 @@ ENDSQL
 LOANS=$($MYSQL APP_V2 --skip-column-names -e "SELECT COUNT(*) FROM loan_db.loan_requests;" 2>/dev/null)
 log "  → loan_db.loan_requests tổng: ${LOANS}"
 
-# ── Step 2: Migrate loan_db.repayment_schedule ───────────────────────────────
-log "Step 2: Migrate tbl_payment_period → loan_db.repayment_schedule..."
+# ── Step 2: Migrate loan_db.loan_offers (danh mục đầu tư của nhà đầu tư) ────
+#
+# Hệ thống cũ hiển thị danh mục đầu tư từ tbl_user_loan_user với điều kiện:
+#   - INVESTMENT_FORM = 1
+#   - STATUS = 1
+#   - AMOUNT > 0
+#   - IS_DELETED = 'N'
+#
+# Đây là mapping bảo thủ nhất để rehearsal trên test phản ánh đúng các khoản
+# đầu tư thực sự còn hiệu lực, tránh kéo lẫn các bản ghi chuyển nhượng/status
+# đặc biệt của hệ cũ.
+log "Step 2: Migrate tbl_user_loan_user → loan_db.loan_offers..."
+$MYSQL APP_V2 <<'ENDSQL'
+INSERT INTO loan_db.loan_offers
+  (id, loan_request_id, investor_id, amount, status,
+   is_deleted, created_at, updated_at)
+SELECT
+  ulu.ID,
+  ulu.USER_LOAN_ID,
+  ulu.USER_ID,
+  CAST(NULLIF(TRIM(ulu.AMOUNT), '') AS DECIMAL(15,2)),
+  'ACCEPTED',
+  CASE WHEN ulu.IS_DELETED = 'Y' THEN 1 ELSE 0 END,
+  ulu.CREATED_DATE,
+  COALESCE(ulu.UPDATED_DATE, ulu.CREATED_DATE)
+FROM tbl_user_loan_user ulu
+JOIN loan_db.loan_requests lr ON lr.id = ulu.USER_LOAN_ID
+JOIN auth_db.users u ON u.id = ulu.USER_ID
+WHERE ulu.IS_DELETED = 'N'
+  AND COALESCE(ulu.INVESTMENT_FORM, 1) = 1
+  AND ulu.STATUS = 1
+  AND NULLIF(TRIM(ulu.AMOUNT), '') IS NOT NULL
+  AND CAST(NULLIF(TRIM(ulu.AMOUNT), '') AS DECIMAL(15,2)) > 0
+ON DUPLICATE KEY UPDATE
+  amount      = VALUES(amount),
+  status      = VALUES(status),
+  is_deleted  = VALUES(is_deleted),
+  updated_at  = VALUES(updated_at);
+ENDSQL
+
+OFFERS=$($MYSQL APP_V2 --skip-column-names -e "SELECT COUNT(*) FROM loan_db.loan_offers;" 2>/dev/null)
+log "  → loan_db.loan_offers tổng: ${OFFERS}"
+
+# ── Step 3: Migrate loan_db.repayment_schedule ───────────────────────────────
+log "Step 3: Migrate tbl_payment_period → loan_db.repayment_schedule..."
 $MYSQL APP_V2 <<'ENDSQL'
 INSERT INTO loan_db.repayment_schedule
   (id, loan_id, period_number,
@@ -175,8 +218,8 @@ ENDSQL
 SCHEDULES=$($MYSQL APP_V2 --skip-column-names -e "SELECT COUNT(*) FROM loan_db.repayment_schedule;" 2>/dev/null)
 log "  → loan_db.repayment_schedule tổng: ${SCHEDULES}"
 
-# ── Step 3: Set activated_at cho khoản ACTIVE chưa có ────────────────────────
-log "Step 3: Set activated_at = created_at cho ACTIVE loans chưa có..."
+# ── Step 4: Set activated_at cho khoản ACTIVE chưa có ────────────────────────
+log "Step 4: Set activated_at = created_at cho ACTIVE loans chưa có..."
 mysql -u"${DB_USER}" -p"${DB_PASS}" -h"${DB_HOST}" loan_db 2>/dev/null <<'ENDSQL'
 UPDATE loan_requests
 SET activated_at = created_at
@@ -190,4 +233,5 @@ log "  → ACTIVE loans có activated_at: ${ACTIVATED}"
 
 log "===== Loan migration hoàn thành ====="
 log "loan_requests:       ${LOANS}"
+log "loan_offers:         ${OFFERS}"
 log "repayment_schedule:  ${SCHEDULES}"
