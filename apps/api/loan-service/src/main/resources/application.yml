@@ -91,6 +91,10 @@ app:
     excluded-user-ids: ${DEMO_EXCLUDED_USER_IDS:}
   otp:
     mock: ${APP_OTP_MOCK:true}
+  vnf-otp:
+    url: ${VNF_OTP_SERVICE_URL:}
+    path: ${VNF_OTP_SERVICE_PATH:/common/generate-otp-app-v2}
+    loan-function-type: ${VNF_OTP_LOAN_FUNCTION_TYPE:7}
   redis:
     namespace: ${APP_REDIS_NAMESPACE:${SPRING_PROFILES_ACTIVE:dev}}:loan-service
   internal:

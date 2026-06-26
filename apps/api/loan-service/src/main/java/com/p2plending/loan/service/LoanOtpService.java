@@ -2,6 +2,7 @@ package com.p2plending.loan.service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.p2plending.loan.client.AuthServiceClient;
 import com.p2plending.loan.config.RedisNamespaceProperties;
 import com.p2plending.loan.dto.request.LoanCreateRequest;
 import com.p2plending.loan.dto.request.PendingLoanData;
@@ -16,7 +17,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.security.SecureRandom;
 import java.time.Duration;
 
 /**
@@ -39,6 +39,8 @@ public class LoanOtpService {
     private final ObjectMapper objectMapper;
     private final LoanService loanService;
     private final RedisNamespaceProperties redisNamespaceProperties;
+    private final AuthServiceClient authServiceClient;
+    private final VnfOtpSenderService vnfOtpSenderService;
 
     @Value("${app.otp.mock:true}")
     private boolean mockOtp;
@@ -46,7 +48,7 @@ public class LoanOtpService {
     // ── Init ─────────────────────────────────────────────────────────────────
 
     public LoanOtpInitResponse init(LoanCreateRequest request, String borrowerId) {
-        String otp = mockOtp ? MOCK_OTP : generateOtp();
+        String otp = resolveOtp(borrowerId);
 
         PendingLoanData pending = PendingLoanData.builder()
                 .borrowerId(borrowerId)
@@ -79,11 +81,6 @@ public class LoanOtpService {
         } catch (JsonProcessingException e) {
             log.error("Failed to serialize pending loan data for borrower {}", borrowerId, e);
             throw new InvalidLoanStateException("Không thể lưu thông tin tạm thời. Vui lòng thử lại.");
-        }
-
-        // TODO: production — gửi OTP qua Kafka → notification-service
-        if (!mockOtp) {
-            log.info("[LoanOtp] OTP generated for borrower {} (send via notification-service)", borrowerId);
         }
 
         LoanOtpInitResponse.LoanOtpInitResponseBuilder builder = LoanOtpInitResponse.builder()
@@ -156,12 +153,26 @@ public class LoanOtpService {
         return r;
     }
 
-    private String generateOtp() {
-        SecureRandom random = new SecureRandom();
-        return String.format("%06d", random.nextInt(1_000_000));
-    }
-
     private String pendingKey(String borrowerId) {
         return redisNamespaceProperties.qualify(KEY_PREFIX + borrowerId);
+    }
+
+    private String resolveOtp(String borrowerId) {
+        if (mockOtp) {
+            return MOCK_OTP;
+        }
+
+        String phone = authServiceClient.getUserById(borrowerId)
+                .map(user -> user.getPhone())
+                .filter(phoneNumber -> phoneNumber != null && !phoneNumber.isBlank())
+                .orElseThrow(() -> new InvalidLoanStateException(
+                        "Không lấy được số điện thoại để gửi OTP. Vui lòng thử lại."));
+
+        String sentOtp = vnfOtpSenderService.sendLoanOtp(phone);
+        if (sentOtp == null || sentOtp.isBlank()) {
+            throw new InvalidLoanStateException(
+                    "Không gửi được OTP xác nhận gọi vốn. Vui lòng thử lại sau.");
+        }
+        return sentOtp;
     }
 }
