@@ -33,4 +33,17 @@ public interface KycSubmissionRepository extends JpaRepository<KycSubmission, St
               )
             """)
     List<String> findUserIdsByFullNameOrCccd(@Param("search") String search);
+
+    @Query("""
+            select k.userId as userId, k.fullName as fullName, k.cccdNumber as cccdNumber
+            from KycSubmission k
+            where k.isDeleted = false
+            """)
+    List<KycSearchRow> findSearchRows();
+
+    interface KycSearchRow {
+        String getUserId();
+        String getFullName();
+        String getCccdNumber();
+    }
 }

@@ -17,11 +17,14 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.text.Normalizer;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 
 @Service
@@ -40,7 +43,7 @@ public class InternalUserQueryService {
         PageRequest pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
         String trimmedSearch = StringUtils.hasText(search) ? search.trim() : null;
         List<String> matchedKycUserIds = StringUtils.hasText(trimmedSearch)
-                ? kycSubmissionRepository.findUserIdsByFullNameOrCccd(trimmedSearch)
+                ? findMatchedKycUserIds(trimmedSearch)
                 : List.of();
         var users = userRepository.findAll((root, query, cb) -> {
             var predicates = cb.conjunction();
@@ -67,6 +70,32 @@ public class InternalUserQueryService {
             return predicates;
         }, pageable).map(this::toSummary);
         return PagedResponse.from(users);
+    }
+
+    private List<String> findMatchedKycUserIds(String search) {
+        var userIds = new LinkedHashSet<>(kycSubmissionRepository.findUserIdsByFullNameOrCccd(search));
+        String normalizedSearch = normalizeForSearch(search);
+        if (!StringUtils.hasText(normalizedSearch)) {
+            return new ArrayList<>(userIds);
+        }
+
+        for (var row : kycSubmissionRepository.findSearchRows()) {
+            String normalizedName = normalizeForSearch(row.getFullName());
+            String normalizedCccd = normalizeForSearch(row.getCccdNumber());
+            if (normalizedName.contains(normalizedSearch) || normalizedCccd.contains(normalizedSearch)) {
+                userIds.add(row.getUserId());
+            }
+        }
+        return new ArrayList<>(userIds);
+    }
+
+    private String normalizeForSearch(String value) {
+        if (!StringUtils.hasText(value)) return "";
+        String normalized = Normalizer.normalize(value.trim(), Normalizer.Form.NFD)
+                .replaceAll("\\p{M}+", "")
+                .replace('đ', 'd')
+                .replace('Đ', 'D');
+        return normalized.toLowerCase(Locale.ROOT);
     }
 
     @Transactional(readOnly = true)
