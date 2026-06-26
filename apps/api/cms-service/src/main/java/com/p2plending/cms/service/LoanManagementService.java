@@ -120,6 +120,12 @@ public class LoanManagementService {
         return sourceServiceClient.expireSweep();
     }
 
+    /** Chạy ngay job thu nợ tự động từ ví người gọi vốn. */
+    public JsonNode autoDebitSweep(CmsPrincipal operator) {
+        String triggeredBy = operator != null ? operator.username() : "unknown";
+        return sourceServiceClient.autoDebitSweep(triggeredBy);
+    }
+
     public LoanSummaryResponse disburse(String loanId, CmsPrincipal operator) {
         LoanSummaryResponse loanBefore = safeGetLoan(loanId);
         String decidedBy   = operator != null ? operator.username() : "unknown";

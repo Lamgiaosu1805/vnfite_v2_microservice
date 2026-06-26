@@ -601,6 +601,17 @@ public class SourceServiceClient {
         return exchangeForJson(url, HttpMethod.POST, null);
     }
 
+    /** Chạy ngay job thu nợ tự động từ ví người gọi vốn (CMS bấm tay). */
+    public JsonNode autoDebitSweep(String triggeredBy) {
+        String url = UriComponentsBuilder.fromHttpUrl(loanServiceUrl)
+                .path("/internal/loans/repayments/auto-debit-sweep")
+                .queryParam("triggeredBy", triggeredBy)
+                .build()
+                .encode()
+                .toUriString();
+        return exchangeForJson(url, HttpMethod.POST, null);
+    }
+
     /** Giải ngân vốn cho người gọi vốn (OPS bấm trên CMS). */
     public LoanSummaryResponse disburseLoan(String loanId, String disbursedBy) {
         String url = UriComponentsBuilder.fromHttpUrl(loanServiceUrl)

@@ -13,15 +13,12 @@ import com.p2plending.payment.dto.response.WalletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -112,23 +109,10 @@ public class WalletService {
     @Transactional(readOnly = true)
     public Page<TransactionResponse> getTransactions(String userId, int page, int size) {
         Wallet wallet = findByUser(userId);
-        List<WalletTransaction> transactions =
-                transactionRepository.findByWalletIdAndIsDeletedFalseOrderByCreatedAtAsc(wallet.getId());
-
-        List<TransactionResponse> ledger = new ArrayList<>(transactions.size());
-        BigDecimal runningAvailable = BigDecimal.ZERO;
-        for (WalletTransaction transaction : transactions) {
-            runningAvailable = runningAvailable
-                    .add(signedAvailableDelta(transaction))
-                    .max(BigDecimal.ZERO);
-            ledger.add(toTxnResponse(transaction, runningAvailable));
-        }
-
-        Collections.reverse(ledger);
         PageRequest pageable = PageRequest.of(page, size);
-        int from = Math.min((int) pageable.getOffset(), ledger.size());
-        int to = Math.min(from + pageable.getPageSize(), ledger.size());
-        return new PageImpl<>(ledger.subList(from, to), pageable, ledger.size());
+        return transactionRepository
+                .findByWalletIdAndIsDeletedFalseOrderByCreatedAtDesc(wallet.getId(), pageable)
+                .map(this::toTxnResponse);
     }
 
     @Transactional(readOnly = true)
@@ -544,38 +528,14 @@ public class WalletService {
     }
 
     private TransactionResponse toTxnResponse(WalletTransaction t) {
-        return toTxnResponse(t, t.getBalanceAfter());
-    }
-
-    private TransactionResponse toTxnResponse(WalletTransaction t, BigDecimal balanceAfter) {
         return TransactionResponse.builder()
                 .id(t.getId())
                 .type(t.getType())
                 .amount(t.getAmount())
                 .status(t.getStatus())
                 .description(t.getDescription())
-                .balanceAfter(balanceAfter)
+                .balanceAfter(t.getBalanceAfter())
                 .createdAt(t.getCreatedAt())
                 .build();
-    }
-
-    private BigDecimal signedAvailableDelta(WalletTransaction transaction) {
-        if (transaction.getAmount() == null || transaction.getType() == null) {
-            return BigDecimal.ZERO;
-        }
-        TransactionStatus status = transaction.getStatus();
-        TransactionType type = transaction.getType();
-
-        if (status == TransactionStatus.FAILED) {
-            return BigDecimal.ZERO;
-        }
-        if (status == TransactionStatus.PENDING && type != TransactionType.WITHDRAW) {
-            return BigDecimal.ZERO;
-        }
-
-        return switch (type) {
-            case DEPOSIT, INVEST_REFUND, DISBURSEMENT, REPAYMENT -> transaction.getAmount();
-            case WITHDRAW, INVEST, REPAY -> transaction.getAmount().negate();
-        };
     }
 }

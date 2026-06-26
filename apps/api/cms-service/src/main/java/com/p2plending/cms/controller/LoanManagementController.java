@@ -131,6 +131,16 @@ public class LoanManagementController {
     }
 
     /**
+     * POST /cms/loans/repayments/auto-debit-sweep
+     * Chạy ngay job thu nợ tự động từ ví người gọi vốn. Dùng khi khách vừa nạp tiền sau lượt cron.
+     */
+    @PostMapping("/repayments/auto-debit-sweep")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN')")
+    public ResponseEntity<JsonNode> autoDebitSweep(@AuthenticationPrincipal CmsPrincipal operator) {
+        return ResponseEntity.ok(loanService.autoDebitSweep(operator));
+    }
+
+    /**
      * POST /cms/loans/{loanId}/disburse
      * ADMIN giải ngân vốn cho người gọi vốn: AWAITING_DISBURSEMENT → DISBURSED.
      * Sinh lịch trả nợ từ ngày giải ngân + bắn loan.disbursed.

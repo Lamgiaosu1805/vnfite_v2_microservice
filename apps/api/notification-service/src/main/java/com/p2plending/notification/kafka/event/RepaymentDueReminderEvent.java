@@ -15,5 +15,7 @@ public class RepaymentDueReminderEvent {
     private Integer totalPeriods;
     private BigDecimal amountDue;
     private LocalDate dueDate;
+    /** >0: nhắc trước hạn; 0/null: đến hạn hôm nay hoặc event cũ. */
+    private Integer daysUntilDue;
     private int dpd;
 }

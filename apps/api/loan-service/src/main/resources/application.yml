@@ -113,6 +113,13 @@ app:
     default-threshold: ${APP_DPD_THRESHOLD:30}
     # Cron quét DPD hằng ngày (giờ Việt Nam)
     cron: ${APP_DPD_CRON:0 0 1 * * *}
+  auto-debit:
+    # Quét thu nợ tự động nhiều lần trong ngày để bắt kịp khách nạp tiền sau lượt quét đầu.
+    cron: ${APP_AUTO_DEBIT_CRON:0 45 0,10,15,22 * * *}
+  repayment-reminder:
+    # Nhắc người gọi vốn chuẩn bị số dư trước ngày đến hạn, không trừ tiền.
+    days-ahead: ${APP_REPAYMENT_REMINDER_DAYS_AHEAD:1}
+    cron: ${APP_REPAYMENT_REMINDER_CRON:0 0 8 * * *}
   funding:
     # Số ngày khoản được phép ở ACTIVE để gọi vốn trước khi hết hạn & hoàn tiền nhà đầu tư
     window-days: ${APP_FUNDING_WINDOW_DAYS:180}

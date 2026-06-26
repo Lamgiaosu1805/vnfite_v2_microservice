@@ -25,6 +25,7 @@ import java.math.BigDecimal;
 import java.text.NumberFormat;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
 import java.util.Locale;
@@ -286,18 +287,26 @@ public class NotificationService {
     /** Đến hạn nhưng ví không đủ — nhắc người gọi vốn nạp tiền (đẩy hằng ngày tới khi trả/đủ). */
     @Transactional
     public void notifyRepaymentDueReminder(RepaymentDueReminderEvent event) {
+        DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy");
         String code = event.getLoanCode() != null ? event.getLoanCode() : event.getLoanId();
         String periodLabel = event.getTotalPeriods() != null
                 ? "%d/%d".formatted(event.getPeriodNumber(), event.getTotalPeriods())
                 : String.valueOf(event.getPeriodNumber());
         boolean overdue = event.getDpd() > 0;
+        boolean beforeDue = event.getDaysUntilDue() != null && event.getDaysUntilDue() > 0;
 
-        String title = overdue ? "Khoản vay đã quá hạn" : "Đến hạn trả nợ";
+        String title = overdue
+                ? "Khoản vay đã quá hạn"
+                : beforeDue ? "Sắp đến hạn trả nợ" : "Đến hạn trả nợ";
+        String dueDate = event.getDueDate() != null ? event.getDueDate().format(dateFormatter) : "";
         String message = overdue
-                ? "Kỳ %s khoản %s đã quá hạn %d ngày. Số tiền cần trả %s nhưng ví chưa đủ — vui lòng nạp tiền để tránh phí phạt tăng thêm."
+                ? "Kỳ %s khoản %s đã quá hạn %d ngày. Số tiền cần trả %s nhưng ví chưa đủ — vui lòng nạp tiền để tránh phí phạt tăng thêm. Bỏ qua thông báo này nếu bạn đã thanh toán."
                         .formatted(periodLabel, code, event.getDpd(), formatMoney(event.getAmountDue()))
-                : "Kỳ %s khoản %s đến hạn hôm nay (%s). Ví của bạn chưa đủ số dư — vui lòng nạp tiền để hệ thống tự động thu."
-                        .formatted(periodLabel, code, formatMoney(event.getAmountDue()));
+                : beforeDue
+                        ? "Kỳ %s khoản %s sẽ đến hạn vào %s. Vui lòng chuẩn bị số dư %s trong ví VNFITE. Bỏ qua thông báo này nếu bạn đã thanh toán."
+                                .formatted(periodLabel, code, dueDate, formatMoney(event.getAmountDue()))
+                        : "Kỳ %s khoản %s đến hạn hôm nay (%s). Ví của bạn chưa đủ số dư — vui lòng nạp tiền để hệ thống tự động thu. Bỏ qua thông báo này nếu bạn đã thanh toán."
+                                .formatted(periodLabel, code, formatMoney(event.getAmountDue()));
 
         notificationRepository.save(Notification.builder()
                 .userId(event.getBorrowerId())

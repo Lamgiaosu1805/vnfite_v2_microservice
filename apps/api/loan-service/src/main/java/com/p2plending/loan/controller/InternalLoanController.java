@@ -9,6 +9,7 @@ import com.p2plending.loan.dto.request.LoanFilterParams;
 import com.p2plending.loan.dto.request.LoanProductUpdateRequest;
 import com.p2plending.loan.dto.request.RecordPaymentRequest;
 import com.p2plending.loan.dto.response.AppraisalSuggestionResponse;
+import com.p2plending.loan.dto.response.AutoDebitSweepResponse;
 import com.p2plending.loan.dto.response.ContractResponse;
 import com.p2plending.loan.dto.response.InternalLoanStatsResponse;
 import com.p2plending.loan.dto.response.LoanDocumentResponse;
@@ -18,6 +19,7 @@ import com.p2plending.loan.dto.response.PagedResponse;
 import com.p2plending.loan.dto.response.RepaymentScheduleResponse;
 import com.p2plending.loan.dto.response.RepaymentMonitoringResponse;
 import com.p2plending.loan.service.AppraisalSuggestionService;
+import com.p2plending.loan.service.AutoDebitSweepService;
 import com.p2plending.loan.service.ContractService;
 import com.p2plending.loan.service.FundingExpiryService;
 import com.p2plending.loan.service.LoanProductService;
@@ -45,6 +47,7 @@ public class InternalLoanController {
     private final LoanService loanService;
     private final LoanProductService loanProductService;
     private final RepaymentService repaymentService;
+    private final AutoDebitSweepService autoDebitSweepService;
     private final AppraisalSuggestionService appraisalSuggestionService;
     private final ContractService contractService;
     private final LoanRequestRepository loanRequestRepository;
@@ -151,6 +154,19 @@ public class InternalLoanController {
             @Valid @RequestBody RecordPaymentRequest request) {
         requireInternalSecret(secret);
         return ResponseEntity.ok(repaymentService.recordPayment(loanId, request));
+    }
+
+    /**
+     * Chạy ngay job thu nợ tự động từ ví người gọi vốn (CMS bấm tay).
+     * Dùng khi khách vừa nạp tiền sau lượt cron cuối trong ngày.
+     */
+    @PostMapping("/repayments/auto-debit-sweep")
+    public ResponseEntity<AutoDebitSweepResponse> autoDebitSweep(
+            @RequestHeader(INTERNAL_SECRET_HEADER) String secret,
+            @RequestParam(required = false) String triggeredBy) {
+        requireInternalSecret(secret);
+        return ResponseEntity.ok(autoDebitSweepService.runSweep("MANUAL_CMS",
+                triggeredBy != null && !triggeredBy.isBlank() ? triggeredBy : "cms"));
     }
 
     // ─── Hợp đồng & giải ngân ───────────────────────────────────────────────────

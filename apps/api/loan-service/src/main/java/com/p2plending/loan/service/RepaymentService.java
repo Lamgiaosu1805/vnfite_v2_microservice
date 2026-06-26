@@ -9,6 +9,7 @@ import com.p2plending.loan.domain.entity.RepaymentSchedule;
 import com.p2plending.loan.domain.entity.RepaymentTransaction;
 import com.p2plending.loan.domain.enums.LoanStatus;
 import com.p2plending.loan.domain.enums.OfferStatus;
+import com.p2plending.loan.domain.enums.AutoDebitLoanResultStatus;
 import com.p2plending.loan.domain.enums.PaymentChannel;
 import com.p2plending.loan.domain.enums.PendingCreditStatus;
 import com.p2plending.loan.domain.enums.RepaymentMethod;
@@ -19,6 +20,7 @@ import com.p2plending.loan.domain.repository.PendingInvestorCreditRepository;
 import com.p2plending.loan.domain.repository.RepaymentScheduleRepository;
 import com.p2plending.loan.domain.repository.RepaymentTransactionRepository;
 import com.p2plending.loan.dto.request.RecordPaymentRequest;
+import com.p2plending.loan.dto.response.AutoDebitLoanResult;
 import com.p2plending.loan.dto.response.RepaymentScheduleResponse;
 import com.p2plending.loan.dto.response.RepaymentMonitoringResponse;
 import com.p2plending.loan.exception.InvalidLoanStateException;
@@ -361,15 +363,64 @@ public class RepaymentService {
                 .stream().map(LoanRequest::getId).toList();
     }
 
+    /** Nhắc trước hạn N ngày để người gọi vốn chuẩn bị số dư. Không trừ tiền. */
+    @Transactional(readOnly = true)
+    public int publishUpcomingDueReminders(int daysAhead) {
+        int normalizedDays = Math.max(1, Math.min(daysAhead, 7));
+        LocalDate targetDate = LocalDate.now(TZ).plusDays(normalizedDays);
+        List<RepaymentSchedule> schedules = scheduleRepository
+                .findByStatusNotAndIsDeletedFalseOrderByDueDateAscPeriodNumberAsc(RepaymentStatus.PAID);
+        Set<String> loanIds = schedules.stream()
+                .filter(s -> targetDate.equals(s.getDueDate()))
+                .map(RepaymentSchedule::getLoanId)
+                .collect(java.util.stream.Collectors.toSet());
+        Map<String, LoanRequest> loansById = new HashMap<>();
+        loanRequestRepository.findAllById(loanIds)
+                .forEach(loan -> loansById.put(loan.getId(), loan));
+
+        int sent = 0;
+        for (RepaymentSchedule schedule : schedules) {
+            if (!targetDate.equals(schedule.getDueDate())) continue;
+            if (schedule.getTotalOutstanding().signum() <= 0) continue;
+            LoanRequest loan = loansById.get(schedule.getLoanId());
+            if (loan == null || loan.isDeleted() || !PAYABLE_STATUSES.contains(loan.getStatus())) continue;
+
+            List<RepaymentSchedule> loanSchedules =
+                    scheduleRepository.findByLoanIdAndIsDeletedFalseOrderByPeriodNumberAsc(loan.getId());
+            kafkaProducerService.publishRepaymentDueReminder(RepaymentDueReminderEvent.builder()
+                    .loanId(loan.getId())
+                    .loanCode(loan.getLoanCode())
+                    .borrowerId(loan.getBorrowerId())
+                    .periodNumber(schedule.getPeriodNumber())
+                    .totalPeriods(loanSchedules.size())
+                    .amountDue(schedule.getTotalOutstanding())
+                    .dueDate(schedule.getDueDate())
+                    .daysUntilDue(normalizedDays)
+                    .dpd(0)
+                    .build());
+            sent++;
+        }
+        log.info("Published upcoming repayment reminders: daysAhead={} targetDate={} sent={}",
+                normalizedDays, targetDate, sent);
+        return sent;
+    }
+
     /**
      * Scheduler: tự động trừ ví người gọi vốn cho kỳ đến hạn sớm nhất (dueDate ≤ hôm nay).
      * Số dư đủ → trả đủ kỳ; số dư thiếu → trả một phần; không có số dư → bỏ qua (DPD đánh OVERDUE sau).
      * Mỗi khoản một transaction riêng để một khoản lỗi không ảnh hưởng khoản khác.
      */
     @Transactional
-    public void autoDebitLoan(String loanId) {
+    public AutoDebitLoanResult autoDebitLoan(String loanId) {
         LoanRequest loan = loanRequestRepository.findById(loanId).orElse(null);
-        if (loan == null || !SERVICING_STATUSES.contains(loan.getStatus())) return;
+        if (loan == null || !SERVICING_STATUSES.contains(loan.getStatus())) {
+            return AutoDebitLoanResult.builder()
+                    .loanId(loanId)
+                    .status(AutoDebitLoanResultStatus.NO_DUE)
+                    .amountCollected(BigDecimal.ZERO)
+                    .message("Khoản không còn trong trạng thái thu nợ")
+                    .build();
+        }
 
         List<RepaymentSchedule> schedules =
                 scheduleRepository.findByLoanIdAndIsDeletedFalseOrderByPeriodNumberAsc(loanId);
@@ -377,7 +428,15 @@ public class RepaymentService {
         RepaymentSchedule due = firstUnpaid(schedules)
                 .filter(s -> !s.getDueDate().isAfter(today))   // chỉ trừ khi đã tới hạn
                 .orElse(null);
-        if (due == null) return;
+        if (due == null) {
+            return AutoDebitLoanResult.builder()
+                    .loanId(loan.getId())
+                    .loanCode(loan.getLoanCode())
+                    .status(AutoDebitLoanResultStatus.NO_DUE)
+                    .amountCollected(BigDecimal.ZERO)
+                    .message("Chưa có kỳ đến hạn")
+                    .build();
+        }
 
         BigDecimal available;
         try {
@@ -385,7 +444,13 @@ public class RepaymentService {
         } catch (Exception e) {
             log.warn("Auto-debit loan {}: không lấy được số dư ví borrower {}: {}",
                     loanId, loan.getBorrowerId(), e.getMessage());
-            return;
+            return AutoDebitLoanResult.builder()
+                    .loanId(loan.getId())
+                    .loanCode(loan.getLoanCode())
+                    .status(AutoDebitLoanResultStatus.BALANCE_ERROR)
+                    .amountCollected(BigDecimal.ZERO)
+                    .message("Không lấy được số dư ví")
+                    .build();
         }
         if (available == null || available.signum() <= 0) {
             log.info("Auto-debit loan {}: ví borrower không đủ số dư (available={}) — nhắc nạp tiền, để DPD đánh quá hạn",
@@ -398,13 +463,30 @@ public class RepaymentService {
                     .totalPeriods(schedules.size())
                     .amountDue(due.getTotalOutstanding())
                     .dueDate(due.getDueDate())
+                    .daysUntilDue(0)
                     .dpd(due.getDpd() != null ? due.getDpd() : 0)
                     .build());
-            return;
+            return AutoDebitLoanResult.builder()
+                    .loanId(loan.getId())
+                    .loanCode(loan.getLoanCode())
+                    .status(AutoDebitLoanResultStatus.NO_BALANCE)
+                    .amountCollected(BigDecimal.ZERO)
+                    .message("Ví không có số dư khả dụng")
+                    .build();
         }
 
         BigDecimal payAmount = available.min(due.getTotalOutstanding());
         doSettlePeriod(loan, due, payAmount, PaymentChannel.AUTO_DEBIT, null, schedules.size());
+        boolean settledFull = due.getTotalOutstanding().signum() <= 0;
+        return AutoDebitLoanResult.builder()
+                .loanId(loan.getId())
+                .loanCode(loan.getLoanCode())
+                .status(settledFull
+                        ? AutoDebitLoanResultStatus.SETTLED_FULL
+                        : AutoDebitLoanResultStatus.SETTLED_PARTIAL)
+                .amountCollected(payAmount)
+                .message(settledFull ? "Đã thu đủ kỳ đến hạn" : "Đã thu một phần kỳ đến hạn")
+                .build();
     }
 
     /**
