@@ -38,6 +38,10 @@ public class InternalUserQueryService {
     public PagedResponse<InternalUserSummaryResponse> getUsers(
             KycStatus kycStatus, String role, String search, int page, int size) {
         PageRequest pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+        String trimmedSearch = StringUtils.hasText(search) ? search.trim() : null;
+        List<String> matchedKycUserIds = StringUtils.hasText(trimmedSearch)
+                ? kycSubmissionRepository.findUserIdsByFullNameOrCccd(trimmedSearch)
+                : List.of();
         var users = userRepository.findAll((root, query, cb) -> {
             var predicates = cb.conjunction();
             predicates = cb.and(predicates, cb.isFalse(root.get("isDeleted")));
@@ -48,23 +52,16 @@ public class InternalUserQueryService {
             if (kycStatus != null) {
                 predicates = cb.and(predicates, cb.equal(root.get("kycStatus"), kycStatus));
             }
-            if (StringUtils.hasText(search)) {
-                String pattern = "%" + search.trim().toLowerCase() + "%";
-                var kycSubquery = query.subquery(String.class);
-                var kycRoot = kycSubquery.from(KycSubmission.class);
-                kycSubquery.select(kycRoot.get("userId"))
-                        .where(cb.and(
-                                cb.equal(kycRoot.get("userId"), root.get("id")),
-                                cb.isFalse(kycRoot.get("isDeleted")),
-                                cb.or(
-                                        cb.like(cb.lower(kycRoot.get("fullName")), pattern),
-                                        cb.like(cb.lower(kycRoot.get("cccdNumber")), pattern)
-                                )
-                        ));
+            if (StringUtils.hasText(trimmedSearch)) {
+                String pattern = "%" + trimmedSearch.toLowerCase() + "%";
+                var searchPredicates = new ArrayList<jakarta.persistence.criteria.Predicate>();
+                searchPredicates.add(cb.like(cb.lower(root.get("phone")), pattern));
+                searchPredicates.add(cb.like(cb.lower(root.get("email")), pattern));
+                if (!matchedKycUserIds.isEmpty()) {
+                    searchPredicates.add(root.get("id").in(matchedKycUserIds));
+                }
                 predicates = cb.and(predicates, cb.or(
-                        cb.like(cb.lower(root.get("phone")), pattern),
-                        cb.like(cb.lower(root.get("email")), pattern),
-                        cb.exists(kycSubquery)
+                        searchPredicates.toArray(jakarta.persistence.criteria.Predicate[]::new)
                 ));
             }
             return predicates;
