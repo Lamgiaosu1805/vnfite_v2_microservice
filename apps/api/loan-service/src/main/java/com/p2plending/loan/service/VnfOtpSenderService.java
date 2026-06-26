@@ -35,8 +35,15 @@ public class VnfOtpSenderService {
     @Value("${app.vnf-otp.loan-function-type:7}")
     private int loanFunctionType;
 
+    @Value("${app.vnf-otp.contract-function-type:2}")
+    private int contractFunctionType;
+
     public String sendLoanOtp(String phone) {
         return sendOtp(phone, loanFunctionType);
+    }
+
+    public String sendContractOtp(String phone) {
+        return sendOtp(phone, contractFunctionType);
     }
 
     private String sendOtp(String phone, int functionType) {

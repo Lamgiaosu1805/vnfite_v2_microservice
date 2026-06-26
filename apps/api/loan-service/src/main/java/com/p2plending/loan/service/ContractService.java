@@ -1,5 +1,6 @@
 package com.p2plending.loan.service;
 
+import com.p2plending.loan.client.AuthServiceClient;
 import com.p2plending.loan.client.PaymentServiceClient;
 import com.p2plending.loan.config.CacheConfig;
 import com.p2plending.loan.config.RedisNamespaceProperties;
@@ -32,7 +33,6 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
-import java.security.SecureRandom;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -70,6 +70,8 @@ public class ContractService {
     private final RedisNamespaceProperties redisNamespaceProperties;
     private final CacheManager             cacheManager;
     private final PaymentServiceClient     paymentServiceClient;
+    private final AuthServiceClient        authServiceClient;
+    private final VnfOtpSenderService      vnfOtpSenderService;
 
     @Value("${app.otp.mock:true}")
     private boolean mockOtp;
@@ -152,12 +154,8 @@ public class ContractService {
             throw new InvalidLoanStateException("Hợp đồng đã được ký hoặc không ở trạng thái chờ ký.");
         }
 
-        String otp = mockOtp ? MOCK_OTP : generateOtp();
+        String otp = resolveOtp(userId);
         redisTemplate.opsForValue().set(otpKey(contractId), otp, OTP_TTL);
-
-        if (!mockOtp) {
-            log.info("[ContractOtp] OTP generated for contract {} (send via notification-service)", contractId);
-        }
 
         ContractSignInitResponse.ContractSignInitResponseBuilder builder = ContractSignInitResponse.builder()
                 .message("Mã OTP ký hợp đồng đã được gửi đến số điện thoại của bạn. Có hiệu lực trong 10 phút.");
@@ -403,11 +401,26 @@ public class ContractService {
         if (list != null) list.clear();
     }
 
-    private String generateOtp() {
-        return String.format("%06d", new SecureRandom().nextInt(1_000_000));
-    }
-
     private String otpKey(String contractId) {
         return redisNamespaceProperties.qualify(KEY_PREFIX + contractId);
+    }
+
+    private String resolveOtp(String userId) {
+        if (mockOtp) {
+            return MOCK_OTP;
+        }
+
+        String phone = authServiceClient.getUserById(userId)
+                .map(user -> user.getPhone())
+                .filter(phoneNumber -> phoneNumber != null && !phoneNumber.isBlank())
+                .orElseThrow(() -> new InvalidLoanStateException(
+                        "Không lấy được số điện thoại để gửi OTP. Vui lòng thử lại."));
+
+        String sentOtp = vnfOtpSenderService.sendContractOtp(phone);
+        if (sentOtp == null || sentOtp.isBlank()) {
+            throw new InvalidLoanStateException(
+                    "Không gửi được OTP ký hợp đồng. Vui lòng thử lại sau.");
+        }
+        return sentOtp;
     }
 }
