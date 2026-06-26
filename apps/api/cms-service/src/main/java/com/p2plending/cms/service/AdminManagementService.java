@@ -26,6 +26,7 @@ public class AdminManagementService {
     private final UsernameGeneratorService usernameGenerator;
 
     private static final String SUPER_ADMIN = "SUPER_ADMIN";
+    private static final List<String> EDITABLE_ROLES = List.of("ADMIN", "OPS");
     private static final String PASSWORD_CHARS =
             "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
     private static final SecureRandom RANDOM = new SecureRandom();
@@ -89,17 +90,7 @@ public class AdminManagementService {
     public List<AdminListResponse> listAdmins() {
         return adminRepo.findAllByIsDeletedFalseOrderByCreatedAtDesc()
                 .stream()
-                .map(a -> AdminListResponse.builder()
-                        .id(a.getId())
-                        .username(a.getUsername())
-                        .email(a.getEmail())
-                        .fullName(a.getFullName())
-                        .role(a.getRole())
-                        .active(a.isActive())
-                        .mustChangePassword(a.isMustChangePassword())
-                        .totpEnabled(a.isTotpEnabled())
-                        .createdAt(a.getCreatedAt())
-                        .build())
+                .map(this::toListResponse)
                 .toList();
     }
 
@@ -117,6 +108,25 @@ public class AdminManagementService {
         }
         admin.setActive(!admin.isActive());
         adminRepo.save(admin);
+    }
+
+    @Transactional
+    public AdminListResponse updateRole(String adminId, String newRole, String requesterId) {
+        if (adminId.equals(requesterId)) {
+            throw new IllegalArgumentException("Không thể tự thay đổi quyền của mình");
+        }
+        if (!EDITABLE_ROLES.contains(newRole)) {
+            throw new IllegalArgumentException("Role phải là ADMIN hoặc OPS");
+        }
+
+        CmsAdminUser admin = adminRepo.findByIdAndIsDeletedFalse(adminId)
+                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy admin"));
+        if (SUPER_ADMIN.equals(admin.getRole())) {
+            throw new IllegalArgumentException("Không thể thay đổi quyền tài khoản Super Admin");
+        }
+
+        admin.setRole(newRole);
+        return toListResponse(adminRepo.save(admin));
     }
 
     // ─── Change Password ──────────────────────────────────────────────────────
@@ -175,5 +185,19 @@ public class AdminManagementService {
             sb.append(PASSWORD_CHARS.charAt(RANDOM.nextInt(PASSWORD_CHARS.length())));
         }
         return sb.toString();
+    }
+
+    private AdminListResponse toListResponse(CmsAdminUser admin) {
+        return AdminListResponse.builder()
+                .id(admin.getId())
+                .username(admin.getUsername())
+                .email(admin.getEmail())
+                .fullName(admin.getFullName())
+                .role(admin.getRole())
+                .active(admin.isActive())
+                .mustChangePassword(admin.isMustChangePassword())
+                .totpEnabled(admin.isTotpEnabled())
+                .createdAt(admin.getCreatedAt())
+                .build();
     }
 }
