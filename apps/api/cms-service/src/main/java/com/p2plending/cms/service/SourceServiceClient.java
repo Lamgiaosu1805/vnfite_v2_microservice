@@ -82,16 +82,17 @@ public class SourceServiceClient {
 
     public PagedResponse<UserSummaryResponse> getUsers(
             String kycStatus, String role, UserAccountStatus status, String search, int page, int size) {
-        String url = UriComponentsBuilder.fromHttpUrl(authServiceUrl)
+        URI uri = UriComponentsBuilder.fromHttpUrl(authServiceUrl)
                 .path("/internal/users")
                 .queryParamIfPresent("kycStatus", Optional.ofNullable(kycStatus))
                 .queryParamIfPresent("role", Optional.ofNullable(role))
                 .queryParamIfPresent("search", Optional.ofNullable(search))
                 .queryParam("page", page)
                 .queryParam("size", size)
-                .toUriString();
+                .build()
+                .toUri();
 
-        JsonNode root = exchangeForJson(url, HttpMethod.GET, null);
+        JsonNode root = exchangeForJson(uri, HttpMethod.GET, null);
         PagedResponse<UserSummaryResponse> response = parseUserPage(root);
         if (status != null) {
             List<UserSummaryResponse> filtered = response.getContent().stream()
