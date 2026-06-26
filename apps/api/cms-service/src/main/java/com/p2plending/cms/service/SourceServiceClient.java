@@ -7,6 +7,7 @@ import com.p2plending.cms.dto.request.LoanActionRequest;
 import com.p2plending.cms.dto.response.CustomerDetailResponse;
 import com.p2plending.cms.dto.response.LoanSummaryResponse;
 import com.p2plending.cms.dto.response.PagedResponse;
+import com.p2plending.cms.dto.response.ResetCustomerPasswordResponse;
 import com.p2plending.cms.dto.response.SystemTransactionSummaryResponse;
 import com.p2plending.cms.dto.response.UserSummaryResponse;
 import com.p2plending.cms.dto.response.WalletSummaryResponse;
@@ -127,6 +128,27 @@ public class SourceServiceClient {
                 .transactions(transactions)
                 .loans(loans)
                 .build();
+    }
+
+    public ResetCustomerPasswordResponse resetCustomerPassword(String userId) {
+        String url = UriComponentsBuilder.fromHttpUrl(authServiceUrl)
+                .path("/internal/users/{userId}/reset-password")
+                .buildAndExpand(userId)
+                .toUriString();
+        JsonNode node = exchangeForJson(url, HttpMethod.POST, null);
+        return ResetCustomerPasswordResponse.builder()
+                .userId(text(node, "userId"))
+                .phone(text(node, "phone"))
+                .generatedPassword(text(node, "generatedPassword"))
+                .build();
+    }
+
+    public void resetCustomerDevice(String userId) {
+        String url = UriComponentsBuilder.fromHttpUrl(authServiceUrl)
+                .path("/internal/users/{userId}/reset-device")
+                .buildAndExpand(userId)
+                .toUriString();
+        exchangeForJson(url, HttpMethod.POST, null);
     }
 
     private WalletSummaryResponse safeGetWallet(String userId) {

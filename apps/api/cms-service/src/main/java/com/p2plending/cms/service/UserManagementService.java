@@ -5,6 +5,7 @@ import com.p2plending.cms.dto.request.KycDecisionRequest;
 import com.p2plending.cms.dto.request.UserStatusRequest;
 import com.p2plending.cms.dto.response.CustomerDetailResponse;
 import com.p2plending.cms.dto.response.PagedResponse;
+import com.p2plending.cms.dto.response.ResetCustomerPasswordResponse;
 import com.p2plending.cms.dto.response.UserSummaryResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -36,5 +37,13 @@ public class UserManagementService {
 
     public UserSummaryResponse updateStatus(String userId, UserStatusRequest req) {
         throw new UnsupportedOperationException("CMS no longer stores user mirror data. Send account-status changes to auth-service.");
+    }
+
+    public ResetCustomerPasswordResponse resetPassword(String userId) {
+        return sourceServiceClient.resetCustomerPassword(userId);
+    }
+
+    public void resetDevice(String userId) {
+        sourceServiceClient.resetCustomerDevice(userId);
     }
 }

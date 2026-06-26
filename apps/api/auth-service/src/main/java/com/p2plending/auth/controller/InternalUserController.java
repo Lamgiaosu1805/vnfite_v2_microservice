@@ -2,10 +2,12 @@ package com.p2plending.auth.controller;
 
 import com.p2plending.auth.domain.enums.KycStatus;
 import com.p2plending.auth.dto.request.KycDecisionInternalRequest;
+import com.p2plending.auth.dto.response.InternalCustomerPasswordResetResponse;
 import com.p2plending.auth.dto.response.InternalUserStatsResponse;
 import com.p2plending.auth.dto.response.InternalUserSummaryResponse;
 import com.p2plending.auth.dto.response.PagedResponse;
 import com.p2plending.auth.service.FcmTokenService;
+import com.p2plending.auth.service.InternalCustomerAdminService;
 import com.p2plending.auth.service.InternalUserQueryService;
 import com.p2plending.auth.service.KycDecisionService;
 import jakarta.validation.Valid;
@@ -31,6 +33,7 @@ public class InternalUserController {
     private final InternalUserQueryService userQueryService;
     private final FcmTokenService          fcmTokenService;
     private final KycDecisionService       kycDecisionService;
+    private final InternalCustomerAdminService customerAdminService;
 
     @Value("${app.internal.secret}")
     private String internalSecret;
@@ -106,6 +109,23 @@ public class InternalUserController {
         requireInternalSecret(secret);
         kycDecisionService.decide(userId, request.isApproved(), request.getReason());
         return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/{userId}/reset-password")
+    public ResponseEntity<InternalCustomerPasswordResetResponse> resetCustomerPassword(
+            @RequestHeader(INTERNAL_SECRET_HEADER) String secret,
+            @PathVariable String userId) {
+        requireInternalSecret(secret);
+        return ResponseEntity.ok(customerAdminService.resetPassword(userId));
+    }
+
+    @PostMapping("/{userId}/reset-device")
+    public ResponseEntity<Map<String, String>> resetCustomerDevice(
+            @RequestHeader(INTERNAL_SECRET_HEADER) String secret,
+            @PathVariable String userId) {
+        requireInternalSecret(secret);
+        customerAdminService.resetDevice(userId);
+        return ResponseEntity.ok(Map.of("message", "Đã đặt lại thiết bị khách hàng"));
     }
 
     private void requireInternalSecret(String secret) {

@@ -5,6 +5,7 @@ import com.p2plending.cms.dto.request.KycDecisionRequest;
 import com.p2plending.cms.dto.request.UserStatusRequest;
 import com.p2plending.cms.dto.response.CustomerDetailResponse;
 import com.p2plending.cms.dto.response.PagedResponse;
+import com.p2plending.cms.dto.response.ResetCustomerPasswordResponse;
 import com.p2plending.cms.dto.response.UserSummaryResponse;
 import com.p2plending.cms.service.UserManagementService;
 import jakarta.validation.Valid;
@@ -62,5 +63,18 @@ public class UserManagementController {
             @PathVariable String userId,
             @Valid @RequestBody UserStatusRequest req) {
         return ResponseEntity.ok(userService.updateStatus(userId, req));
+    }
+
+    @PostMapping("/{userId}/reset-password")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN')")
+    public ResponseEntity<ResetCustomerPasswordResponse> resetPassword(@PathVariable String userId) {
+        return ResponseEntity.ok(userService.resetPassword(userId));
+    }
+
+    @PostMapping("/{userId}/reset-device")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN')")
+    public ResponseEntity<Void> resetDevice(@PathVariable String userId) {
+        userService.resetDevice(userId);
+        return ResponseEntity.noContent().build();
     }
 }
