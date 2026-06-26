@@ -7,6 +7,7 @@ import com.p2plending.cms.dto.request.CreateAdminRequest;
 import com.p2plending.cms.dto.request.SetupRequest;
 import com.p2plending.cms.dto.response.AdminListResponse;
 import com.p2plending.cms.dto.response.CreateAdminResponse;
+import com.p2plending.cms.dto.response.ResetAdminPasswordResponse;
 import com.p2plending.cms.exception.InvalidCredentialsException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -96,6 +97,7 @@ public class AdminManagementService {
                         .role(a.getRole())
                         .active(a.isActive())
                         .mustChangePassword(a.isMustChangePassword())
+                        .totpEnabled(a.isTotpEnabled())
                         .createdAt(a.getCreatedAt())
                         .build())
                 .toList();
@@ -129,6 +131,39 @@ public class AdminManagementService {
         }
         admin.setPassword(passwordEncoder.encode(request.getNewPassword()));
         admin.setMustChangePassword(false);
+        adminRepo.save(admin);
+    }
+
+    // ─── Reset Password / TOTP ───────────────────────────────────────────────
+
+    @Transactional
+    public ResetAdminPasswordResponse resetPassword(String adminId, String requesterId) {
+        if (adminId.equals(requesterId)) {
+            throw new IllegalArgumentException("Không thể tự reset mật khẩu của mình tại màn quản trị");
+        }
+        CmsAdminUser admin = adminRepo.findByIdAndIsDeletedFalse(adminId)
+                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy admin"));
+        String rawPassword = generatePassword();
+        admin.setPassword(passwordEncoder.encode(rawPassword));
+        admin.setMustChangePassword(true);
+        adminRepo.save(admin);
+        return ResetAdminPasswordResponse.builder()
+                .id(admin.getId())
+                .username(admin.getUsername())
+                .fullName(admin.getFullName())
+                .generatedPassword(rawPassword)
+                .build();
+    }
+
+    @Transactional
+    public void resetTotp(String adminId, String requesterId) {
+        if (adminId.equals(requesterId)) {
+            throw new IllegalArgumentException("Không thể tự reset TOTP của mình tại màn quản trị");
+        }
+        CmsAdminUser admin = adminRepo.findByIdAndIsDeletedFalse(adminId)
+                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy admin"));
+        admin.setTotpSecret(null);
+        admin.setTotpEnabled(false);
         adminRepo.save(admin);
     }
 

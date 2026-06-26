@@ -16,5 +16,6 @@ public class AdminListResponse {
     private String role;
     private boolean active;
     private boolean mustChangePassword;
+    private boolean totpEnabled;
     private LocalDateTime createdAt;
 }

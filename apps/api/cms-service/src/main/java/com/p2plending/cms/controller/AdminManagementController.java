@@ -5,6 +5,7 @@ import com.p2plending.cms.dto.request.CreateAdminRequest;
 import com.p2plending.cms.dto.request.SetupRequest;
 import com.p2plending.cms.dto.response.AdminListResponse;
 import com.p2plending.cms.dto.response.CreateAdminResponse;
+import com.p2plending.cms.dto.response.ResetAdminPasswordResponse;
 import com.p2plending.cms.security.CmsPrincipal;
 import com.p2plending.cms.service.AdminManagementService;
 import jakarta.validation.Valid;
@@ -71,6 +72,23 @@ public class AdminManagementController {
             @PathVariable String id,
             @AuthenticationPrincipal CmsPrincipal principal) {
         service.toggleActive(id, principal.userId());
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/admins/{id}/reset-password")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    public ResponseEntity<ResetAdminPasswordResponse> resetPassword(
+            @PathVariable String id,
+            @AuthenticationPrincipal CmsPrincipal principal) {
+        return ResponseEntity.ok(service.resetPassword(id, principal.userId()));
+    }
+
+    @PostMapping("/admins/{id}/reset-totp")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    public ResponseEntity<Void> resetTotp(
+            @PathVariable String id,
+            @AuthenticationPrincipal CmsPrincipal principal) {
+        service.resetTotp(id, principal.userId());
         return ResponseEntity.noContent().build();
     }
 }
