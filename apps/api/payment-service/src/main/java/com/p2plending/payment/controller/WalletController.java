@@ -9,6 +9,7 @@ import com.p2plending.payment.dto.response.TransactionResponse;
 import com.p2plending.payment.dto.response.WalletResponse;
 import com.p2plending.payment.dto.response.WithdrawalResponse;
 import com.p2plending.payment.security.AuthenticatedUser;
+import com.p2plending.payment.service.KycGuardService;
 import com.p2plending.payment.service.WalletService;
 import com.p2plending.payment.service.WithdrawalRequestService;
 import com.p2plending.payment.service.WithdrawalTransferOrchestrator;
@@ -30,10 +31,12 @@ public class WalletController {
     private final WithdrawalRequestService withdrawalRequestService;
     private final WithdrawalTransferOrchestrator withdrawalTransferOrchestrator;
     private final LinkedBankRepository linkedBankRepository;
+    private final KycGuardService kycGuardService;
 
     /** Lấy thông tin ví + số dư */
     @GetMapping("/wallet")
     public ResponseEntity<WalletResponse> getWallet(@AuthenticationPrincipal AuthenticatedUser user) {
+        kycGuardService.requireApproved(user.userId(), "nạp tiền");
         return ResponseEntity.ok(walletService.getWallet(user.userId()));
     }
 
@@ -56,6 +59,7 @@ public class WalletController {
     public ResponseEntity<Map<String, String>> initiateWithdrawal(
             @AuthenticationPrincipal AuthenticatedUser user,
             @RequestBody @Valid WithdrawalInitiateRequest req) {
+        kycGuardService.requireApproved(user.userId(), "rút tiền");
         WithdrawalRequest wr = withdrawalRequestService.initiate(
                 user.userId(), req.getAmount(), req.getLinkedBankId());
         return ResponseEntity.ok(Map.of(
@@ -71,6 +75,7 @@ public class WalletController {
             @AuthenticationPrincipal AuthenticatedUser user,
             @PathVariable String withdrawalId,
             @RequestBody @Valid WithdrawalConfirmOtpRequest req) {
+        kycGuardService.requireApproved(user.userId(), "rút tiền");
         WithdrawalRequest wr = withdrawalTransferOrchestrator.confirmOtp(
                 user.userId(), withdrawalId, req.getOtp());
         return ResponseEntity.ok(toWithdrawalResponse(wr));
@@ -107,6 +112,7 @@ public class WalletController {
     public ResponseEntity<Map<String, String>> resendOtp(
             @AuthenticationPrincipal AuthenticatedUser user,
             @PathVariable String withdrawalId) {
+        kycGuardService.requireApproved(user.userId(), "rút tiền");
         withdrawalRequestService.resendOtp(user.userId(), withdrawalId);
         return ResponseEntity.ok(Map.of("message", "OTP đã được gửi lại. Vui lòng kiểm tra điện thoại."));
     }

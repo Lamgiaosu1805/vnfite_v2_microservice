@@ -4,6 +4,7 @@ import com.p2plending.payment.dto.request.AddBankRequest;
 import com.p2plending.payment.dto.response.BankCatalogItem;
 import com.p2plending.payment.dto.response.LinkedBankResponse;
 import com.p2plending.payment.security.AuthenticatedUser;
+import com.p2plending.payment.service.KycGuardService;
 import com.p2plending.payment.service.LinkedBankService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -20,6 +21,7 @@ import java.util.Map;
 public class BankController {
 
     private final LinkedBankService linkedBankService;
+    private final KycGuardService kycGuardService;
 
     @GetMapping
     public ResponseEntity<List<LinkedBankResponse>> listBanks(
@@ -31,6 +33,7 @@ public class BankController {
     public ResponseEntity<LinkedBankResponse> addBank(
             @AuthenticationPrincipal AuthenticatedUser user,
             @RequestBody @Valid AddBankRequest req) {
+        kycGuardService.requireApproved(user.userId(), "liên kết tài khoản ngân hàng");
         return ResponseEntity.ok(linkedBankService.addBank(user.userId(), req));
     }
 
@@ -54,6 +57,7 @@ public class BankController {
             @AuthenticationPrincipal AuthenticatedUser user,
             @RequestParam String bankCode,
             @RequestParam String bankAccountNo) {
+        kycGuardService.requireApproved(user.userId(), "xác minh tài khoản ngân hàng");
         String name = linkedBankService.verifyBankAccount(user.userId(), bankCode, bankAccountNo);
         return ResponseEntity.ok(Map.of("accountName", name));
     }

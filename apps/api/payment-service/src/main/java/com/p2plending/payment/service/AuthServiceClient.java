@@ -41,6 +41,15 @@ public class AuthServiceClient {
         return phoneNode.isNull() || phoneNode.isMissingNode() ? null : phoneNode.asText();
     }
 
+    public boolean isKycApproved(String userId) {
+        JsonNode body = fetchUser(userId);
+        if (body == null) return false;
+        JsonNode kycNode = body.path("kycStatus");
+        return !kycNode.isMissingNode()
+                && !kycNode.isNull()
+                && "APPROVED".equalsIgnoreCase(kycNode.asText());
+    }
+
     private JsonNode fetchUser(String userId) {
         try {
             HttpHeaders headers = new HttpHeaders();

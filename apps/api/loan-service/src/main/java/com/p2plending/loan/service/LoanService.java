@@ -85,6 +85,7 @@ public class LoanService {
     private final AuthServiceClient      authServiceClient;
     private final PaymentServiceClient   paymentServiceClient;
     private final CacheManager           cacheManager;
+    private final KycGuardService        kycGuardService;
 
     /** Số ngày một khoản được phép ở trạng thái ACTIVE để gọi vốn trước khi hết hạn & hoàn tiền. */
     @Value("${app.funding.window-days:30}")
@@ -99,6 +100,8 @@ public class LoanService {
     @Transactional
     @CacheEvict(value = CacheConfig.CACHE_LOANS, allEntries = true)
     public LoanResponse createLoan(LoanCreateRequest request, String borrowerId) {
+        kycGuardService.requireApproved(borrowerId, "đăng ký gọi vốn");
+
         // 1. Validate sản phẩm gọi vốn
         LoanProduct product = loanProductService.findByCodeOrThrow(request.getProductCode().toUpperCase());
 

@@ -2,7 +2,6 @@ package com.p2plending.loan.service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.p2plending.loan.client.AuthServiceClient;
 import com.p2plending.loan.config.RedisNamespaceProperties;
 import com.p2plending.loan.dto.request.LoanCreateRequest;
 import com.p2plending.loan.dto.request.PendingLoanData;
@@ -39,8 +38,8 @@ public class LoanOtpService {
     private final ObjectMapper objectMapper;
     private final LoanService loanService;
     private final RedisNamespaceProperties redisNamespaceProperties;
-    private final AuthServiceClient authServiceClient;
     private final VnfOtpSenderService vnfOtpSenderService;
+    private final KycGuardService kycGuardService;
 
     @Value("${app.otp.mock:true}")
     private boolean mockOtp;
@@ -158,15 +157,16 @@ public class LoanOtpService {
     }
 
     private String resolveOtp(String borrowerId) {
+        String phone = kycGuardService.requireApproved(borrowerId, "đăng ký gọi vốn")
+                .getPhone();
+        if (phone == null || phone.isBlank()) {
+            throw new InvalidLoanStateException(
+                    "Không lấy được số điện thoại để gửi OTP. Vui lòng thử lại.");
+        }
+
         if (mockOtp) {
             return MOCK_OTP;
         }
-
-        String phone = authServiceClient.getUserById(borrowerId)
-                .map(user -> user.getPhone())
-                .filter(phoneNumber -> phoneNumber != null && !phoneNumber.isBlank())
-                .orElseThrow(() -> new InvalidLoanStateException(
-                        "Không lấy được số điện thoại để gửi OTP. Vui lòng thử lại."));
 
         String sentOtp = vnfOtpSenderService.sendLoanOtp(phone);
         if (sentOtp == null || sentOtp.isBlank()) {
