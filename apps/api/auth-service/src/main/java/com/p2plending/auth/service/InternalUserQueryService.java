@@ -50,9 +50,21 @@ public class InternalUserQueryService {
             }
             if (StringUtils.hasText(search)) {
                 String pattern = "%" + search.trim().toLowerCase() + "%";
+                var kycSubquery = query.subquery(String.class);
+                var kycRoot = kycSubquery.from(KycSubmission.class);
+                kycSubquery.select(kycRoot.get("userId"))
+                        .where(cb.and(
+                                cb.equal(kycRoot.get("userId"), root.get("id")),
+                                cb.isFalse(kycRoot.get("isDeleted")),
+                                cb.or(
+                                        cb.like(cb.lower(kycRoot.get("fullName")), pattern),
+                                        cb.like(cb.lower(kycRoot.get("cccdNumber")), pattern)
+                                )
+                        ));
                 predicates = cb.and(predicates, cb.or(
                         cb.like(cb.lower(root.get("phone")), pattern),
-                        cb.like(cb.lower(root.get("email")), pattern)
+                        cb.like(cb.lower(root.get("email")), pattern),
+                        cb.exists(kycSubquery)
                 ));
             }
             return predicates;
