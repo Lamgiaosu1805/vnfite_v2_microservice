@@ -19,6 +19,7 @@ import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
 
 import java.math.BigDecimal;
+import java.net.URI;
 
 /**
  * Gọi payment-service ({@code /internal/payment/wallet/**}) để kiểm tra & khóa/trừ tiền ví
@@ -123,9 +124,9 @@ public class PaymentServiceClient {
         if (referenceId != null) {
             builder.queryParam("referenceId", referenceId);
         }
-        String url = builder.toUriString();
+        URI uri = builder.build().encode().toUri();
         try {
-            restTemplate.exchange(url, HttpMethod.POST, new HttpEntity<>(authHeaders()), Void.class);
+            restTemplate.exchange(uri, HttpMethod.POST, new HttpEntity<>(authHeaders()), Void.class);
         } catch (HttpStatusCodeException e) {
             throw new InvalidLoanStateException(extractMessage(e, fallback));
         } catch (ResourceAccessException e) {

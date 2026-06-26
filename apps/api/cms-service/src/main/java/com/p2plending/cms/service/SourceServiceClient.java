@@ -90,6 +90,7 @@ public class SourceServiceClient {
                 .queryParam("page", page)
                 .queryParam("size", size)
                 .build()
+                .encode()
                 .toUri();
 
         JsonNode root = exchangeForJson(uri, HttpMethod.GET, null);
@@ -199,6 +200,7 @@ public class SourceServiceClient {
                 .queryParam("page", page)
                 .queryParam("size", size)
                 .build()
+                .encode()
                 .toUri();
 
         JsonNode pageNode = exchangeForJson(uri, HttpMethod.GET, null);
@@ -249,27 +251,33 @@ public class SourceServiceClient {
     // ─── Stats ────────────────────────────────────────────────────────────────
 
     public com.fasterxml.jackson.databind.JsonNode getUserStats(java.time.LocalDate from) {
-        String url = UriComponentsBuilder.fromHttpUrl(authServiceUrl)
+        URI uri = UriComponentsBuilder.fromHttpUrl(authServiceUrl)
                 .path("/internal/users/stats")
                 .queryParam("from", from.toString())
-                .toUriString();
-        return exchangeForJson(url, HttpMethod.GET, null);
+                .build()
+                .encode()
+                .toUri();
+        return exchangeForJson(uri, HttpMethod.GET, null);
     }
 
     public com.fasterxml.jackson.databind.JsonNode getLoanStats(java.time.LocalDate from) {
-        String url = UriComponentsBuilder.fromHttpUrl(loanServiceUrl)
+        URI uri = UriComponentsBuilder.fromHttpUrl(loanServiceUrl)
                 .path("/internal/loans/stats")
                 .queryParam("from", from.toString())
-                .toUriString();
-        return exchangeForJson(url, HttpMethod.GET, null);
+                .build()
+                .encode()
+                .toUri();
+        return exchangeForJson(uri, HttpMethod.GET, null);
     }
 
     public JsonNode getRepaymentMonitoring(int dueWithinDays) {
-        String url = UriComponentsBuilder.fromHttpUrl(loanServiceUrl)
+        URI uri = UriComponentsBuilder.fromHttpUrl(loanServiceUrl)
                 .path("/internal/loans/repayment-monitoring")
                 .queryParam("dueWithinDays", dueWithinDays)
-                .toUriString();
-        return exchangeForJson(url, HttpMethod.GET, null);
+                .build()
+                .encode()
+                .toUri();
+        return exchangeForJson(uri, HttpMethod.GET, null);
     }
 
     /**
@@ -283,8 +291,8 @@ public class SourceServiceClient {
         if (creditGrade != null && !creditGrade.isBlank()) {
             builder.queryParam("creditGrade", creditGrade);
         }
-        String url = builder.buildAndExpand(loanId).toUriString();
-        return exchangeForJson(url, HttpMethod.GET, null);
+        URI uri = builder.buildAndExpand(loanId).encode().toUri();
+        return exchangeForJson(uri, HttpMethod.GET, null);
     }
 
     /** Lịch trả nợ của một khoản — passthrough JSON nguyên bản từ loan-service. */
@@ -508,7 +516,7 @@ public class SourceServiceClient {
             statuses.stream().filter(s -> s != null && !s.isBlank())
                     .forEach(s -> builder.queryParam("statuses", s));
         }
-        URI uri = builder.build().toUri();
+        URI uri = builder.build().encode().toUri();
         JsonNode node = exchangeForJson(uri, HttpMethod.GET, null);
         return parseWithdrawalPage(node, page, size);
     }
@@ -937,6 +945,7 @@ public class SourceServiceClient {
                 .queryParam("date", date.toString())
                 .queryParam("runBy", runBy)
                 .build()
+                .encode()
                 .toUri();
         return exchangeForJson(uri, HttpMethod.POST, null);
     }
@@ -947,6 +956,7 @@ public class SourceServiceClient {
                 .queryParam("page", page)
                 .queryParam("size", size)
                 .build()
+                .encode()
                 .toUri();
         return exchangeForJson(uri, HttpMethod.GET, null);
     }
@@ -959,7 +969,7 @@ public class SourceServiceClient {
         if (status != null && !status.isBlank()) {
             builder.queryParam("status", status);
         }
-        URI uri = builder.buildAndExpand(sessionId).toUri();
+        URI uri = builder.buildAndExpand(sessionId).encode().toUri();
         return exchangeForJson(uri, HttpMethod.GET, null);
     }
 
