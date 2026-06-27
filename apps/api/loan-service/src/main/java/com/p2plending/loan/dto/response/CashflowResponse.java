@@ -52,6 +52,7 @@ public class CashflowResponse {
         private String        offerId;
         private String        loanId;
         private String        loanCode;
+        private String        borrowerId;
         /** Số tiền nhà đầu tư đã đặt. */
         private BigDecimal    amount;
         private String        loanStatus;

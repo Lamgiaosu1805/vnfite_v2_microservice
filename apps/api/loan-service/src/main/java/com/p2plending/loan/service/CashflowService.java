@@ -82,6 +82,7 @@ public class CashflowService {
                     .offerId(offer.getId())
                     .loanId(loan.getId())
                     .loanCode(loan.getLoanCode())
+                    .borrowerId(loan.getBorrowerId())
                     .amount(offer.getAmount())
                     .loanStatus(loan.getStatus().name())
                     .interestRate(loan.getInterestRate())

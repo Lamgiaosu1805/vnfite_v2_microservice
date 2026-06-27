@@ -54,6 +54,9 @@ public class InvestorCashflowResponse {
         private String offerId;
         private String loanId;
         private String loanCode;
+        private String borrowerId;
+        private String borrowerName;
+        private String borrowerPhone;
         private BigDecimal amount;
         private String loanStatus;
         private BigDecimal interestRate;

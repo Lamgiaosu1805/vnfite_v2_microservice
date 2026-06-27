@@ -191,7 +191,10 @@ public class SourceServiceClient {
                     .path("/internal/loans/investors/{investorId}/cashflow")
                     .buildAndExpand(userId)
                     .toUri();
-            return objectMapper.treeToValue(exchangeForJson(uri, HttpMethod.GET, null), InvestorCashflowResponse.class);
+            InvestorCashflowResponse response =
+                    objectMapper.treeToValue(exchangeForJson(uri, HttpMethod.GET, null), InvestorCashflowResponse.class);
+            enrichInvestmentBorrowers(response);
+            return response;
         } catch (Exception ex) {
             log.warn("Could not fetch investment cashflow for customer {}: {}", userId, ex.getMessage());
             return InvestorCashflowResponse.builder()
@@ -204,6 +207,31 @@ public class SourceServiceClient {
                     .upcomingPayments(List.of())
                     .monthlyChart(List.of())
                     .build();
+        }
+    }
+
+    private void enrichInvestmentBorrowers(InvestorCashflowResponse response) {
+        if (response == null || response.getInvestmentHistory() == null || response.getInvestmentHistory().isEmpty()) {
+            return;
+        }
+        Map<String, UserSummaryResponse> borrowers = new HashMap<>();
+        for (InvestorCashflowResponse.InvestmentItem item : response.getInvestmentHistory()) {
+            String borrowerId = item.getBorrowerId();
+            if (borrowerId == null || borrowerId.isBlank()) {
+                continue;
+            }
+            UserSummaryResponse borrower = borrowers.computeIfAbsent(borrowerId, id -> {
+                try {
+                    return getUser(id);
+                } catch (Exception ex) {
+                    log.warn("Could not resolve investment borrower profile for {}: {}", id, ex.getMessage());
+                    return null;
+                }
+            });
+            if (borrower != null) {
+                item.setBorrowerName(resolveBorrowerName(borrower));
+                item.setBorrowerPhone(borrower.getPhone());
+            }
         }
     }
 
