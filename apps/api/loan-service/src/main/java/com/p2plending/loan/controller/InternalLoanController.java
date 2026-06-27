@@ -10,6 +10,7 @@ import com.p2plending.loan.dto.request.LoanProductUpdateRequest;
 import com.p2plending.loan.dto.request.RecordPaymentRequest;
 import com.p2plending.loan.dto.response.AppraisalSuggestionResponse;
 import com.p2plending.loan.dto.response.AutoDebitSweepResponse;
+import com.p2plending.loan.dto.response.CashflowResponse;
 import com.p2plending.loan.dto.response.ContractResponse;
 import com.p2plending.loan.dto.response.InternalLoanStatsResponse;
 import com.p2plending.loan.dto.response.LoanDocumentResponse;
@@ -20,6 +21,7 @@ import com.p2plending.loan.dto.response.RepaymentScheduleResponse;
 import com.p2plending.loan.dto.response.RepaymentMonitoringResponse;
 import com.p2plending.loan.service.AppraisalSuggestionService;
 import com.p2plending.loan.service.AutoDebitSweepService;
+import com.p2plending.loan.service.CashflowService;
 import com.p2plending.loan.service.ContractService;
 import com.p2plending.loan.service.FundingExpiryService;
 import com.p2plending.loan.service.LoanProductService;
@@ -47,6 +49,7 @@ public class InternalLoanController {
     private final LoanService loanService;
     private final LoanProductService loanProductService;
     private final RepaymentService repaymentService;
+    private final CashflowService cashflowService;
     private final AutoDebitSweepService autoDebitSweepService;
     private final AppraisalSuggestionService appraisalSuggestionService;
     private final ContractService contractService;
@@ -199,6 +202,15 @@ public class InternalLoanController {
         requireInternalSecret(secret);
         return ResponseEntity.ok(
                 loanRequestRepository.countByBorrowerIdAndStatusAndIsDeletedFalse(borrowerId, LoanStatus.COMPLETED));
+    }
+
+    /** Danh mục đầu tư và dòng tiền của một nhà đầu tư — CMS chi tiết khách hàng dùng. */
+    @GetMapping("/investors/{investorId}/cashflow")
+    public ResponseEntity<CashflowResponse> getInvestorCashflow(
+            @RequestHeader(INTERNAL_SECRET_HEADER) String secret,
+            @PathVariable String investorId) {
+        requireInternalSecret(secret);
+        return ResponseEntity.ok(cashflowService.getCashflow(investorId));
     }
 
     /** Danh sách chứng từ của một khoản — CMS thẩm định xem. */

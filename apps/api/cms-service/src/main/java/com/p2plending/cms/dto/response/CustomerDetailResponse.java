@@ -14,4 +14,5 @@ public class CustomerDetailResponse {
     private WalletSummaryResponse wallet;
     private PagedResponse<WalletTransactionSummaryResponse> transactions;
     private PagedResponse<LoanSummaryResponse> loans;
+    private InvestorCashflowResponse investments;
 }

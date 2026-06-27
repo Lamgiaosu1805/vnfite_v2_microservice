@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.p2plending.cms.domain.enums.UserAccountStatus;
 import com.p2plending.cms.dto.request.LoanActionRequest;
 import com.p2plending.cms.dto.response.CustomerDetailResponse;
+import com.p2plending.cms.dto.response.InvestorCashflowResponse;
 import com.p2plending.cms.dto.response.LoanSummaryResponse;
 import com.p2plending.cms.dto.response.PagedResponse;
 import com.p2plending.cms.dto.response.ResetCustomerPasswordResponse;
@@ -123,12 +124,14 @@ public class SourceServiceClient {
                 safeGetWalletTransactions(userId, transactionPage, transactionSize);
         PagedResponse<LoanSummaryResponse> loans =
                 getLoans(null, userId, null, null, loanPage, loanSize);
+        InvestorCashflowResponse investments = safeGetInvestorCashflow(userId);
 
         return CustomerDetailResponse.builder()
                 .profile(profile)
                 .wallet(wallet)
                 .transactions(transactions)
                 .loans(loans)
+                .investments(investments)
                 .build();
     }
 
@@ -179,6 +182,28 @@ public class SourceServiceClient {
         } catch (Exception ex) {
             log.warn("Could not fetch wallet transactions for customer {}: {}", userId, ex.getMessage());
             return PagedResponse.empty(page, size);
+        }
+    }
+
+    private InvestorCashflowResponse safeGetInvestorCashflow(String userId) {
+        try {
+            URI uri = UriComponentsBuilder.fromHttpUrl(loanServiceUrl)
+                    .path("/internal/loans/investors/{investorId}/cashflow")
+                    .buildAndExpand(userId)
+                    .toUri();
+            return objectMapper.treeToValue(exchangeForJson(uri, HttpMethod.GET, null), InvestorCashflowResponse.class);
+        } catch (Exception ex) {
+            log.warn("Could not fetch investment cashflow for customer {}: {}", userId, ex.getMessage());
+            return InvestorCashflowResponse.builder()
+                    .summary(InvestorCashflowResponse.Summary.builder()
+                            .totalInvested(BigDecimal.ZERO)
+                            .totalReturnsExpected(BigDecimal.ZERO)
+                            .totalReturnsPaid(BigDecimal.ZERO)
+                            .build())
+                    .investmentHistory(List.of())
+                    .upcomingPayments(List.of())
+                    .monthlyChart(List.of())
+                    .build();
         }
     }
 
