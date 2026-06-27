@@ -44,9 +44,13 @@ public class UserManagementController {
             @RequestParam(defaultValue = "0") int transactionPage,
             @RequestParam(defaultValue = "20") int transactionSize,
             @RequestParam(defaultValue = "0") int loanPage,
-            @RequestParam(defaultValue = "20") int loanSize) {
+            @RequestParam(defaultValue = "20") int loanSize,
+            @RequestParam(defaultValue = "0") int investmentPage,
+            @RequestParam(defaultValue = "10") int investmentSize,
+            @RequestParam(required = false) String investmentStatus) {
         return ResponseEntity.ok(userService.getCustomerDetail(
-                userId, transactionPage, transactionSize, loanPage, loanSize));
+                userId, transactionPage, transactionSize, loanPage, loanSize,
+                investmentPage, investmentSize, investmentStatus));
     }
 
     @PutMapping("/{userId}/kyc")

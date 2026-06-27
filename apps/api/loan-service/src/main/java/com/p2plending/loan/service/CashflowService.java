@@ -38,7 +38,7 @@ public class CashflowService {
     private static final Set<LoanStatus> ACTIVE_STATUSES = Set.of(
             LoanStatus.ACTIVE, LoanStatus.FUNDED, LoanStatus.AWAITING_DISBURSEMENT,
             LoanStatus.DISBURSED, LoanStatus.REPAYING, LoanStatus.COMPLETED,
-            LoanStatus.AWAITING_BORROWER_APPROVAL
+            LoanStatus.DEFAULTED, LoanStatus.AWAITING_BORROWER_APPROVAL
     );
 
     @Transactional(readOnly = true)

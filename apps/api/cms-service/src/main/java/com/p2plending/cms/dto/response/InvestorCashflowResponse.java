@@ -18,6 +18,7 @@ public class InvestorCashflowResponse {
     private Summary summary;
     private List<UpcomingPayment> upcomingPayments;
     private List<InvestmentItem> investmentHistory;
+    private PagedResponse<InvestmentItem> investmentHistoryPage;
     private List<MonthlyChartItem> monthlyChart;
 
     @Data

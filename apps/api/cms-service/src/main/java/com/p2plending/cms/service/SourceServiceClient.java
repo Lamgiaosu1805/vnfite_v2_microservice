@@ -6,6 +6,7 @@ import com.p2plending.cms.domain.enums.UserAccountStatus;
 import com.p2plending.cms.dto.request.LoanActionRequest;
 import com.p2plending.cms.dto.response.CustomerDetailResponse;
 import com.p2plending.cms.dto.response.InvestorCashflowResponse;
+import com.p2plending.cms.dto.response.LoanOfferSummaryResponse;
 import com.p2plending.cms.dto.response.LoanSummaryResponse;
 import com.p2plending.cms.dto.response.PagedResponse;
 import com.p2plending.cms.dto.response.ResetCustomerPasswordResponse;
@@ -117,14 +118,18 @@ public class SourceServiceClient {
     }
 
     public CustomerDetailResponse getCustomerDetail(String userId, int transactionPage, int transactionSize,
-                                                    int loanPage, int loanSize) {
+                                                    int loanPage, int loanSize,
+                                                    int investmentPage, int investmentSize,
+                                                    String investmentStatus) {
         UserSummaryResponse profile = getUser(userId);
         WalletSummaryResponse wallet = safeGetWallet(userId);
         PagedResponse<WalletTransactionSummaryResponse> transactions =
                 safeGetWalletTransactions(userId, transactionPage, transactionSize);
         PagedResponse<LoanSummaryResponse> loans =
                 getLoans(null, userId, null, null, loanPage, loanSize);
-        InvestorCashflowResponse investments = safeGetInvestorCashflow(userId);
+        enrichLoanOffers(loans);
+        InvestorCashflowResponse investments = safeGetInvestorCashflow(userId,
+                investmentPage, investmentSize, investmentStatus);
 
         return CustomerDetailResponse.builder()
                 .profile(profile)
@@ -185,7 +190,8 @@ public class SourceServiceClient {
         }
     }
 
-    private InvestorCashflowResponse safeGetInvestorCashflow(String userId) {
+    private InvestorCashflowResponse safeGetInvestorCashflow(
+            String userId, int page, int size, String status) {
         try {
             URI uri = UriComponentsBuilder.fromHttpUrl(loanServiceUrl)
                     .path("/internal/loans/investors/{investorId}/cashflow")
@@ -194,6 +200,7 @@ public class SourceServiceClient {
             InvestorCashflowResponse response =
                     objectMapper.treeToValue(exchangeForJson(uri, HttpMethod.GET, null), InvestorCashflowResponse.class);
             enrichInvestmentBorrowers(response);
+            paginateInvestments(response, page, size, status);
             return response;
         } catch (Exception ex) {
             log.warn("Could not fetch investment cashflow for customer {}: {}", userId, ex.getMessage());
@@ -204,6 +211,7 @@ public class SourceServiceClient {
                             .totalReturnsPaid(BigDecimal.ZERO)
                             .build())
                     .investmentHistory(List.of())
+                    .investmentHistoryPage(PagedResponse.empty(page, size))
                     .upcomingPayments(List.of())
                     .monthlyChart(List.of())
                     .build();
@@ -231,6 +239,48 @@ public class SourceServiceClient {
             if (borrower != null) {
                 item.setBorrowerName(resolveBorrowerName(borrower));
                 item.setBorrowerPhone(borrower.getPhone());
+            }
+        }
+    }
+
+    private void paginateInvestments(InvestorCashflowResponse response, int page, int size, String status) {
+        int normalizedPage = Math.max(page, 0);
+        int normalizedSize = Math.min(Math.max(size, 1), 50);
+        String normalizedStatus = status == null || status.isBlank() ? null : status.trim();
+        List<InvestorCashflowResponse.InvestmentItem> filtered =
+                Optional.ofNullable(response.getInvestmentHistory()).orElse(List.of()).stream()
+                        .filter(item -> normalizedStatus == null
+                                || normalizedStatus.equalsIgnoreCase(item.getLoanStatus()))
+                        .toList();
+        int from = Math.min(normalizedPage * normalizedSize, filtered.size());
+        int to = Math.min(from + normalizedSize, filtered.size());
+        List<InvestorCashflowResponse.InvestmentItem> content = filtered.subList(from, to);
+        int totalPages = filtered.isEmpty() ? 0 : (int) Math.ceil((double) filtered.size() / normalizedSize);
+        response.setInvestmentHistory(content);
+        response.setInvestmentHistoryPage(PagedResponse.<InvestorCashflowResponse.InvestmentItem>builder()
+                .content(content)
+                .page(normalizedPage)
+                .size(normalizedSize)
+                .totalElements(filtered.size())
+                .totalPages(totalPages)
+                .last(totalPages == 0 || normalizedPage >= totalPages - 1)
+                .build());
+    }
+
+    private void enrichLoanOffers(PagedResponse<LoanSummaryResponse> loans) {
+        if (loans == null || loans.getContent() == null || loans.getContent().isEmpty()) {
+            return;
+        }
+        for (LoanSummaryResponse loan : loans.getContent()) {
+            if (loan.getLoanId() == null) {
+                continue;
+            }
+            try {
+                LoanSummaryResponse detailed = getLoanById(loan.getLoanId());
+                loan.setOffers(detailed.getOffers());
+            } catch (Exception ex) {
+                log.warn("Could not fetch offers for borrower loan {}: {}", loan.getLoanId(), ex.getMessage());
+                loan.setOffers(List.of());
             }
         }
     }
@@ -983,7 +1033,40 @@ public class SourceServiceClient {
                 .reviewedAt(dateTime(node, "reviewedAt"))
                 .reviewedBy(text(node, "reviewedBy"))
                 .createdAt(dateTime(node, "createdAt"))
+                .offers(parseOffers(node.path("offers")))
                 .build();
+    }
+
+    private List<LoanOfferSummaryResponse> parseOffers(JsonNode offersNode) {
+        if (offersNode == null || !offersNode.isArray()) {
+            return List.of();
+        }
+        List<LoanOfferSummaryResponse> offers = new ArrayList<>();
+        Map<String, UserSummaryResponse> investors = new HashMap<>();
+        offersNode.forEach(node -> {
+            String investorId = text(node, "investorId");
+            UserSummaryResponse investor = null;
+            if (investorId != null) {
+                investor = investors.computeIfAbsent(investorId, id -> {
+                    try {
+                        return getUser(id);
+                    } catch (Exception ex) {
+                        log.warn("Could not resolve investment investor profile for {}: {}", id, ex.getMessage());
+                        return null;
+                    }
+                });
+            }
+            offers.add(LoanOfferSummaryResponse.builder()
+                    .offerId(text(node, "id"))
+                    .investorId(investorId)
+                    .investorName(resolveBorrowerName(investor))
+                    .investorPhone(investor != null ? investor.getPhone() : null)
+                    .amount(decimal(node, "amount"))
+                    .status(text(node, "status"))
+                    .createdAt(dateTime(node, "createdAt"))
+                    .build());
+        });
+        return offers;
     }
 
     private UserSummaryResponse resolveBorrower(String borrowerId) {

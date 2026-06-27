@@ -27,8 +27,11 @@ public class UserManagementService {
     }
 
     public CustomerDetailResponse getCustomerDetail(String userId, int transactionPage, int transactionSize,
-                                                    int loanPage, int loanSize) {
-        return sourceServiceClient.getCustomerDetail(userId, transactionPage, transactionSize, loanPage, loanSize);
+                                                    int loanPage, int loanSize,
+                                                    int investmentPage, int investmentSize,
+                                                    String investmentStatus) {
+        return sourceServiceClient.getCustomerDetail(userId, transactionPage, transactionSize, loanPage, loanSize,
+                investmentPage, investmentSize, investmentStatus);
     }
 
     public UserSummaryResponse decideKyc(String userId, KycDecisionRequest req) {
