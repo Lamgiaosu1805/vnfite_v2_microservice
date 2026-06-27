@@ -817,6 +817,11 @@ public class RepaymentService {
     }
 
     private RepaymentScheduleResponse toResponse(RepaymentSchedule s) {
+        int displayDpd = 0;
+        LocalDate today = LocalDate.now(TZ);
+        if (s.getStatus() != RepaymentStatus.PAID && s.getDueDate() != null && s.getDueDate().isBefore(today)) {
+            displayDpd = Math.toIntExact(ChronoUnit.DAYS.between(s.getDueDate(), today));
+        }
         return RepaymentScheduleResponse.builder()
                 .periodNumber(s.getPeriodNumber())
                 .dueDate(s.getDueDate())
@@ -828,7 +833,7 @@ public class RepaymentService {
                 .lateFeeOutstanding(s.getLateFeeOutstanding())
                 .totalOutstanding(s.getTotalOutstanding())
                 .status(s.getStatus())
-                .dpd(s.getDpd())
+                .dpd(displayDpd)
                 .paidAt(s.getPaidAt())
                 .build();
     }
