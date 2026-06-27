@@ -2,12 +2,16 @@ package com.p2plending.loan.specification;
 
 import com.p2plending.loan.domain.entity.LoanProduct;
 import com.p2plending.loan.domain.entity.LoanRequest;
+import com.p2plending.loan.domain.entity.RepaymentSchedule;
+import com.p2plending.loan.domain.enums.RepaymentStatus;
 import com.p2plending.loan.dto.request.LoanFilterParams;
 import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Subquery;
 import org.springframework.data.jpa.domain.Specification;
 
 import java.text.Normalizer;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashSet;
@@ -16,6 +20,8 @@ import java.util.Locale;
 import java.util.Set;
 
 public final class LoanSpecification {
+
+    private static final ZoneId VIETNAM_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
 
     private LoanSpecification() {}
 
@@ -85,6 +91,25 @@ public final class LoanSpecification {
             }
             if (params.getMaxAmount() != null) {
                 predicates.add(cb.lessThanOrEqualTo(root.get("amount"), params.getMaxAmount()));
+            }
+            if (params.isOverdueOnly()) {
+                LocalDate today = LocalDate.now(VIETNAM_ZONE);
+                Subquery<String> overdueSubquery = query.subquery(String.class);
+                var schedule = overdueSubquery.from(RepaymentSchedule.class);
+                overdueSubquery.select(schedule.get("loanId"))
+                        .where(cb.and(
+                                cb.equal(schedule.get("loanId"), root.get("id")),
+                                cb.isFalse(schedule.get("isDeleted")),
+                                cb.or(
+                                        cb.equal(schedule.get("status"), RepaymentStatus.OVERDUE),
+                                        cb.greaterThan(schedule.get("dpd"), 0),
+                                        cb.and(
+                                                cb.lessThan(schedule.get("dueDate"), today),
+                                                cb.notEqual(schedule.get("status"), RepaymentStatus.PAID)
+                                        )
+                                )
+                        ));
+                predicates.add(cb.exists(overdueSubquery));
             }
 
             return cb.and(predicates.toArray(new Predicate[0]));

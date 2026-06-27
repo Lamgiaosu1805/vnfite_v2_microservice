@@ -95,10 +95,12 @@ public class CashflowService {
 
             totalInvested = totalInvested.add(offer.getAmount());
 
-            // Lịch trả nợ chỉ có sau khi giải ngân: DISBURSED / REPAYING / COMPLETED
+            // Lịch trả nợ chỉ có sau khi giải ngân: DISBURSED / REPAYING / COMPLETED / DEFAULTED.
+            // DEFAULTED vẫn là khoản nhà đầu tư cần theo dõi dòng tiền thu hồi.
             if (loan.getStatus() != LoanStatus.DISBURSED
                     && loan.getStatus() != LoanStatus.REPAYING
-                    && loan.getStatus() != LoanStatus.COMPLETED) continue;
+                    && loan.getStatus() != LoanStatus.COMPLETED
+                    && loan.getStatus() != LoanStatus.DEFAULTED) continue;
 
             BigDecimal fundedAmount = loan.getFundedAmount();
             if (fundedAmount == null || fundedAmount.compareTo(BigDecimal.ZERO) == 0) {

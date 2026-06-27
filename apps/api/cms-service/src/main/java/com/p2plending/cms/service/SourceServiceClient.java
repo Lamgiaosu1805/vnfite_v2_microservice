@@ -35,8 +35,10 @@ import java.time.temporal.ChronoField;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 @Service
 @Slf4j
@@ -246,11 +248,20 @@ public class SourceServiceClient {
     private void paginateInvestments(InvestorCashflowResponse response, int page, int size, String status) {
         int normalizedPage = Math.max(page, 0);
         int normalizedSize = Math.min(Math.max(size, 1), 50);
-        String normalizedStatus = status == null || status.isBlank() ? null : status.trim();
+        String normalizedStatus = status == null || status.isBlank() ? null : status.trim().toUpperCase(Locale.ROOT);
+        Set<String> activePortfolioStatuses = Set.of(
+                "FUNDED",
+                "AWAITING_DISBURSEMENT",
+                "DISBURSED",
+                "REPAYING",
+                "DEFAULTED"
+        );
         List<InvestorCashflowResponse.InvestmentItem> filtered =
                 Optional.ofNullable(response.getInvestmentHistory()).orElse(List.of()).stream()
                         .filter(item -> normalizedStatus == null
-                                || normalizedStatus.equalsIgnoreCase(item.getLoanStatus()))
+                                || ("ACTIVE_PORTFOLIO".equals(normalizedStatus)
+                                    ? activePortfolioStatuses.contains(String.valueOf(item.getLoanStatus()).toUpperCase(Locale.ROOT))
+                                    : normalizedStatus.equalsIgnoreCase(item.getLoanStatus())))
                         .toList();
         int from = Math.min(normalizedPage * normalizedSize, filtered.size());
         int to = Math.min(from + normalizedSize, filtered.size());
@@ -728,16 +739,23 @@ public class SourceServiceClient {
 
     public PagedResponse<LoanSummaryResponse> getLoans(String status, String borrowerId,
                                                        String province, String search, int page, int size) {
-        URI uri = UriComponentsBuilder.fromHttpUrl(loanServiceUrl)
+        boolean overdueOnly = "OVERDUE".equalsIgnoreCase(String.valueOf(status));
+        UriComponentsBuilder builder = UriComponentsBuilder.fromHttpUrl(loanServiceUrl)
                 .path("/internal/loans")
-                .queryParamIfPresent("status",     Optional.ofNullable(status))
                 .queryParamIfPresent("borrowerId", Optional.ofNullable(borrowerId))
                 .queryParamIfPresent("province",   Optional.ofNullable(province))
                 .queryParamIfPresent("search",     Optional.ofNullable(search))
                 .queryParam("page", page)
                 .queryParam("size", size)
                 .queryParam("sortBy", "createdAt")
-                .queryParam("sortDir", "desc")
+                .queryParam("sortDir", "desc");
+        if (overdueOnly) {
+            builder.queryParam("overdueOnly", true)
+                    .queryParam("statuses", "DISBURSED", "REPAYING", "DEFAULTED");
+        } else {
+            builder.queryParamIfPresent("status", Optional.ofNullable(status));
+        }
+        URI uri = builder
                 .build()
                 .encode()
                 .toUri();

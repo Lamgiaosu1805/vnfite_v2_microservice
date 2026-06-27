@@ -17,6 +17,8 @@ public class LoanFilterParams {
     private LoanStatus status;
     /** Lọc theo nhiều trạng thái — ưu tiên hơn status khi được set. */
     private List<LoanStatus> statuses;
+    /** Lọc các khoản có ít nhất một kỳ trả nợ quá hạn từ 1 ngày trở lên. */
+    private boolean overdueOnly;
     private String borrowerId;
     /** Lọc theo tỉnh/thành phố — hỗ trợ dữ liệu mới ở province và dữ liệu cũ còn trong currentAddress. */
     private String province;
@@ -44,7 +46,7 @@ public class LoanFilterParams {
 
     /** Deterministic cache key for all filter combinations. */
     public String cacheKey() {
-        return "%s|%s|%s|%s|%s|%s|%d|%d|%s|%s"
-                .formatted(status, borrowerId, province, search, minAmount, maxAmount, page, size, sortBy, sortDir);
+        return "%s|%s|%s|%s|%s|%s|%s|%s|%d|%d|%s|%s"
+                .formatted(status, statuses, overdueOnly, borrowerId, province, search, minAmount, maxAmount, page, size, sortBy, sortDir);
     }
 }
