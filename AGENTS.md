@@ -263,6 +263,10 @@ Seed users in dev/test use password `Test@1234`; see `CLAUDE.md` for the full li
 
 Use `Asia/Ho_Chi_Minh` consistently across JVM default timezone, Jackson, Hibernate/JDBC, Docker runtime, scheduler logic, and frontend formatting. Do not depend on the host or device timezone. Display dates as zero-padded `dd/MM/yyyy` (for example `22/01/2021`) and date-times as `HH:mm:ss dd/MM/yyyy` when seconds are required. Treat offset-less backend `LocalDateTime` values as Vietnam time (`+07:00`); format `LocalDate` values directly so timezone conversion cannot shift the calendar date. `Instant`/epoch remains appropriate for JWT, TTL, and signatures, but convert it to Vietnam time for display.
 
+## Money / VND
+
+All VNFITE business money must be integer VND. Do not store, return, or display fractional money such as `4.923.170,05 đ`. For interest, late fees, repayment schedules, wallet ledger, balance snapshots, deposits, withdrawals, disbursements, investments, and investor repayment credits, round `BigDecimal` to `scale=0` with `RoundingMode.HALF_UP` before saving to the database, calling TIKLUY/MB, publishing events, or returning APIs. Only rates/percentages may keep decimal places.
+
 ## Before Finishing Backend Changes
 
 - Run the focused build/test command for touched services when feasible.

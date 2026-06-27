@@ -19,6 +19,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -180,6 +181,8 @@ public class WalletService {
     @Transactional
     public void processDeposit(String txnId, String accNo, BigDecimal amount, String referenceId,
                                BigDecimal runningBalance, String description) {
+        amount = money(amount);
+        runningBalance = runningBalance != null ? money(runningBalance) : null;
         if (referenceId != null && transactionRepository.existsByReferenceId(referenceId)) {
             log.warn("txnId={} Duplicate deposit referenceId={}, skip", txnId, referenceId);
             return;
@@ -221,6 +224,7 @@ public class WalletService {
 
     @Transactional
     public void lockAmount(String userId, BigDecimal amount, String description, String referenceId) {
+        amount = money(amount);
         if (referenceId != null && transactionRepository.existsByReferenceId(referenceId)) {
             log.warn("Idempotent lock skip: referenceId={} đã xử lý", referenceId);
             return;
@@ -235,7 +239,7 @@ public class WalletService {
                     "Số dư khả dụng không đủ. Khả dụng: " + available + ", yêu cầu: " + amount);
         }
 
-        wallet.setLockedBalance(wallet.getLockedBalance().add(amount));
+        wallet.setLockedBalance(money(wallet.getLockedBalance().add(amount)));
         walletRepository.save(wallet);
 
         transactionRepository.save(WalletTransaction.builder()
@@ -261,13 +265,14 @@ public class WalletService {
 
     @Transactional
     public void unlockAmount(String userId, BigDecimal amount, String description, String referenceId) {
+        amount = money(amount);
         if (referenceId != null && transactionRepository.existsByReferenceId(referenceId)) {
             log.warn("Idempotent unlock skip: referenceId={} đã xử lý", referenceId);
             return;
         }
 
         Wallet wallet = findByUser(userId);
-        BigDecimal newLocked = wallet.getLockedBalance().subtract(amount);
+        BigDecimal newLocked = money(wallet.getLockedBalance().subtract(amount));
         if (newLocked.compareTo(BigDecimal.ZERO) < 0) newLocked = BigDecimal.ZERO;
 
         wallet.setLockedBalance(newLocked);
@@ -298,6 +303,7 @@ public class WalletService {
 
     @Transactional
     public void debitInvestment(String userId, BigDecimal amount, String description, String referenceId) {
+        amount = money(amount);
         if (referenceId != null && transactionRepository.existsByReferenceId(referenceId)) {
             log.warn("Idempotent debit skip: referenceId={} đã xử lý", referenceId);
             return;
@@ -307,12 +313,12 @@ public class WalletService {
         boolean mock = appProperties.getPayment().isMock();
         BigDecimal tikluyTotal = mock ? BigDecimal.ZERO : getTikluyBalance(wallet);
 
-        BigDecimal newLocked = wallet.getLockedBalance().subtract(amount);
+        BigDecimal newLocked = money(wallet.getLockedBalance().subtract(amount));
         if (newLocked.compareTo(BigDecimal.ZERO) < 0) newLocked = BigDecimal.ZERO;
         wallet.setLockedBalance(newLocked);
         walletRepository.save(wallet);
 
-        BigDecimal balanceAfter = tikluyTotal.subtract(amount).subtract(newLocked).max(BigDecimal.ZERO);
+        BigDecimal balanceAfter = money(tikluyTotal.subtract(amount).subtract(newLocked).max(BigDecimal.ZERO));
         transactionRepository.save(WalletTransaction.builder()
                 .walletId(wallet.getId())
                 .type(TransactionType.INVEST)
@@ -338,6 +344,7 @@ public class WalletService {
      */
     @Transactional
     public void creditDisbursement(String userId, BigDecimal amount, String description, String referenceId) {
+        amount = money(amount);
         if (referenceId != null && transactionRepository.existsByReferenceId(referenceId)) {
             log.warn("Idempotent disbursement-credit skip: referenceId={} đã xử lý", referenceId);
             return;
@@ -371,6 +378,7 @@ public class WalletService {
      */
     @Transactional
     public void creditRepayment(String userId, BigDecimal amount, String description, String referenceId) {
+        amount = money(amount);
         if (referenceId != null && transactionRepository.existsByReferenceId(referenceId)) {
             log.warn("Idempotent repay-credit skip: referenceId={} đã xử lý", referenceId);
             return;
@@ -406,6 +414,7 @@ public class WalletService {
      */
     @Transactional
     public void debitRepayment(String userId, BigDecimal amount, String description, String referenceId) {
+        amount = money(amount);
         if (referenceId != null && transactionRepository.existsByReferenceId(referenceId)) {
             log.warn("Idempotent repay-debit skip: referenceId={} đã xử lý", referenceId);
             return;
@@ -414,8 +423,8 @@ public class WalletService {
         Wallet wallet = findByUser(userId);
         boolean mock = appProperties.getPayment().isMock();
         BigDecimal tikluyTotal = mock ? BigDecimal.ZERO : getTikluyBalance(wallet);
-        BigDecimal locked = wallet.getLockedBalance() != null ? wallet.getLockedBalance() : BigDecimal.ZERO;
-        BigDecimal available = tikluyTotal.subtract(locked).max(BigDecimal.ZERO);
+        BigDecimal locked = money(wallet.getLockedBalance());
+        BigDecimal available = money(tikluyTotal.subtract(locked).max(BigDecimal.ZERO));
 
         // Mock mode: TIKLUY balance luôn = 0 nên bỏ qua kiểm tra để không chặn test cục bộ.
         if (!mock && available.compareTo(amount) < 0) {
@@ -423,7 +432,7 @@ public class WalletService {
                     "Số dư khả dụng không đủ để trả nợ. Khả dụng: " + available + ", cần: " + amount);
         }
 
-        BigDecimal balanceAfter = available.subtract(amount).max(BigDecimal.ZERO);
+        BigDecimal balanceAfter = money(available.subtract(amount).max(BigDecimal.ZERO));
         transactionRepository.save(WalletTransaction.builder()
                 .walletId(wallet.getId())
                 .type(TransactionType.REPAY)
@@ -485,20 +494,17 @@ public class WalletService {
     }
 
     private BigDecimal computeAvailableFromTotal(BigDecimal totalBalance, Wallet wallet) {
-        BigDecimal total = totalBalance != null ? totalBalance : BigDecimal.ZERO;
-        BigDecimal locked = wallet.getLockedBalance() != null ? wallet.getLockedBalance() : BigDecimal.ZERO;
-        return total.subtract(locked).max(BigDecimal.ZERO);
+        BigDecimal total = money(totalBalance);
+        BigDecimal locked = money(wallet.getLockedBalance());
+        return money(total.subtract(locked).max(BigDecimal.ZERO));
     }
 
     private BigDecimal computeAvailableFromProvider(TikluyClient.TikluyAccountInfo info,
                                                     Wallet wallet) {
-        BigDecimal total = info.getTotalMoney() != null
-                ? info.getTotalMoney() : BigDecimal.ZERO;
-        BigDecimal providerLocked = info.getLockedMoney() != null
-                ? info.getLockedMoney() : BigDecimal.ZERO;
-        BigDecimal localLocked = wallet.getLockedBalance() != null
-                ? wallet.getLockedBalance() : BigDecimal.ZERO;
-        return total.subtract(providerLocked.max(localLocked)).max(BigDecimal.ZERO);
+        BigDecimal total = money(info.getTotalMoney());
+        BigDecimal providerLocked = money(info.getLockedMoney());
+        BigDecimal localLocked = money(wallet.getLockedBalance());
+        return money(total.subtract(providerLocked.max(localLocked)).max(BigDecimal.ZERO));
     }
 
     private void publishDepositEvent(String userId, BigDecimal amount, BigDecimal balance, String txnId) {
@@ -514,8 +520,7 @@ public class WalletService {
 
     private WalletResponse toResponse(Wallet w) {
         TikluyClient.TikluyAccountInfo info = getTikluyAccountInfo(w);
-        BigDecimal total = info.getTotalMoney() != null
-                ? info.getTotalMoney() : BigDecimal.ZERO;
+        BigDecimal total = money(info.getTotalMoney());
         BigDecimal available = computeAvailableFromProvider(info, w);
         return WalletResponse.builder()
                 .walletId(w.getId())
@@ -537,5 +542,9 @@ public class WalletService {
                 .balanceAfter(t.getBalanceAfter())
                 .createdAt(t.getCreatedAt())
                 .build();
+    }
+
+    private BigDecimal money(BigDecimal value) {
+        return value == null ? BigDecimal.ZERO : value.setScale(0, RoundingMode.HALF_UP);
     }
 }

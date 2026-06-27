@@ -7,6 +7,7 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
@@ -92,22 +93,26 @@ public class RepaymentSchedule {
 
     /** Gốc + lãi còn phải trả của kỳ (chưa gồm phí phạt). */
     public BigDecimal getRemainingDue() {
-        return totalDue.subtract(paidAmount);
+        return money(totalDue).subtract(money(paidAmount)).max(BigDecimal.ZERO);
     }
 
     /** Phí phạt còn phải trả của kỳ. */
     public BigDecimal getLateFeeOutstanding() {
-        BigDecimal fee = lateFee != null ? lateFee : BigDecimal.ZERO;
-        BigDecimal paid = lateFeePaid != null ? lateFeePaid : BigDecimal.ZERO;
+        BigDecimal fee = money(lateFee);
+        BigDecimal paid = money(lateFeePaid);
         return fee.subtract(paid).max(BigDecimal.ZERO);
     }
 
     /** Tổng còn phải trả của kỳ = gốc + lãi + phí phạt còn lại. */
     public BigDecimal getTotalOutstanding() {
-        return getRemainingDue().add(getLateFeeOutstanding());
+        return money(getRemainingDue().add(getLateFeeOutstanding()));
     }
 
     public boolean isSettled() {
         return status == RepaymentStatus.PAID;
+    }
+
+    private BigDecimal money(BigDecimal value) {
+        return value == null ? BigDecimal.ZERO : value.setScale(0, RoundingMode.HALF_UP);
     }
 }

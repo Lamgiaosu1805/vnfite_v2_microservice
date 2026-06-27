@@ -265,7 +265,11 @@ public class RepaymentService {
                 });
 
         LocalDateTime paidAt = request.getPaidAt() != null ? request.getPaidAt() : LocalDateTime.now(TZ);
-        BigDecimal remaining = request.getAmount();
+        BigDecimal amount = money(request.getAmount());
+        if (amount.signum() <= 0) {
+            throw new InvalidLoanStateException("Số tiền trả phải lớn hơn 0");
+        }
+        BigDecimal remaining = amount;
         String firstTouchedScheduleId = null;
 
         for (RepaymentSchedule s : schedules) {
@@ -276,7 +280,7 @@ public class RepaymentService {
             if (due.signum() <= 0) continue;
 
             BigDecimal applied = remaining.min(due);
-            s.setPaidAmount(s.getPaidAmount().add(applied));
+            s.setPaidAmount(money(s.getPaidAmount().add(applied)));
             remaining = remaining.subtract(applied);
             if (firstTouchedScheduleId == null) firstTouchedScheduleId = s.getId();
 
@@ -295,7 +299,7 @@ public class RepaymentService {
         transactionRepository.save(RepaymentTransaction.builder()
                 .loanId(loanId)
                 .scheduleId(firstTouchedScheduleId)
-                .amount(request.getAmount())
+                .amount(amount)
                 .paidAt(paidAt)
                 .channel(request.getChannel() != null ? request.getChannel() : PaymentChannel.MANUAL_ADMIN)
                 .externalRef(request.getExternalRef())
@@ -310,7 +314,7 @@ public class RepaymentService {
             log.warn("Loan {} payment had {} VND unapplied (overpayment)", loanId, remaining);
         }
         log.info("Recorded payment {} VND for loan {} — new status {}",
-                request.getAmount(), loanId, loan.getStatus());
+                amount, loanId, loan.getStatus());
 
         return schedules.stream().map(this::toResponse).toList();
     }
@@ -475,7 +479,16 @@ public class RepaymentService {
                     .build();
         }
 
-        BigDecimal payAmount = available.min(due.getTotalOutstanding());
+        BigDecimal payAmount = money(available.min(due.getTotalOutstanding()));
+        if (payAmount.signum() <= 0) {
+            return AutoDebitLoanResult.builder()
+                    .loanId(loan.getId())
+                    .loanCode(loan.getLoanCode())
+                    .status(AutoDebitLoanResultStatus.NO_BALANCE)
+                    .amountCollected(BigDecimal.ZERO)
+                    .message("Số dư khả dụng sau làm tròn không đủ để thu")
+                    .build();
+        }
         doSettlePeriod(loan, due, payAmount, PaymentChannel.AUTO_DEBIT, null, schedules.size());
         boolean settledFull = due.getTotalOutstanding().signum() <= 0;
         return AutoDebitLoanResult.builder()
@@ -500,6 +513,7 @@ public class RepaymentService {
     private List<RepaymentSchedule> doSettlePeriod(LoanRequest loan, RepaymentSchedule period,
                                                    BigDecimal payAmount, PaymentChannel channel,
                                                    String recordedBy, int totalPeriods) {
+        payAmount = money(payAmount);
         LocalDateTime paidAt = LocalDateTime.now(TZ);
         // Khóa idempotent ổn định theo (khoản, kỳ, TỔNG đã trả TRƯỚC giao dịch này = gốc+lãi+phí phạt).
         // Mỗi lần trả thành công làm tổng đã trả tăng → lần trả kế tiếp (kể cả cùng ngày: auto-debit một
@@ -523,7 +537,7 @@ public class RepaymentService {
 
         BigDecimal toLateFee = remaining.min(period.getLateFeeOutstanding());
         if (toLateFee.signum() > 0) {
-            period.setLateFeePaid(lateFeePaidBefore.add(toLateFee));
+            period.setLateFeePaid(money(lateFeePaidBefore.add(toLateFee)));
         }
 
         boolean periodSettled = period.getTotalOutstanding().signum() <= 0;
@@ -612,7 +626,7 @@ public class RepaymentService {
             LoanOffer offer = offers.get(i);
             BigDecimal share = (i == offers.size() - 1)
                     ? payAmount.subtract(distributed)   // dồn phần dư làm tròn vào người cuối
-                    : payAmount.multiply(offer.getAmount()).divide(totalFunded, 2, RoundingMode.DOWN);
+                    : payAmount.multiply(offer.getAmount()).divide(totalFunded, 0, RoundingMode.DOWN);
             distributed = distributed.add(share);
             if (share.signum() <= 0) continue;
 
@@ -795,8 +809,11 @@ public class RepaymentService {
         BigDecimal dailyFraction = penaltyAnnualPct
                 .divide(HUNDRED, 14, RoundingMode.HALF_UP)
                 .divide(DAYS_PER_YEAR, 14, RoundingMode.HALF_UP);
-        return remainingDue.multiply(dailyFraction).multiply(BigDecimal.valueOf(dpd))
-                .setScale(2, RoundingMode.HALF_UP);
+        return money(remainingDue.multiply(dailyFraction).multiply(BigDecimal.valueOf(dpd)));
+    }
+
+    private BigDecimal money(BigDecimal value) {
+        return value == null ? BigDecimal.ZERO : value.setScale(0, RoundingMode.HALF_UP);
     }
 
     private RepaymentScheduleResponse toResponse(RepaymentSchedule s) {

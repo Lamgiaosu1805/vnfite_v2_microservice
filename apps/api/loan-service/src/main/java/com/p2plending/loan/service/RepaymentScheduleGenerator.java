@@ -36,7 +36,7 @@ import java.util.List;
 @Slf4j
 public class RepaymentScheduleGenerator {
 
-    private static final int        MONEY_SCALE  = 2;
+    private static final int        MONEY_SCALE  = 0;
     private static final BigDecimal DAYS_IN_YEAR = BigDecimal.valueOf(365);
     /** 100 × 365 — mẫu số duy nhất cho công thức lãi actual/365: B × r × days / 36500 */
     private static final BigDecimal RATE_BASE    = BigDecimal.valueOf(36500);
@@ -248,7 +248,7 @@ public class RepaymentScheduleGenerator {
                 .dueDate(dueDate)
                 .principalDue(princ)
                 .interestDue(interest)
-                .totalDue(princ.add(interest))
+                .totalDue(money(princ.add(interest)))
                 .paidAmount(BigDecimal.ZERO)
                 .status(RepaymentStatus.PENDING)
                 .dpd(0)
