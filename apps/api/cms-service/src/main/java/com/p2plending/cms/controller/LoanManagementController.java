@@ -141,6 +141,29 @@ public class LoanManagementController {
     }
 
     /**
+     * GET /cms/loans/repayments/auto-debit-audit
+     * Lịch sử các lần quét auto-debit — giám sát kết quả scheduler hàng ngày.
+     */
+    @GetMapping("/repayments/auto-debit-audit")
+    public ResponseEntity<com.fasterxml.jackson.databind.JsonNode> getAutoDebitAudit(
+            @RequestParam(defaultValue = "200") int limit) {
+        return ResponseEntity.ok(loanService.getAutoDebitAudit(limit));
+    }
+
+    /**
+     * GET /cms/loans/repayments/distribution-log
+     * Log phân bổ nhà đầu tư: gốc/lãi/phí phạt/thuế TNCN/net — kế toán tra soát.
+     */
+    @GetMapping("/repayments/distribution-log")
+    public ResponseEntity<com.fasterxml.jackson.databind.JsonNode> getDistributionLog(
+            @RequestParam(required = false) String loanId,
+            @RequestParam(required = false) String investorId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "50") int size) {
+        return ResponseEntity.ok(loanService.getDistributionLog(loanId, investorId, page, size));
+    }
+
+    /**
      * POST /cms/loans/{loanId}/disburse
      * ADMIN giải ngân vốn cho người gọi vốn: AWAITING_DISBURSEMENT → DISBURSED.
      * Sinh lịch trả nợ từ ngày giải ngân + bắn loan.disbursed.

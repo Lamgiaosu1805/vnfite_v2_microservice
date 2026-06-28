@@ -727,6 +727,28 @@ public class SourceServiceClient {
         return exchangeForJson(url, HttpMethod.POST, null);
     }
 
+    /** Lịch sử quét auto-debit — dùng cho CMS trang giám sát. */
+    public JsonNode getAutoDebitAudit(int limit) {
+        String url = UriComponentsBuilder.fromHttpUrl(loanServiceUrl)
+                .path("/internal/loans/repayments/auto-debit-audit")
+                .queryParam("limit", limit)
+                .build()
+                .encode()
+                .toUriString();
+        return exchangeForJson(url, HttpMethod.GET, null);
+    }
+
+    /** Log phân bổ nhà đầu tư (thuế TNCN) — dùng cho CMS kế toán. */
+    public JsonNode getDistributionLog(String loanId, String investorId, int page, int size) {
+        UriComponentsBuilder builder = UriComponentsBuilder.fromHttpUrl(loanServiceUrl)
+                .path("/internal/loans/repayments/distribution-log")
+                .queryParam("page", page)
+                .queryParam("size", size);
+        if (loanId != null && !loanId.isBlank())     builder.queryParam("loanId", loanId);
+        if (investorId != null && !investorId.isBlank()) builder.queryParam("investorId", investorId);
+        return exchangeForJson(builder.build().encode().toUri(), HttpMethod.GET, null);
+    }
+
     /** Giải ngân vốn cho người gọi vốn (OPS bấm trên CMS). */
     public LoanSummaryResponse disburseLoan(String loanId, String disbursedBy) {
         String url = UriComponentsBuilder.fromHttpUrl(loanServiceUrl)

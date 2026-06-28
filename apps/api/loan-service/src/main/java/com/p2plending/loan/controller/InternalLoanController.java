@@ -172,6 +172,27 @@ public class InternalLoanController {
                 triggeredBy != null && !triggeredBy.isBlank() ? triggeredBy : "cms"));
     }
 
+    /** Lịch sử quét auto-debit — CMS hiển thị. */
+    @GetMapping("/repayments/auto-debit-audit")
+    public ResponseEntity<java.util.List<com.p2plending.loan.domain.entity.RepaymentAutoDebitAudit>> getAutoDebitAudit(
+            @RequestHeader(INTERNAL_SECRET_HEADER) String secret,
+            @RequestParam(defaultValue = "200") int limit) {
+        requireInternalSecret(secret);
+        return ResponseEntity.ok(repaymentService.getAutoDebitAuditList(limit));
+    }
+
+    /** Log phân bổ tiền cho nhà đầu tư (gốc/lãi/thuế/net) — CMS kế toán tra soát. */
+    @GetMapping("/repayments/distribution-log")
+    public ResponseEntity<org.springframework.data.domain.Page<com.p2plending.loan.domain.entity.InvestorDistributionLog>> getDistributionLog(
+            @RequestHeader(INTERNAL_SECRET_HEADER) String secret,
+            @RequestParam(required = false) String loanId,
+            @RequestParam(required = false) String investorId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "50") int size) {
+        requireInternalSecret(secret);
+        return ResponseEntity.ok(repaymentService.getDistributionLog(loanId, investorId, page, size));
+    }
+
     // ─── Hợp đồng & giải ngân ───────────────────────────────────────────────────
 
     /** Danh sách hợp đồng (vay + đầu tư) của một khoản — CMS hiển thị. */

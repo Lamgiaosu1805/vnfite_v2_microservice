@@ -126,6 +126,16 @@ public class LoanManagementService {
         return sourceServiceClient.autoDebitSweep(triggeredBy);
     }
 
+    /** Lịch sử quét auto-debit — passthrough JSON từ loan-service. */
+    public JsonNode getAutoDebitAudit(int limit) {
+        return sourceServiceClient.getAutoDebitAudit(limit);
+    }
+
+    /** Log phân bổ nhà đầu tư (thuế TNCN) — passthrough JSON từ loan-service. */
+    public JsonNode getDistributionLog(String loanId, String investorId, int page, int size) {
+        return sourceServiceClient.getDistributionLog(loanId, investorId, page, size);
+    }
+
     public LoanSummaryResponse disburse(String loanId, CmsPrincipal operator) {
         LoanSummaryResponse loanBefore = safeGetLoan(loanId);
         String decidedBy   = operator != null ? operator.username() : "unknown";

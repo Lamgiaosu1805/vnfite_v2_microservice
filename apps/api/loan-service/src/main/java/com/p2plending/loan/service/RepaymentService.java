@@ -2,9 +2,11 @@ package com.p2plending.loan.service;
 
 import com.p2plending.loan.client.PaymentServiceClient;
 import com.p2plending.loan.config.CacheConfig;
+import com.p2plending.loan.domain.entity.InvestorDistributionLog;
 import com.p2plending.loan.domain.entity.LoanOffer;
 import com.p2plending.loan.domain.entity.LoanRequest;
 import com.p2plending.loan.domain.entity.PendingInvestorCredit;
+import com.p2plending.loan.domain.entity.RepaymentAutoDebitAudit;
 import com.p2plending.loan.domain.entity.RepaymentSchedule;
 import com.p2plending.loan.domain.entity.RepaymentTransaction;
 import com.p2plending.loan.domain.enums.LoanStatus;
@@ -14,9 +16,11 @@ import com.p2plending.loan.domain.enums.PaymentChannel;
 import com.p2plending.loan.domain.enums.PendingCreditStatus;
 import com.p2plending.loan.domain.enums.RepaymentMethod;
 import com.p2plending.loan.domain.enums.RepaymentStatus;
+import com.p2plending.loan.domain.repository.InvestorDistributionLogRepository;
 import com.p2plending.loan.domain.repository.LoanOfferRepository;
 import com.p2plending.loan.domain.repository.LoanRequestRepository;
 import com.p2plending.loan.domain.repository.PendingInvestorCreditRepository;
+import com.p2plending.loan.domain.repository.RepaymentAutoDebitAuditRepository;
 import com.p2plending.loan.domain.repository.RepaymentScheduleRepository;
 import com.p2plending.loan.domain.repository.RepaymentTransactionRepository;
 import com.p2plending.loan.dto.request.RecordPaymentRequest;
@@ -36,6 +40,9 @@ import org.springframework.cache.Cache;
 import org.springframework.cache.CacheManager;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -71,6 +78,8 @@ public class RepaymentService {
     private final LoanRequestRepository            loanRequestRepository;
     private final LoanOfferRepository              loanOfferRepository;
     private final PendingInvestorCreditRepository  pendingCreditRepository;
+    private final InvestorDistributionLogRepository distributionLogRepository;
+    private final RepaymentAutoDebitAuditRepository autoDebitAuditRepository;
     private final LoanProductService               loanProductService;
     private final RepaymentScheduleGenerator       generator;
     private final PaymentServiceClient             paymentServiceClient;
@@ -84,6 +93,10 @@ public class RepaymentService {
     /** Bật/tắt tính phí phạt trả chậm (kill-switch cho tính năng tiền). */
     @Value("${app.late-fee.enabled:true}")
     private boolean lateFeeEnabled;
+
+    /** Tỷ lệ thuế TNCN khấu trừ tại nguồn trên phần lãi và phí phạt của nhà đầu tư (mặc định 5%). */
+    @Value("${app.tax.tncn-rate:0.05}")
+    private BigDecimal tncnRate;
 
     @Transactional(readOnly = true)
     public RepaymentMonitoringResponse getMonitoring(int dueWithinDays) {
@@ -551,7 +564,7 @@ public class RepaymentService {
         scheduleRepository.save(period);
 
         // 3) Ghi giao dịch trả nợ
-        transactionRepository.save(RepaymentTransaction.builder()
+        RepaymentTransaction txn = transactionRepository.save(RepaymentTransaction.builder()
                 .loanId(loan.getId())
                 .scheduleId(period.getId())
                 .amount(payAmount)
@@ -562,9 +575,10 @@ public class RepaymentService {
                 .note("Trả nợ kỳ %d".formatted(period.getPeriodNumber()))
                 .build());
 
-        // 4) Phân bổ pro-rata về ví nhà đầu tư (best-effort, idempotent)
+        // 4) Phân bổ pro-rata về ví nhà đầu tư (best-effort, idempotent), tính thuế TNCN
         List<LoanRepaidEvent.InvestorPayout> payouts =
-                distributeToInvestors(loan, payAmount, "REPAY-IN-" + baseRef);
+                distributeToInvestors(loan, period, toPrincipalInterest, toLateFee,
+                        txn.getId(), "REPAY-IN-" + baseRef);
 
         // 5) Cập nhật trạng thái khoản
         List<RepaymentSchedule> all =
@@ -599,13 +613,25 @@ public class RepaymentService {
     }
 
     /**
-     * Chia payAmount cho nhà đầu tư theo tỉ lệ số tiền đã đầu tư (offer ACCEPTED), làm tròn 2 chữ số,
-     * dồn phần dư vào nhà đầu tư cuối để tổng khớp tuyệt đối. Cộng ví best-effort: lỗi từng người
-     * được log để đối soát, không làm hỏng giao dịch (borrower đã bị trừ thành công).
+     * Chia tiền trả nợ cho nhà đầu tư theo tỉ lệ số tiền đã đầu tư (offer ACCEPTED).
+     * Khấu trừ thuế TNCN 5% trên phần lãi và phí phạt; phần gốc không chịu thuế.
+     * Dồn phần dư làm tròn vào nhà đầu tư cuối để tổng khớp tuyệt đối.
+     * Cộng ví best-effort: lỗi từng người được log để đối soát, không làm hỏng giao dịch.
+     *
+     * @param period             kỳ trả nợ (để tính tỷ lệ gốc/lãi)
+     * @param principalInterestPaid phần payAmount áp vào gốc+lãi
+     * @param lateFeePaid        phần payAmount áp vào phí phạt
+     * @param repaymentTransactionId ID giao dịch trả nợ vừa lưu
+     * @param creditRefBase      prefix cho credit ref idempotent
      */
     private List<LoanRepaidEvent.InvestorPayout> distributeToInvestors(
-            LoanRequest loan, BigDecimal payAmount, String creditRefBase) {
+            LoanRequest loan, RepaymentSchedule period,
+            BigDecimal principalInterestPaid, BigDecimal lateFeePaid,
+            String repaymentTransactionId, String creditRefBase) {
+
         List<LoanRepaidEvent.InvestorPayout> payouts = new ArrayList<>();
+        BigDecimal payAmount = money(principalInterestPaid).add(money(lateFeePaid));
+
         List<LoanOffer> offers = loanOfferRepository
                 .findByLoanRequestIdAndStatus(loan.getId(), OfferStatus.ACCEPTED);
         if (offers.isEmpty()) {
@@ -621,42 +647,117 @@ public class RepaymentService {
             return payouts;
         }
 
-        BigDecimal distributed = BigDecimal.ZERO;
+        // Tỷ lệ lãi trong phần gốc+lãi của kỳ — dùng để tách interestPortion khỏi principalPortion
+        BigDecimal periodTotalDue = money(period.getTotalDue());
+        BigDecimal interestRatio = periodTotalDue.signum() > 0
+                ? period.getInterestDue().divide(periodTotalDue, 10, RoundingMode.HALF_UP)
+                : BigDecimal.ZERO;
+
+        BigDecimal effectiveTaxRate = (tncnRate != null && tncnRate.signum() > 0) ? tncnRate : BigDecimal.ZERO;
+
+        BigDecimal distributedTotal   = BigDecimal.ZERO;
+        BigDecimal distributedLateFee = BigDecimal.ZERO;
+        BigDecimal distributedPi      = BigDecimal.ZERO;
+        LocalDateTime distributedAt   = LocalDateTime.now(TZ);
+
         for (int i = 0; i < offers.size(); i++) {
             LoanOffer offer = offers.get(i);
-            BigDecimal share = (i == offers.size() - 1)
-                    ? payAmount.subtract(distributed)   // dồn phần dư làm tròn vào người cuối
-                    : payAmount.multiply(offer.getAmount()).divide(totalFunded, 0, RoundingMode.DOWN);
-            distributed = distributed.add(share);
+            boolean isLast = (i == offers.size() - 1);
+
+            // Pro-rata share: dồn phần dư làm tròn vào investor cuối
+            BigDecimal share, lateFeeShare, piShare;
+            if (isLast) {
+                share        = payAmount.subtract(distributedTotal);
+                lateFeeShare = money(lateFeePaid).subtract(distributedLateFee);
+                piShare      = money(principalInterestPaid).subtract(distributedPi);
+            } else {
+                lateFeeShare = money(lateFeePaid).multiply(offer.getAmount()).divide(totalFunded, 0, RoundingMode.DOWN);
+                piShare      = money(principalInterestPaid).multiply(offer.getAmount()).divide(totalFunded, 0, RoundingMode.DOWN);
+                share        = piShare.add(lateFeeShare);
+            }
+            distributedTotal   = distributedTotal.add(share);
+            distributedLateFee = distributedLateFee.add(lateFeeShare);
+            distributedPi      = distributedPi.add(piShare);
+
             if (share.signum() <= 0) continue;
 
+            // Tách phần lãi và gốc trong piShare
+            BigDecimal interestPortion  = money(piShare.multiply(interestRatio));
+            BigDecimal principalPortion = piShare.subtract(interestPortion);
+
+            // Thuế TNCN khấu trừ tại nguồn trên (lãi + phí phạt); gốc không chịu thuế.
+            // Tiền thuế VNFITE giữ lại để nộp thay nhà đầu tư — không credit vào ví nào,
+            // kế toán hạch toán dựa trên bảng investor_distribution_log.
+            BigDecimal taxAmount = money(interestPortion.add(lateFeeShare).multiply(effectiveTaxRate));
+            BigDecimal netAmount = share.subtract(taxAmount);
+
             String creditRef = creditRefBase + "-" + offer.getId();
+
             try {
-                paymentServiceClient.creditRepayment(offer.getInvestorId(), share,
-                        "Nhận hoàn trả khoản %s".formatted(loan.getLoanCode()), creditRef);
+                paymentServiceClient.creditRepayment(offer.getInvestorId(), netAmount,
+                        "Nhận lợi nhuận khoản %s (sau thuế TNCN)".formatted(loan.getLoanCode()), creditRef);
                 payouts.add(LoanRepaidEvent.InvestorPayout.builder()
                         .investorId(offer.getInvestorId())
-                        .amount(share)
+                        .amount(netAmount)
                         .build());
             } catch (Exception e) {
-                // Cộng lỗi → ghi vào hàng đợi đối soát để job thử lại idempotent (không rollback,
-                // tránh trừ trùng người gọi vốn). Người gọi vốn đã bị trừ thành công ở bước trước.
-                log.error("ĐỐI SOÁT: cộng hoàn trả thất bại loan={} investor={} offer={} amount={} ref={}: {}",
-                        loan.getId(), offer.getInvestorId(), offer.getId(), share, creditRef, e.getMessage());
+                log.error("ĐỐI SOÁT: phân bổ thất bại loan={} investor={} offer={} gross={} net={} tax={} ref={}: {}",
+                        loan.getId(), offer.getInvestorId(), offer.getId(), share, netAmount, taxAmount, creditRef, e.getMessage());
                 if (!pendingCreditRepository.existsByReferenceId(creditRef)) {
                     pendingCreditRepository.save(PendingInvestorCredit.builder()
                             .loanId(loan.getId())
                             .loanCode(loan.getLoanCode())
                             .investorId(offer.getInvestorId())
                             .offerId(offer.getId())
-                            .amount(share)
+                            .amount(netAmount)
                             .referenceId(creditRef)
-                            .description("Nhận hoàn trả khoản %s".formatted(loan.getLoanCode()))
+                            .description("Nhận lợi nhuận khoản %s (sau thuế TNCN)".formatted(loan.getLoanCode()))
                             .build());
                 }
             }
+
+            // Ghi log phân bổ (gốc/lãi/phí phạt/thuế/net) — kế toán dùng để đối soát
+            try {
+                distributionLogRepository.save(InvestorDistributionLog.builder()
+                        .repaymentTransactionId(repaymentTransactionId)
+                        .loanId(loan.getId())
+                        .loanCode(loan.getLoanCode())
+                        .scheduleId(period.getId())
+                        .offerId(offer.getId())
+                        .investorId(offer.getInvestorId())
+                        .grossAmount(share)
+                        .principalAmount(principalPortion)
+                        .interestAmount(interestPortion)
+                        .lateFeeAmount(lateFeeShare)
+                        .taxRate(effectiveTaxRate)
+                        .taxAmount(taxAmount)
+                        .netAmount(netAmount)
+                        .creditRef(creditRef)
+                        .distributedAt(distributedAt)
+                        .build());
+            } catch (Exception ex) {
+                log.error("Ghi distribution log thất bại loan={} investor={}: {}", loan.getId(), offer.getInvestorId(), ex.getMessage());
+            }
         }
         return payouts;
+    }
+
+    /** Lấy lịch sử quét auto-debit (mới nhất trước) — dùng cho CMS. */
+    @Transactional(readOnly = true)
+    public List<RepaymentAutoDebitAudit> getAutoDebitAuditList(int limit) {
+        return autoDebitAuditRepository.findAll(
+                PageRequest.of(0, Math.min(limit, 500), Sort.by("startedAt").descending()))
+                .getContent();
+    }
+
+    /** Lấy log phân bổ nhà đầu tư có phân trang và lọc theo loanId/investorId — dùng cho CMS. */
+    @Transactional(readOnly = true)
+    public org.springframework.data.domain.Page<InvestorDistributionLog> getDistributionLog(
+            String loanId, String investorId, int page, int size) {
+        String ln = (loanId != null && loanId.isBlank()) ? null : loanId;
+        String iv = (investorId != null && investorId.isBlank()) ? null : investorId;
+        return distributionLogRepository.findFiltered(
+                ln, iv, PageRequest.of(page, Math.min(size, 100)));
     }
 
     /** Kỳ chưa thanh toán xong sớm nhất (còn nợ gốc+lãi hoặc phí phạt). */
