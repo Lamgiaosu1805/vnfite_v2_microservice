@@ -72,6 +72,9 @@ public class LoanCreateRequest {
     private String workplace;
 
     @Size(max = 500)
+    private String workplaceAddress;
+
+    @Size(max = 500)
     private String currentAddress;
 
     /** Xã / Phường / Thị trấn — lưu riêng, không được tự ghép vào currentAddress. */

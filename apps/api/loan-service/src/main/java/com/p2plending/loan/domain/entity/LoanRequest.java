@@ -128,6 +128,10 @@ public class LoanRequest {
     @Column(length = 255)
     private String workplace;
 
+    /** Địa chỉ nơi làm việc — riêng biệt với tên cơ sở. */
+    @Column(name = "workplace_address", length = 500)
+    private String workplaceAddress;
+
     /** Địa chỉ hiện tại — số nhà, tên đường/phố (phần tự do). */
     @Column(length = 500)
     private String currentAddress;

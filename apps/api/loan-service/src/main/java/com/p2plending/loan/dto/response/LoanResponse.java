@@ -45,6 +45,7 @@ public class LoanResponse {
     private BigDecimal monthlyIncome;
     private String occupation;
     private String workplace;
+    private String workplaceAddress;
     private String currentAddress;
     private String commune;
     private String province;
