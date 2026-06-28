@@ -250,6 +250,7 @@ public class SourceServiceClient {
         int normalizedSize = Math.min(Math.max(size, 1), 50);
         String normalizedStatus = status == null || status.isBlank() ? null : status.trim().toUpperCase(Locale.ROOT);
         Set<String> activePortfolioStatuses = Set.of(
+                "ACTIVE",
                 "FUNDED",
                 "AWAITING_DISBURSEMENT",
                 "DISBURSED",
