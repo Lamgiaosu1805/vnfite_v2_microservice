@@ -811,7 +811,8 @@ public class SourceServiceClient {
 
     public PagedResponse<LoanSummaryResponse> getLoans(String status, String borrowerId,
                                                        String province, String search, int page, int size) {
-        boolean overdueOnly = "OVERDUE".equalsIgnoreCase(String.valueOf(status));
+        boolean overdueOnly    = "OVERDUE".equalsIgnoreCase(String.valueOf(status));
+        boolean repayingGroup  = "REPAYING".equalsIgnoreCase(String.valueOf(status));
         UriComponentsBuilder builder = UriComponentsBuilder.fromHttpUrl(loanServiceUrl)
                 .path("/internal/loans")
                 .queryParamIfPresent("borrowerId", Optional.ofNullable(borrowerId))
@@ -824,6 +825,9 @@ public class SourceServiceClient {
         if (overdueOnly) {
             builder.queryParam("overdueOnly", true)
                     .queryParam("statuses", "DISBURSED", "REPAYING", "DEFAULTED");
+        } else if (repayingGroup) {
+            // Khoản DEFAULTED vẫn chưa trả xong — hiển thị cùng "Đang thanh toán"
+            builder.queryParam("statuses", "REPAYING", "DEFAULTED");
         } else {
             builder.queryParamIfPresent("status", Optional.ofNullable(status));
         }
