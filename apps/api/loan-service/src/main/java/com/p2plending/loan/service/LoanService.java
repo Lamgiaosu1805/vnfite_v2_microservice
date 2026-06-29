@@ -720,6 +720,12 @@ public class LoanService {
     private LoanResponse buildResponse(LoanRequest loan, boolean includeOffers) {
         LoanResponse response = loanRequestMapper.toResponse(loan);
 
+        // Khoản cũ chưa có workplace riêng → dùng occupation làm fallback
+        if ((response.getWorkplace() == null || response.getWorkplace().isBlank())
+                && response.getOccupation() != null && !response.getOccupation().isBlank()) {
+            response.setWorkplace(response.getOccupation());
+        }
+
         // Enrich với thông tin sản phẩm nếu có
         if (loan.getProductId() != null) {
             loanProductService.findProductById(loan.getProductId()).ifPresent(product -> {
