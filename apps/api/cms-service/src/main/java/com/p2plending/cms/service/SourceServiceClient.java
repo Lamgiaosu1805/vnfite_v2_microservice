@@ -738,6 +738,55 @@ public class SourceServiceClient {
         return exchangeForJson(url, HttpMethod.GET, null);
     }
 
+    /** Danh sách kỳ trả nợ đến hạn theo ngày, đã enrich thông tin người gọi vốn. */
+    public JsonNode getDueTodaySchedules(String date) {
+        UriComponentsBuilder builder = UriComponentsBuilder.fromHttpUrl(loanServiceUrl)
+                .path("/internal/loans/repayments/due-today");
+        if (date != null && !date.isBlank()) builder.queryParam("date", date);
+        String url = builder.build().toUriString();
+        JsonNode items = exchangeForJson(url, HttpMethod.GET, null);
+        if (items == null || !items.isArray()) return items;
+
+        // Collect unique borrower IDs
+        Set<String> borrowerIds = new java.util.LinkedHashSet<>();
+        items.forEach(item -> {
+            JsonNode bid = item.get("borrowerId");
+            if (bid != null && !bid.isNull()) borrowerIds.add(bid.asText());
+        });
+
+        // Fetch borrower info (phone + fullName) for each unique borrower
+        Map<String, JsonNode> borrowerMap = new HashMap<>();
+        for (String bid : borrowerIds) {
+            try {
+                String authUrl = UriComponentsBuilder.fromHttpUrl(authServiceUrl)
+                        .path("/internal/users/{userId}")
+                        .buildAndExpand(bid).toUriString();
+                borrowerMap.put(bid, exchangeForJson(authUrl, HttpMethod.GET, null));
+            } catch (Exception e) {
+                log.warn("Không lấy được thông tin borrower {}: {}", bid, e.getMessage());
+            }
+        }
+
+        // Merge borrower info into each item
+        com.fasterxml.jackson.databind.node.ArrayNode enriched =
+                objectMapper.createArrayNode();
+        items.forEach(item -> {
+            com.fasterxml.jackson.databind.node.ObjectNode merged =
+                    (com.fasterxml.jackson.databind.node.ObjectNode) item.deepCopy();
+            String bid = item.path("borrowerId").asText(null);
+            if (bid != null && borrowerMap.containsKey(bid)) {
+                JsonNode borrow = borrowerMap.get(bid);
+                merged.put("borrowerPhone",    borrow.path("phone").asText(""));
+                merged.put("borrowerFullName", borrow.path("fullName").asText(""));
+            } else {
+                merged.put("borrowerPhone", "");
+                merged.put("borrowerFullName", "");
+            }
+            enriched.add(merged);
+        });
+        return enriched;
+    }
+
     /** Log phân bổ nhà đầu tư (thuế TNCN) — dùng cho CMS kế toán. */
     public JsonNode getDistributionLog(String loanId, String investorId, int page, int size) {
         UriComponentsBuilder builder = UriComponentsBuilder.fromHttpUrl(loanServiceUrl)

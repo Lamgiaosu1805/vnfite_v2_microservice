@@ -181,6 +181,15 @@ public class InternalLoanController {
         return ResponseEntity.ok(repaymentService.getAutoDebitAuditList(limit));
     }
 
+    /** Danh sách kỳ trả nợ đến hạn theo ngày — CMS theo dõi ai đã/chưa trả. */
+    @GetMapping("/repayments/due-today")
+    public ResponseEntity<List<com.p2plending.loan.dto.response.DueTodayItem>> getDueTodayList(
+            @RequestHeader(INTERNAL_SECRET_HEADER) String secret,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
+        requireInternalSecret(secret);
+        return ResponseEntity.ok(repaymentService.getDueTodayList(date));
+    }
+
     /** Log phân bổ tiền cho nhà đầu tư (gốc/lãi/thuế/net) — CMS kế toán tra soát. */
     @GetMapping("/repayments/distribution-log")
     public ResponseEntity<org.springframework.data.domain.Page<com.p2plending.loan.domain.entity.InvestorDistributionLog>> getDistributionLog(

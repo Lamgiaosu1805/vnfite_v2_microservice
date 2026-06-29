@@ -938,4 +938,40 @@ public class RepaymentService {
                 .paidAt(s.getPaidAt())
                 .build();
     }
+
+    /** Danh sách kỳ trả nợ đến hạn theo ngày chỉ định (mặc định hôm nay) — CMS theo dõi ai đã/chưa trả. */
+    @Transactional(readOnly = true)
+    public List<com.p2plending.loan.dto.response.DueTodayItem> getDueTodayList(LocalDate date) {
+        LocalDate today = date != null ? date : LocalDate.now(TZ);
+        List<RepaymentSchedule> schedules =
+                scheduleRepository.findByDueDateAndIsDeletedFalseOrderByLoanIdAscPeriodNumberAsc(today);
+
+        java.util.Set<String> loanIds = schedules.stream()
+                .map(RepaymentSchedule::getLoanId)
+                .collect(java.util.stream.Collectors.toSet());
+        Map<String, LoanRequest> loans = new HashMap<>();
+        loanRequestRepository.findAllById(loanIds)
+                .forEach(l -> loans.put(l.getId(), l));
+
+        return schedules.stream().map(s -> {
+            LoanRequest loan = loans.get(s.getLoanId());
+            return com.p2plending.loan.dto.response.DueTodayItem.builder()
+                    .scheduleId(s.getId())
+                    .loanId(s.getLoanId())
+                    .loanCode(loan != null ? loan.getLoanCode() : null)
+                    .borrowerId(loan != null ? loan.getBorrowerId() : null)
+                    .periodNumber(s.getPeriodNumber())
+                    .dueDate(s.getDueDate())
+                    .principalDue(money(s.getPrincipalDue()))
+                    .interestDue(money(s.getInterestDue()))
+                    .totalDue(money(s.getTotalDue()))
+                    .lateFee(money(s.getLateFee()))
+                    .paidAmount(money(s.getPaidAmount()))
+                    .lateFeePaid(money(s.getLateFeePaid()))
+                    .remaining(money(s.getTotalOutstanding()))
+                    .status(s.getStatus().name())
+                    .dpd(s.getDpd())
+                    .build();
+        }).collect(java.util.stream.Collectors.toList());
+    }
 }

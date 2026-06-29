@@ -141,6 +141,16 @@ public class LoanManagementController {
     }
 
     /**
+     * GET /cms/loans/repayments/due-today?date=yyyy-MM-dd
+     * Kỳ trả nợ đến hạn theo ngày — theo dõi ai đã/chưa trả.
+     */
+    @GetMapping("/repayments/due-today")
+    public ResponseEntity<com.fasterxml.jackson.databind.JsonNode> getDueTodaySchedules(
+            @RequestParam(required = false) String date) {
+        return ResponseEntity.ok(loanService.getDueTodaySchedules(date));
+    }
+
+    /**
      * GET /cms/loans/repayments/auto-debit-audit
      * Lịch sử các lần quét auto-debit — giám sát kết quả scheduler hàng ngày.
      */

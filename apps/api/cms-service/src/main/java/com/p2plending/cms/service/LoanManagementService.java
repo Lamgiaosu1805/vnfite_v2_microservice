@@ -136,6 +136,11 @@ public class LoanManagementService {
         return sourceServiceClient.getDistributionLog(loanId, investorId, page, size);
     }
 
+    /** Kỳ trả nợ đến hạn theo ngày, enrich thông tin người gọi vốn. */
+    public JsonNode getDueTodaySchedules(String date) {
+        return sourceServiceClient.getDueTodaySchedules(date);
+    }
+
     public LoanSummaryResponse disburse(String loanId, CmsPrincipal operator) {
         LoanSummaryResponse loanBefore = safeGetLoan(loanId);
         String decidedBy   = operator != null ? operator.username() : "unknown";

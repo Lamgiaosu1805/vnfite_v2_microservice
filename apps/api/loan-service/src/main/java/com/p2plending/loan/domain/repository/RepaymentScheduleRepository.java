@@ -4,6 +4,7 @@ import com.p2plending.loan.domain.entity.RepaymentSchedule;
 import com.p2plending.loan.domain.enums.RepaymentStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.time.LocalDate;
 import java.util.List;
 
 public interface RepaymentScheduleRepository extends JpaRepository<RepaymentSchedule, String> {
@@ -14,4 +15,6 @@ public interface RepaymentScheduleRepository extends JpaRepository<RepaymentSche
 
     List<RepaymentSchedule> findByStatusNotAndIsDeletedFalseOrderByDueDateAscPeriodNumberAsc(
             RepaymentStatus status);
+
+    List<RepaymentSchedule> findByDueDateAndIsDeletedFalseOrderByLoanIdAscPeriodNumberAsc(LocalDate dueDate);
 }
