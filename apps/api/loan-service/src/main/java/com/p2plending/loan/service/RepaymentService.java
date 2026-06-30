@@ -2,6 +2,7 @@ package com.p2plending.loan.service;
 
 import com.p2plending.loan.client.PaymentServiceClient;
 import com.p2plending.loan.config.CacheConfig;
+import com.p2plending.loan.domain.entity.EarlySettlement;
 import com.p2plending.loan.domain.entity.InvestorDistributionLog;
 import com.p2plending.loan.domain.entity.LoanOffer;
 import com.p2plending.loan.domain.entity.LoanRequest;
@@ -16,6 +17,7 @@ import com.p2plending.loan.domain.enums.PaymentChannel;
 import com.p2plending.loan.domain.enums.PendingCreditStatus;
 import com.p2plending.loan.domain.enums.RepaymentMethod;
 import com.p2plending.loan.domain.enums.RepaymentStatus;
+import com.p2plending.loan.domain.repository.EarlySettlementRepository;
 import com.p2plending.loan.domain.repository.InvestorDistributionLogRepository;
 import com.p2plending.loan.domain.repository.LoanOfferRepository;
 import com.p2plending.loan.domain.repository.LoanRequestRepository;
@@ -25,6 +27,7 @@ import com.p2plending.loan.domain.repository.RepaymentScheduleRepository;
 import com.p2plending.loan.domain.repository.RepaymentTransactionRepository;
 import com.p2plending.loan.dto.request.RecordPaymentRequest;
 import com.p2plending.loan.dto.response.AutoDebitLoanResult;
+import com.p2plending.loan.dto.response.EarlySettlementQuoteResponse;
 import com.p2plending.loan.dto.response.RepaymentScheduleResponse;
 import com.p2plending.loan.dto.response.RepaymentMonitoringResponse;
 import com.p2plending.loan.exception.InvalidLoanStateException;
@@ -84,6 +87,7 @@ public class RepaymentService {
     private final LoanOfferRepository              loanOfferRepository;
     private final PendingInvestorCreditRepository  pendingCreditRepository;
     private final InvestorDistributionLogRepository distributionLogRepository;
+    private final EarlySettlementRepository         earlySettlementRepository;
     private final RepaymentAutoDebitAuditRepository autoDebitAuditRepository;
     private final LoanProductService               loanProductService;
     private final RepaymentScheduleGenerator       generator;
@@ -133,23 +137,10 @@ public class RepaymentService {
                 continue;
             }
 
-            BigDecimal paid = schedule.getPaidAmount() != null
-                    ? schedule.getPaidAmount().max(BigDecimal.ZERO)
-                    : BigDecimal.ZERO;
-            BigDecimal interestDue = schedule.getInterestDue() != null
-                    ? schedule.getInterestDue()
-                    : BigDecimal.ZERO;
-            BigDecimal principalDue = schedule.getPrincipalDue() != null
-                    ? schedule.getPrincipalDue()
-                    : BigDecimal.ZERO;
-
-            // Phân bổ phần đã thanh toán theo thứ tự lãi trước, sau đó tới gốc.
-            BigDecimal interestOutstanding = interestDue.subtract(paid.min(interestDue)).max(BigDecimal.ZERO);
-            BigDecimal paidAfterInterest = paid.subtract(interestDue).max(BigDecimal.ZERO);
-            BigDecimal principalOutstanding = principalDue
-                    .subtract(paidAfterInterest.min(principalDue))
-                    .max(BigDecimal.ZERO);
-            BigDecimal lateFeeOutstanding = schedule.getLateFeeOutstanding();
+            // Phần còn lại lấy trực tiếp từ field tách sẵn (lãi/gốc đã trả riêng).
+            BigDecimal interestOutstanding  = schedule.getInterestOutstanding();
+            BigDecimal principalOutstanding = schedule.getPrincipalOutstanding();
+            BigDecimal lateFeeOutstanding   = schedule.getLateFeeOutstanding();
             BigDecimal itemTotal = principalOutstanding.add(interestOutstanding).add(lateFeeOutstanding);
 
             principalTotal = principalTotal.add(principalOutstanding);
@@ -209,6 +200,53 @@ public class RepaymentService {
     private static final BigDecimal HUNDRED = new BigDecimal("100");
     private static final BigDecimal DAYS_PER_YEAR = new BigDecimal("365");
     private static final BigDecimal DEFAULT_LATE_FEE_RATE = new BigDecimal("150.00");
+    private static final BigDecimal DEFAULT_INTEREST_PENALTY_RATE = new BigDecimal("10.00");
+    private static final BigDecimal DEFAULT_EARLY_SETTLEMENT_FEE_RATE = new BigDecimal("5.00");
+    /** 100 × 365 — mẫu số lãi flat actual/365: gốc × rate(%) × ngày / 36500. */
+    private static final BigDecimal RATE_BASE_36500 = new BigDecimal("36500");
+
+    /**
+     * Kết quả phân bổ một lần trả vào một kỳ theo thứ tự PHÍ → LÃI → GỐC.
+     * Dùng để biết chính xác phần lãi/gốc/phí thực trả lần này → phân bổ đúng về nhà đầu tư + tính thuế.
+     */
+    private static final class Allocation {
+        BigDecimal interestPenalty  = BigDecimal.ZERO; // phí phạt lãi quá hạn đã trả lần này
+        BigDecimal principalPenalty = BigDecimal.ZERO; // phí phạt gốc quá hạn đã trả lần này
+        BigDecimal interest         = BigDecimal.ZERO; // lãi đã trả lần này
+        BigDecimal principal        = BigDecimal.ZERO; // gốc đã trả lần này
+
+        BigDecimal penaltyTotal() { return interestPenalty.add(principalPenalty); }
+        BigDecimal total()        { return penaltyTotal().add(interest).add(principal); }
+    }
+
+    /**
+     * Áp một khoản tiền vào một kỳ theo thứ tự PHÍ → LÃI → GỐC.
+     * Cập nhật các field đã-trả của kỳ (giữ bất biến tổng paidAmount/lateFeePaid) và
+     * trả về breakdown để caller phân bổ đúng về nhà đầu tư.
+     */
+    private Allocation applyPayment(RepaymentSchedule s, BigDecimal amount) {
+        BigDecimal remaining = money(amount);
+        Allocation a = new Allocation();
+        if (remaining.signum() <= 0) return a;
+
+        // 1) Phí phạt lãi quá hạn
+        BigDecimal ip = remaining.min(s.getInterestPenaltyOutstanding());
+        if (ip.signum() > 0) { s.addInterestPenaltyPaid(ip); a.interestPenalty = ip; remaining = remaining.subtract(ip); }
+
+        // 2) Phí phạt gốc quá hạn
+        BigDecimal pp = remaining.min(s.getPrincipalPenaltyOutstanding());
+        if (pp.signum() > 0) { s.addPrincipalPenaltyPaid(pp); a.principalPenalty = pp; remaining = remaining.subtract(pp); }
+
+        // 3) Lãi
+        BigDecimal it = remaining.min(s.getInterestOutstanding());
+        if (it.signum() > 0) { s.addInterestPaid(it); a.interest = it; remaining = remaining.subtract(it); }
+
+        // 4) Gốc
+        BigDecimal pr = remaining.min(s.getPrincipalOutstanding());
+        if (pr.signum() > 0) { s.addPrincipalPaid(pr); a.principal = pr; remaining = remaining.subtract(pr); }
+
+        return a;
+    }
 
     // ── Sinh lịch khi FUNDED ──────────────────────────────────────
 
@@ -296,26 +334,14 @@ public class RepaymentService {
             // Bỏ qua kỳ không còn gì phải trả (cả gốc+lãi lẫn phí phạt)
             if (s.getTotalOutstanding().signum() <= 0) continue;
 
-            // 1) Ưu tiên trả gốc + lãi trước
-            BigDecimal piDue = s.getRemainingDue();
-            if (piDue.signum() > 0) {
-                BigDecimal toPi = remaining.min(piDue);
-                s.setPaidAmount(money(s.getPaidAmount().add(toPi)));
-                remaining = remaining.subtract(toPi);
-                if (firstTouchedScheduleId == null) firstTouchedScheduleId = s.getId();
+            // Áp tiền theo thứ tự PHÍ → LÃI → GỐC
+            Allocation alloc = applyPayment(s, remaining);
+            remaining = remaining.subtract(alloc.total());
+            if (alloc.total().signum() > 0 && firstTouchedScheduleId == null) {
+                firstTouchedScheduleId = s.getId();
             }
 
-            // 2) Phần dư tiếp tục áp vào phí phạt
-            BigDecimal lateFeeDue = s.getLateFeeOutstanding();
-            if (lateFeeDue.signum() > 0 && remaining.signum() > 0) {
-                BigDecimal toLf = remaining.min(lateFeeDue);
-                BigDecimal paidBefore = s.getLateFeePaid() != null ? s.getLateFeePaid() : BigDecimal.ZERO;
-                s.setLateFeePaid(money(paidBefore.add(toLf)));
-                remaining = remaining.subtract(toLf);
-                if (firstTouchedScheduleId == null) firstTouchedScheduleId = s.getId();
-            }
-
-            // 3) Kỳ chỉ PAID khi cả gốc+lãi+phí phạt đều hết
+            // Kỳ chỉ PAID khi cả phí phạt + lãi + gốc đều hết
             if (s.getTotalOutstanding().signum() <= 0) {
                 s.setStatus(RepaymentStatus.PAID);
                 s.setPaidAt(paidAt);
@@ -390,6 +416,240 @@ public class RepaymentService {
         List<RepaymentSchedule> updated = doSettlePeriod(
                 loan, period, period.getTotalOutstanding(), PaymentChannel.WALLET, borrowerId, schedules.size());
         return updated.stream().map(this::toResponse).toList();
+    }
+
+    // ── Tất toán trước hạn ────────────────────────────────────────
+
+    /** Báo giá tất toán trước hạn (không trừ tiền) — app/CMS hiển thị trước khi xác nhận. */
+    @Transactional(readOnly = true)
+    public EarlySettlementQuoteResponse quoteEarlySettlement(String loanId) {
+        LoanRequest loan = loanRequestRepository.findById(loanId)
+                .orElseThrow(() -> new LoanNotFoundException(loanId));
+        boolean alreadySettled = earlySettlementRepository.existsByLoanIdAndIsDeletedFalse(loanId);
+        List<RepaymentSchedule> schedules =
+                scheduleRepository.findByLoanIdAndIsDeletedFalseOrderByPeriodNumberAsc(loanId);
+        EarlySettlementCalc calc = computeEarlySettlement(loan, schedules, LocalDate.now(TZ));
+        return toQuoteResponse(loan, calc, LocalDate.now(TZ), alreadySettled);
+    }
+
+    /**
+     * Người gọi vốn tất toán trước hạn: trừ ví MỘT lần toàn bộ payoff (gốc còn lại + lãi tới
+     * ngày tất toán + phí phạt quá hạn + phí tất toán 5%), miễn lãi các kỳ tương lai, phân bổ
+     * gốc/lãi/phí phạt về nhà đầu tư (−TNCN), giữ phí 5% cho VNFITE, đánh khoản COMPLETED.
+     *
+     * @param borrowerId nếu khác null thì kiểm tra quyền sở hữu (app); null = vận hành CMS/OPS
+     */
+    @Transactional
+    public EarlySettlementQuoteResponse earlySettle(String loanId, String borrowerId, String settledBy) {
+        LoanRequest loan = loanRequestRepository.findById(loanId)
+                .orElseThrow(() -> new LoanNotFoundException(loanId));
+        if (borrowerId != null && !loan.getBorrowerId().equals(borrowerId)) {
+            throw new InvalidLoanStateException("Bạn không có quyền tất toán khoản gọi vốn này");
+        }
+        if (!PAYABLE_STATUSES.contains(loan.getStatus())) {
+            throw new InvalidLoanStateException(
+                    "Khoản gọi vốn %s không ở trạng thái cho tất toán (status: %s)"
+                    .formatted(loan.getLoanCode(), loan.getStatus()));
+        }
+        if (earlySettlementRepository.existsByLoanIdAndIsDeletedFalse(loanId)) {
+            throw new InvalidLoanStateException(
+                    "Khoản gọi vốn %s đã được tất toán trước hạn".formatted(loan.getLoanCode()));
+        }
+
+        List<RepaymentSchedule> schedules =
+                scheduleRepository.findByLoanIdAndIsDeletedFalseOrderByPeriodNumberAsc(loanId);
+        LocalDate today = LocalDate.now(TZ);
+        EarlySettlementCalc calc = computeEarlySettlement(loan, schedules, today);
+        if (calc.totalPayoff.signum() <= 0) {
+            throw new InvalidLoanStateException(
+                    "Khoản gọi vốn %s không còn dư nợ để tất toán".formatted(loan.getLoanCode()));
+        }
+
+        LocalDateTime now = LocalDateTime.now(TZ);
+        String borrowerRef = "EARLY-OUT-" + loanId;
+
+        // 1) Trừ ví borrower MỘT lần cho toàn bộ payoff (fail-closed: ví thiếu → ném → rollback)
+        paymentServiceClient.debitRepayment(loan.getBorrowerId(), calc.totalPayoff,
+                "Tất toán trước hạn khoản %s".formatted(loan.getLoanCode()), borrowerRef);
+
+        // 2) Áp vào từng kỳ chưa trả + phân bổ NĐT; miễn lãi các kỳ tương lai
+        List<LoanRepaidEvent.InvestorPayout> payouts = new ArrayList<>();
+        for (PeriodPayoff pp : calc.periods) {
+            RepaymentSchedule s = pp.schedule;
+            if (pp.principal.signum() > 0) s.addPrincipalPaid(pp.principal);
+            if (pp.interest.signum() > 0)  s.addInterestPaid(pp.interest);
+            BigDecimal intPenPay  = s.getInterestPenaltyOutstanding();
+            BigDecimal prinPenPay = s.getPrincipalPenaltyOutstanding();
+            if (intPenPay.signum() > 0)  s.addInterestPenaltyPaid(intPenPay);
+            if (prinPenPay.signum() > 0) s.addPrincipalPenaltyPaid(prinPenPay);
+
+            // Miễn phần lãi tương lai chưa phát sinh: hạ interestDue về đúng mức đã trả tới ngày tất toán.
+            s.setInterestDue(money(s.getInterestPaid()));
+            s.setTotalDue(money(money(s.getPrincipalDue()).add(money(s.getInterestDue()))));
+            s.setStatus(RepaymentStatus.PAID);
+            s.setPaidAt(now);
+            s.setDpd(0);
+            scheduleRepository.save(s);
+
+            BigDecimal periodPaid = pp.principal.add(pp.interest).add(intPenPay).add(prinPenPay);
+            if (periodPaid.signum() <= 0) continue;
+            RepaymentTransaction txn = transactionRepository.save(RepaymentTransaction.builder()
+                    .loanId(loanId)
+                    .scheduleId(s.getId())
+                    .amount(money(periodPaid))
+                    .paidAt(now)
+                    .channel(PaymentChannel.WALLET)
+                    .externalRef(borrowerRef + "-P" + s.getPeriodNumber())
+                    .recordedBy(settledBy)
+                    .note("Tất toán trước hạn kỳ %d".formatted(s.getPeriodNumber()))
+                    .build());
+            payouts.addAll(distributeToInvestors(loan, s, pp.principal, pp.interest,
+                    intPenPay.add(prinPenPay), txn.getId(),
+                    "EARLY-IN-" + loanId + "-P" + s.getPeriodNumber()));
+        }
+
+        // 3) Ghi sổ phí tất toán 5% (đọng tại tài khoản tổng VNFITE — không transfer)
+        earlySettlementRepository.save(EarlySettlement.builder()
+                .loanId(loanId)
+                .loanCode(loan.getLoanCode())
+                .borrowerId(loan.getBorrowerId())
+                .principalSettled(calc.remainingPrincipal)
+                .interestToDate(calc.interestToDate)
+                .penaltyPaid(calc.penaltyOutstanding)
+                .settlementFee(calc.settlementFee)
+                .settlementFeeRate(calc.settlementFeeRate)
+                .totalPaid(calc.totalPayoff)
+                .settledAt(now)
+                .settledBy(settledBy)
+                .build());
+
+        // 4) COMPLETED + cache + event
+        loan.setStatus(LoanStatus.COMPLETED);
+        loanRequestRepository.save(loan);
+        evictLoanCaches(loanId);
+        kafkaProducerService.publishLoanRepaid(LoanRepaidEvent.builder()
+                .loanId(loanId)
+                .loanCode(loan.getLoanCode())
+                .borrowerId(loan.getBorrowerId())
+                .periodNumber(0)
+                .totalPeriods(schedules.size())
+                .amountPaid(calc.totalPayoff)
+                .periodTotalDue(calc.totalPayoff)
+                .partial(false)
+                .loanCompleted(true)
+                .channel("EARLY_SETTLEMENT")
+                .paidAt(now)
+                .investorPayouts(payouts)
+                .build());
+
+        log.info("Tất toán trước hạn loan {} by {}: gốc={} lãiTớiNgày={} phíPhạt={} phíTấtToán={} tổng={}",
+                loanId, settledBy, calc.remainingPrincipal, calc.interestToDate, calc.penaltyOutstanding,
+                calc.settlementFee, calc.totalPayoff);
+        return toQuoteResponse(loan, calc, today, true);
+    }
+
+    /** Tính các cấu phần tất toán trước hạn tại ngày {@code today} (không chạm DB ghi). */
+    private EarlySettlementCalc computeEarlySettlement(LoanRequest loan,
+                                                       List<RepaymentSchedule> schedules, LocalDate today) {
+        BigDecimal feeRate    = resolveEarlySettlementFeeRate(loan);
+        BigDecimal annualRate = loan.getInterestRate() != null ? loan.getInterestRate() : BigDecimal.ZERO;
+        BigDecimal principal  = loan.getAmount() != null ? loan.getAmount() : BigDecimal.ZERO;
+        LocalDate  loanStart  = loanStartDate(loan);
+
+        EarlySettlementCalc calc = new EarlySettlementCalc();
+        calc.settlementFeeRate = feeRate;
+
+        for (int idx = 0; idx < schedules.size(); idx++) {
+            RepaymentSchedule s = schedules.get(idx);
+            if (s.isSettled()) continue;
+
+            BigDecimal principalOut = s.getPrincipalOutstanding();
+            BigDecimal penaltyOut   = s.getLateFeeOutstanding();
+
+            BigDecimal interestOwed;
+            if (!s.getDueDate().isAfter(today)) {
+                // Kỳ đã đến hạn / quá hạn → lãi phát sinh đủ
+                interestOwed = s.getInterestOutstanding();
+            } else {
+                LocalDate start = (idx == 0) ? loanStart : schedules.get(idx - 1).getDueDate();
+                if (start.isBefore(today)) {
+                    // Kỳ đang chạy → pro-rate lãi flat trên gốc ban đầu từ đầu kỳ tới hôm nay
+                    long elapsed = ChronoUnit.DAYS.between(start, today);
+                    BigDecimal accrued = money(principal.multiply(annualRate)
+                            .multiply(BigDecimal.valueOf(elapsed))
+                            .divide(RATE_BASE_36500, 10, RoundingMode.HALF_UP));
+                    accrued = accrued.min(money(s.getInterestDue()));
+                    interestOwed = accrued.subtract(money(s.getInterestPaid())).max(BigDecimal.ZERO);
+                } else {
+                    // Kỳ hoàn toàn tương lai → miễn lãi
+                    interestOwed = BigDecimal.ZERO;
+                }
+            }
+
+            calc.remainingPrincipal = calc.remainingPrincipal.add(principalOut);
+            calc.interestToDate     = calc.interestToDate.add(interestOwed);
+            calc.penaltyOutstanding = calc.penaltyOutstanding.add(penaltyOut);
+            calc.periods.add(new PeriodPayoff(s, principalOut, interestOwed, penaltyOut));
+        }
+
+        calc.settlementFee = money(calc.remainingPrincipal.multiply(feeRate)
+                .divide(HUNDRED, 0, RoundingMode.HALF_UP));
+        calc.totalPayoff = money(calc.remainingPrincipal.add(calc.interestToDate)
+                .add(calc.penaltyOutstanding).add(calc.settlementFee));
+        return calc;
+    }
+
+    /** Tỷ lệ phí tất toán trước hạn (% gốc còn lại, mặc định 5%) — theo sản phẩm. */
+    private BigDecimal resolveEarlySettlementFeeRate(LoanRequest loan) {
+        if (loan.getProductId() == null) return DEFAULT_EARLY_SETTLEMENT_FEE_RATE;
+        return loanProductService.findProductById(loan.getProductId())
+                .map(p -> p.getEarlySettlementFeeRate() != null
+                        ? p.getEarlySettlementFeeRate() : DEFAULT_EARLY_SETTLEMENT_FEE_RATE)
+                .orElse(DEFAULT_EARLY_SETTLEMENT_FEE_RATE);
+    }
+
+    /** Mốc bắt đầu kỳ 1 = ngày giải ngân (fallback fundedAt / hôm nay). */
+    private LocalDate loanStartDate(LoanRequest loan) {
+        LocalDateTime t = loan.getDisbursedAt() != null ? loan.getDisbursedAt() : loan.getFundedAt();
+        return t != null ? t.toLocalDate() : LocalDate.now(TZ);
+    }
+
+    private EarlySettlementQuoteResponse toQuoteResponse(LoanRequest loan, EarlySettlementCalc calc,
+                                                         LocalDate asOf, boolean settled) {
+        return EarlySettlementQuoteResponse.builder()
+                .loanId(loan.getId())
+                .loanCode(loan.getLoanCode())
+                .asOfDate(asOf)
+                .remainingPrincipal(money(calc.remainingPrincipal))
+                .interestToDate(money(calc.interestToDate))
+                .penaltyOutstanding(money(calc.penaltyOutstanding))
+                .settlementFeeRate(calc.settlementFeeRate)
+                .settlementFee(money(calc.settlementFee))
+                .totalPayoff(money(calc.totalPayoff))
+                .settled(settled)
+                .build();
+    }
+
+    /** Tổng hợp cấu phần tất toán + breakdown từng kỳ để áp tiền. */
+    private static final class EarlySettlementCalc {
+        BigDecimal remainingPrincipal = BigDecimal.ZERO;
+        BigDecimal interestToDate     = BigDecimal.ZERO;
+        BigDecimal penaltyOutstanding = BigDecimal.ZERO;
+        BigDecimal settlementFee      = BigDecimal.ZERO;
+        BigDecimal settlementFeeRate  = BigDecimal.ZERO;
+        BigDecimal totalPayoff        = BigDecimal.ZERO;
+        final List<PeriodPayoff> periods = new ArrayList<>();
+    }
+
+    /** Phần phải trả của một kỳ khi tất toán. */
+    private static final class PeriodPayoff {
+        final RepaymentSchedule schedule;
+        final BigDecimal principal;
+        final BigDecimal interest;
+        final BigDecimal penalty;
+        PeriodPayoff(RepaymentSchedule schedule, BigDecimal principal, BigDecimal interest, BigDecimal penalty) {
+            this.schedule = schedule; this.principal = principal; this.interest = interest; this.penalty = penalty;
+        }
     }
 
     /** ID các khoản đang trả nợ — scheduler đọc riêng để auto-debit từng khoản trong transaction độc lập. */
@@ -561,16 +821,8 @@ public class RepaymentService {
                 "Trả nợ kỳ %d khoản %s".formatted(period.getPeriodNumber(), loan.getLoanCode()),
                 borrowerRef);
 
-        // 2) Áp tiền vào kỳ — ưu tiên gốc+lãi trước, phần dư trả vào phí phạt
-        BigDecimal remaining = payAmount;
-        BigDecimal toPrincipalInterest = remaining.min(period.getRemainingDue());
-        period.setPaidAmount(period.getPaidAmount().add(toPrincipalInterest));
-        remaining = remaining.subtract(toPrincipalInterest);
-
-        BigDecimal toLateFee = remaining.min(period.getLateFeeOutstanding());
-        if (toLateFee.signum() > 0) {
-            period.setLateFeePaid(money(lateFeePaidBefore.add(toLateFee)));
-        }
+        // 2) Áp tiền vào kỳ theo thứ tự PHÍ → LÃI → GỐC
+        Allocation alloc = applyPayment(period, payAmount);
 
         boolean periodSettled = period.getTotalOutstanding().signum() <= 0;
         if (periodSettled) {
@@ -596,7 +848,7 @@ public class RepaymentService {
 
         // 4) Phân bổ pro-rata về ví nhà đầu tư (best-effort, idempotent), tính thuế TNCN
         List<LoanRepaidEvent.InvestorPayout> payouts =
-                distributeToInvestors(loan, period, toPrincipalInterest, toLateFee,
+                distributeToInvestors(loan, period, alloc.principal, alloc.interest, alloc.penaltyTotal(),
                         txn.getId(), "REPAY-IN-" + baseRef);
 
         // 5) Cập nhật trạng thái khoản
@@ -637,19 +889,24 @@ public class RepaymentService {
      * Dồn phần dư làm tròn vào nhà đầu tư cuối để tổng khớp tuyệt đối.
      * Cộng ví best-effort: lỗi từng người được log để đối soát, không làm hỏng giao dịch.
      *
-     * @param period             kỳ trả nợ (để tính tỷ lệ gốc/lãi)
-     * @param principalInterestPaid phần payAmount áp vào gốc+lãi
-     * @param lateFeePaid        phần payAmount áp vào phí phạt
+     * @param period             kỳ trả nợ
+     * @param principalPaid      phần gốc thực trả lần này
+     * @param interestPaid       phần lãi thực trả lần này
+     * @param penaltyPaid        phần phí phạt (lãi+gốc quá hạn) thực trả lần này
      * @param repaymentTransactionId ID giao dịch trả nợ vừa lưu
      * @param creditRefBase      prefix cho credit ref idempotent
      */
     private List<LoanRepaidEvent.InvestorPayout> distributeToInvestors(
             LoanRequest loan, RepaymentSchedule period,
-            BigDecimal principalInterestPaid, BigDecimal lateFeePaid,
+            BigDecimal principalPaid, BigDecimal interestPaid, BigDecimal penaltyPaid,
             String repaymentTransactionId, String creditRefBase) {
 
         List<LoanRepaidEvent.InvestorPayout> payouts = new ArrayList<>();
-        BigDecimal payAmount = money(principalInterestPaid).add(money(lateFeePaid));
+        BigDecimal principalTot = money(principalPaid);
+        BigDecimal interestTot  = money(interestPaid);
+        BigDecimal penaltyTot   = money(penaltyPaid);
+        BigDecimal payAmount    = principalTot.add(interestTot).add(penaltyTot);
+        if (payAmount.signum() <= 0) return payouts;
 
         List<LoanOffer> offers = loanOfferRepository
                 .findByLoanRequestIdAndStatus(loan.getId(), OfferStatus.ACCEPTED);
@@ -666,48 +923,38 @@ public class RepaymentService {
             return payouts;
         }
 
-        // Tỷ lệ lãi trong phần gốc+lãi của kỳ — dùng để tách interestPortion khỏi principalPortion
-        BigDecimal periodTotalDue = money(period.getTotalDue());
-        BigDecimal interestRatio = periodTotalDue.signum() > 0
-                ? period.getInterestDue().divide(periodTotalDue, 10, RoundingMode.HALF_UP)
-                : BigDecimal.ZERO;
-
         BigDecimal effectiveTaxRate = (tncnRate != null && tncnRate.signum() > 0) ? tncnRate : BigDecimal.ZERO;
 
-        BigDecimal distributedTotal   = BigDecimal.ZERO;
-        BigDecimal distributedLateFee = BigDecimal.ZERO;
-        BigDecimal distributedPi      = BigDecimal.ZERO;
-        LocalDateTime distributedAt   = LocalDateTime.now(TZ);
+        BigDecimal distPrincipal = BigDecimal.ZERO;
+        BigDecimal distInterest  = BigDecimal.ZERO;
+        BigDecimal distPenalty   = BigDecimal.ZERO;
+        LocalDateTime distributedAt = LocalDateTime.now(TZ);
 
         for (int i = 0; i < offers.size(); i++) {
             LoanOffer offer = offers.get(i);
             boolean isLast = (i == offers.size() - 1);
 
-            // Pro-rata share: dồn phần dư làm tròn vào investor cuối
-            BigDecimal share, lateFeeShare, piShare;
+            // Pro-rata từng phần (gốc/lãi/phí); dồn phần dư làm tròn vào investor cuối
+            BigDecimal principalShare, interestShare, penaltyShare;
             if (isLast) {
-                share        = payAmount.subtract(distributedTotal);
-                lateFeeShare = money(lateFeePaid).subtract(distributedLateFee);
-                piShare      = money(principalInterestPaid).subtract(distributedPi);
+                principalShare = principalTot.subtract(distPrincipal);
+                interestShare  = interestTot.subtract(distInterest);
+                penaltyShare   = penaltyTot.subtract(distPenalty);
             } else {
-                lateFeeShare = money(lateFeePaid).multiply(offer.getAmount()).divide(totalFunded, 0, RoundingMode.DOWN);
-                piShare      = money(principalInterestPaid).multiply(offer.getAmount()).divide(totalFunded, 0, RoundingMode.DOWN);
-                share        = piShare.add(lateFeeShare);
+                principalShare = principalTot.multiply(offer.getAmount()).divide(totalFunded, 0, RoundingMode.DOWN);
+                interestShare  = interestTot.multiply(offer.getAmount()).divide(totalFunded, 0, RoundingMode.DOWN);
+                penaltyShare   = penaltyTot.multiply(offer.getAmount()).divide(totalFunded, 0, RoundingMode.DOWN);
             }
-            distributedTotal   = distributedTotal.add(share);
-            distributedLateFee = distributedLateFee.add(lateFeeShare);
-            distributedPi      = distributedPi.add(piShare);
+            distPrincipal = distPrincipal.add(principalShare);
+            distInterest  = distInterest.add(interestShare);
+            distPenalty   = distPenalty.add(penaltyShare);
 
+            BigDecimal share = principalShare.add(interestShare).add(penaltyShare);
             if (share.signum() <= 0) continue;
 
-            // Tách phần lãi và gốc trong piShare
-            BigDecimal interestPortion  = money(piShare.multiply(interestRatio));
-            BigDecimal principalPortion = piShare.subtract(interestPortion);
-
             // Thuế TNCN khấu trừ tại nguồn trên (lãi + phí phạt); gốc không chịu thuế.
-            // Tiền thuế VNFITE giữ lại để nộp thay nhà đầu tư — không credit vào ví nào,
-            // kế toán hạch toán dựa trên bảng investor_distribution_log.
-            BigDecimal taxAmount = money(interestPortion.add(lateFeeShare).multiply(effectiveTaxRate));
+            // Tiền thuế VNFITE giữ lại để nộp thay nhà đầu tư — hạch toán theo investor_distribution_log.
+            BigDecimal taxAmount = money(interestShare.add(penaltyShare).multiply(effectiveTaxRate));
             BigDecimal netAmount = share.subtract(taxAmount);
 
             String creditRef = creditRefBase + "-" + offer.getId();
@@ -745,9 +992,9 @@ public class RepaymentService {
                         .offerId(offer.getId())
                         .investorId(offer.getInvestorId())
                         .grossAmount(share)
-                        .principalAmount(principalPortion)
-                        .interestAmount(interestPortion)
-                        .lateFeeAmount(lateFeeShare)
+                        .principalAmount(principalShare)
+                        .interestAmount(interestShare)
+                        .lateFeeAmount(penaltyShare)
                         .taxRate(effectiveTaxRate)
                         .taxAmount(taxAmount)
                         .netAmount(netAmount)
@@ -818,27 +1065,30 @@ public class RepaymentService {
             List<RepaymentSchedule> schedules =
                     scheduleRepository.findByLoanIdAndIsDeletedFalseOrderByPeriodNumberAsc(loan.getId());
             int maxDpd = 0;
-            BigDecimal lateFeeRate = resolveLateFeeRate(loan);
+            BigDecimal principalPenaltyRate = resolveLateFeeRate(loan);       // 150% × lãi suất
+            BigDecimal interestPenaltyRate  = resolveInterestPenaltyRate(loan); // 10%/năm
 
             for (RepaymentSchedule s : schedules) {
                 if (s.isSettled()) continue;
                 if (s.getDueDate().isBefore(today)) {
                     int dpd = (int) ChronoUnit.DAYS.between(s.getDueDate(), today);
                     // Số ngày tăng thêm từ lần sweep trước — thường = 1; > 1 nếu sweep bị skip một ngày.
-                    // Cộng dồn phí theo delta để phí tích lũy chính xác ngay cả khi remainingDue thay đổi
-                    // giữa các lần sweep (partial payment). Không tính lại từ đầu × dpd vì sẽ sai sau khi
-                    // borrower trả bớt một phần (fee mới < fee cũ → max đóng băng sai hướng).
+                    // Cộng dồn phí theo delta trên phần lãi/gốc CÒN LẠI để phí tích lũy chính xác ngay cả
+                    // khi borrower trả bớt một phần giữa các lần sweep. Chỉ cộng (không tính lại từ đầu),
+                    // nên phí luôn ≥ phần đã trả, không cần guard đóng băng.
                     int prevDpd = s.getDpd() != null ? s.getDpd() : 0;
                     int deltaDpd = dpd - prevDpd;
                     s.setDpd(dpd);
                     s.setStatus(RepaymentStatus.OVERDUE);
                     if (deltaDpd > 0) {
-                        BigDecimal additional = computeLateFee(
-                                s.getRemainingDue(), loan.getInterestRate(), lateFeeRate, deltaDpd);
-                        BigDecimal accumulated = (s.getLateFee() != null ? s.getLateFee() : BigDecimal.ZERO)
-                                .add(additional);
-                        BigDecimal alreadyPaid = s.getLateFeePaid() != null ? s.getLateFeePaid() : BigDecimal.ZERO;
-                        s.setLateFee(accumulated.max(alreadyPaid));
+                        // Phạt lãi quá hạn: lãi chưa trả × 10%/năm × ngày/365
+                        BigDecimal addIntPen = computeInterestPenalty(
+                                s.getInterestOutstanding(), interestPenaltyRate, deltaDpd);
+                        // Phạt gốc quá hạn: gốc chưa trả × (150%×lãi suất)/năm × ngày/365
+                        BigDecimal addPrinPen = computePrincipalPenalty(
+                                s.getPrincipalOutstanding(), loan.getInterestRate(), principalPenaltyRate, deltaDpd);
+                        if (addIntPen.signum() > 0)  s.addInterestPenalty(addIntPen);
+                        if (addPrinPen.signum() > 0) s.addPrincipalPenalty(addPrinPen);
                     }
                     maxDpd = Math.max(maxDpd, dpd);
                 }
@@ -913,7 +1163,7 @@ public class RepaymentService {
         if (list != null) list.clear();
     }
 
-    /** Lãi suất phạt của khoản = lateFeeRate% (mặc định 150%) của lãi suất — lấy theo sản phẩm. */
+    /** Hệ số phạt GỐC quá hạn = lateFeeRate% (mặc định 150%) của lãi suất — theo sản phẩm. */
     private BigDecimal resolveLateFeeRate(LoanRequest loan) {
         if (loan.getProductId() == null) return DEFAULT_LATE_FEE_RATE;
         return loanProductService.findProductById(loan.getProductId())
@@ -921,23 +1171,48 @@ public class RepaymentService {
                 .orElse(DEFAULT_LATE_FEE_RATE);
     }
 
+    /** Lãi suất phạt LÃI quá hạn (%/năm, mặc định 10%) — theo sản phẩm. */
+    private BigDecimal resolveInterestPenaltyRate(LoanRequest loan) {
+        if (loan.getProductId() == null) return DEFAULT_INTEREST_PENALTY_RATE;
+        return loanProductService.findProductById(loan.getProductId())
+                .map(p -> p.getInterestPenaltyRate() != null ? p.getInterestPenaltyRate() : DEFAULT_INTEREST_PENALTY_RATE)
+                .orElse(DEFAULT_INTEREST_PENALTY_RATE);
+    }
+
     /**
-     * Phí phạt trả chậm = dư nợ kỳ × (lãi suất năm × lateFeeRate%) ÷ 365 × số ngày quá hạn.
-     * Vd lãi 18%/năm, lateFeeRate 150% → lãi phạt 27%/năm trên dư nợ quá hạn. Làm tròn 2 chữ số.
+     * Phí phạt GỐC quá hạn = gốc chưa trả × (lãi suất năm × lateFeeRate%) ÷ 365 × số ngày.
+     * Vd lãi 18%/năm, lateFeeRate 150% → 27%/năm trên gốc quá hạn.
      */
-    private BigDecimal computeLateFee(BigDecimal remainingDue, BigDecimal baseAnnualRate,
-                                      BigDecimal lateFeeRatePct, int dpd) {
-        if (!lateFeeEnabled || dpd <= 0 || remainingDue == null || remainingDue.signum() <= 0
+    private BigDecimal computePrincipalPenalty(BigDecimal principalOutstanding, BigDecimal baseAnnualRate,
+                                               BigDecimal lateFeeRatePct, int dpd) {
+        if (!lateFeeEnabled || dpd <= 0 || principalOutstanding == null || principalOutstanding.signum() <= 0
                 || baseAnnualRate == null || baseAnnualRate.signum() <= 0
                 || lateFeeRatePct == null || lateFeeRatePct.signum() <= 0) {
             return BigDecimal.ZERO;
         }
         BigDecimal penaltyAnnualPct = baseAnnualRate.multiply(lateFeeRatePct)
                 .divide(HUNDRED, 10, RoundingMode.HALF_UP);
-        BigDecimal dailyFraction = penaltyAnnualPct
+        return money(applyDailyRate(principalOutstanding, penaltyAnnualPct, dpd));
+    }
+
+    /**
+     * Phí phạt LÃI quá hạn = lãi chưa trả × penaltyRate%/năm ÷ 365 × số ngày.
+     * Vd penaltyRate 10%/năm trên phần lãi quá hạn.
+     */
+    private BigDecimal computeInterestPenalty(BigDecimal interestOutstanding, BigDecimal penaltyAnnualPct, int dpd) {
+        if (!lateFeeEnabled || dpd <= 0 || interestOutstanding == null || interestOutstanding.signum() <= 0
+                || penaltyAnnualPct == null || penaltyAnnualPct.signum() <= 0) {
+            return BigDecimal.ZERO;
+        }
+        return money(applyDailyRate(interestOutstanding, penaltyAnnualPct, dpd));
+    }
+
+    /** base × (annualPct% ÷ 365) × dpd — chia phân số ngày ở scale cao rồi nhân; làm tròn ở caller. */
+    private BigDecimal applyDailyRate(BigDecimal base, BigDecimal annualPct, int dpd) {
+        BigDecimal dailyFraction = annualPct
                 .divide(HUNDRED, 14, RoundingMode.HALF_UP)
                 .divide(DAYS_PER_YEAR, 14, RoundingMode.HALF_UP);
-        return money(remainingDue.multiply(dailyFraction).multiply(BigDecimal.valueOf(dpd)));
+        return base.multiply(dailyFraction).multiply(BigDecimal.valueOf(dpd));
     }
 
     private BigDecimal money(BigDecimal value) {
@@ -960,6 +1235,10 @@ public class RepaymentService {
                 .lateFee(s.getLateFee())
                 .lateFeeOutstanding(s.getLateFeeOutstanding())
                 .totalOutstanding(s.getTotalOutstanding())
+                .interestPenalty(s.getInterestPenalty())
+                .principalPenalty(s.getPrincipalPenalty())
+                .principalOutstanding(s.getPrincipalOutstanding())
+                .interestOutstanding(s.getInterestOutstanding())
                 .status(s.getStatus())
                 .dpd(displayDpd)
                 .paidAt(s.getPaidAt())

@@ -62,8 +62,12 @@ class RepaymentMonitoringTest {
                 .interestDue(new BigDecimal("200"))
                 .totalDue(new BigDecimal("1000"))
                 .paidAmount(new BigDecimal("100"))
+                .interestPaid(new BigDecimal("100"))   // 100 đã trả áp vào lãi trước (Phí→Lãi→Gốc)
+                .principalPaid(BigDecimal.ZERO)
                 .lateFee(new BigDecimal("50"))
                 .lateFeePaid(BigDecimal.ZERO)
+                .principalPenalty(new BigDecimal("50")) // phí phạt gốc quá hạn 50
+                .principalPenaltyPaid(BigDecimal.ZERO)
                 .status(RepaymentStatus.OVERDUE)
                 .build();
         RepaymentSchedule dueSoon = RepaymentSchedule.builder()

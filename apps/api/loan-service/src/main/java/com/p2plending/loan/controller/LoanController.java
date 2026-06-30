@@ -8,6 +8,7 @@ import com.p2plending.loan.dto.request.LoanFilterParams;
 import com.p2plending.loan.dto.request.LoanOfferCreateRequest;
 import com.p2plending.loan.dto.request.LoanOtpVerifyRequest;
 import com.p2plending.loan.dto.response.CashflowResponse;
+import com.p2plending.loan.dto.response.EarlySettlementQuoteResponse;
 import com.p2plending.loan.dto.response.LoanDocumentResponse;
 import com.p2plending.loan.dto.response.LoanDocumentUploadResponse;
 import com.p2plending.loan.dto.response.LoanOtpInitResponse;
@@ -245,6 +246,34 @@ public class LoanController {
             @AuthenticationPrincipal AuthenticatedUser principal
     ) {
         return ResponseEntity.ok(repaymentService.repayNextDueFromWallet(id, principal.userId()));
+    }
+
+    /**
+     * GET /api/loans/{id}/early-settlement/quote
+     * Báo giá tất toán trước hạn: gốc còn lại + lãi tới ngày tất toán + phí phạt quá hạn + phí 5%.
+     * Không trừ tiền — app hiển thị để người gọi vốn xác nhận trước khi tất toán.
+     */
+    @GetMapping("/{id}/early-settlement/quote")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<EarlySettlementQuoteResponse> earlySettlementQuote(
+            @PathVariable String id
+    ) {
+        return ResponseEntity.ok(repaymentService.quoteEarlySettlement(id));
+    }
+
+    /**
+     * POST /api/loans/{id}/early-settlement
+     * Người gọi vốn tất toán trước hạn từ ví VNFITE: trừ ví một lần toàn bộ payoff, miễn lãi kỳ
+     * tương lai, phân bổ gốc/lãi/phí phạt về nhà đầu tư, phí tất toán 5% về VNFITE. Ví thiếu → 409.
+     */
+    @PostMapping("/{id}/early-settlement")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<EarlySettlementQuoteResponse> earlySettlement(
+            @PathVariable String id,
+            @AuthenticationPrincipal AuthenticatedUser principal
+    ) {
+        return ResponseEntity.ok(
+                repaymentService.earlySettle(id, principal.userId(), principal.userId()));
     }
 
     /**

@@ -54,19 +54,50 @@ public class RepaymentSchedule {
     @Column(nullable = false, precision = 15, scale = 2)
     private BigDecimal totalDue;
 
+    /** Tổng gốc+lãi đã trả = interest_paid + principal_paid (bất biến, giữ cho báo cáo cũ). */
     @Column(nullable = false, precision = 15, scale = 2)
     @Builder.Default
     private BigDecimal paidAmount = BigDecimal.ZERO;
 
-    /** Phí phạt trả chậm đã tính tới hiện tại (job DPD cập nhật theo dpd). */
+    /** Phần LÃI đã trả của kỳ (hạch toán Phí→Lãi→Gốc: lãi trả trước gốc). */
+    @Column(name = "interest_paid", nullable = false, precision = 15, scale = 2)
+    @Builder.Default
+    private BigDecimal interestPaid = BigDecimal.ZERO;
+
+    /** Phần GỐC đã trả của kỳ. */
+    @Column(name = "principal_paid", nullable = false, precision = 15, scale = 2)
+    @Builder.Default
+    private BigDecimal principalPaid = BigDecimal.ZERO;
+
+    /** Tổng phí phạt = interest_penalty + principal_penalty (bất biến, giữ cho báo cáo cũ). */
     @Column(name = "late_fee", nullable = false, precision = 15, scale = 2)
     @Builder.Default
     private BigDecimal lateFee = BigDecimal.ZERO;
 
-    /** Phần phí phạt người gọi vốn đã trả. */
+    /** Tổng phí phạt đã trả = interest_penalty_paid + principal_penalty_paid (bất biến). */
     @Column(name = "late_fee_paid", nullable = false, precision = 15, scale = 2)
     @Builder.Default
     private BigDecimal lateFeePaid = BigDecimal.ZERO;
+
+    /** Phí phạt LÃI quá hạn lũy kế (lãi chưa trả × 10%/năm × ngày/365). */
+    @Column(name = "interest_penalty", nullable = false, precision = 15, scale = 2)
+    @Builder.Default
+    private BigDecimal interestPenalty = BigDecimal.ZERO;
+
+    /** Phần phí phạt lãi đã trả. */
+    @Column(name = "interest_penalty_paid", nullable = false, precision = 15, scale = 2)
+    @Builder.Default
+    private BigDecimal interestPenaltyPaid = BigDecimal.ZERO;
+
+    /** Phí phạt GỐC quá hạn lũy kế (gốc chưa trả × (150%×lãi suất)/năm × ngày/365). */
+    @Column(name = "principal_penalty", nullable = false, precision = 15, scale = 2)
+    @Builder.Default
+    private BigDecimal principalPenalty = BigDecimal.ZERO;
+
+    /** Phần phí phạt gốc đã trả. */
+    @Column(name = "principal_penalty_paid", nullable = false, precision = 15, scale = 2)
+    @Builder.Default
+    private BigDecimal principalPenaltyPaid = BigDecimal.ZERO;
 
     private LocalDateTime paidAt;
 
@@ -91,25 +122,81 @@ public class RepaymentSchedule {
     @UpdateTimestamp
     private LocalDateTime updatedAt;
 
+    /** Lãi còn phải trả của kỳ. */
+    public BigDecimal getInterestOutstanding() {
+        return money(interestDue).subtract(money(interestPaid)).max(BigDecimal.ZERO);
+    }
+
+    /** Gốc còn phải trả của kỳ. */
+    public BigDecimal getPrincipalOutstanding() {
+        return money(principalDue).subtract(money(principalPaid)).max(BigDecimal.ZERO);
+    }
+
     /** Gốc + lãi còn phải trả của kỳ (chưa gồm phí phạt). */
     public BigDecimal getRemainingDue() {
         return money(totalDue).subtract(money(paidAmount)).max(BigDecimal.ZERO);
     }
 
-    /** Phí phạt còn phải trả của kỳ. */
-    public BigDecimal getLateFeeOutstanding() {
-        BigDecimal fee = money(lateFee);
-        BigDecimal paid = money(lateFeePaid);
-        return fee.subtract(paid).max(BigDecimal.ZERO);
+    /** Phí phạt lãi quá hạn còn phải trả. */
+    public BigDecimal getInterestPenaltyOutstanding() {
+        return money(interestPenalty).subtract(money(interestPenaltyPaid)).max(BigDecimal.ZERO);
     }
 
-    /** Tổng còn phải trả của kỳ = gốc + lãi + phí phạt còn lại. */
+    /** Phí phạt gốc quá hạn còn phải trả. */
+    public BigDecimal getPrincipalPenaltyOutstanding() {
+        return money(principalPenalty).subtract(money(principalPenaltyPaid)).max(BigDecimal.ZERO);
+    }
+
+    /** Tổng phí phạt còn phải trả của kỳ (cả lãi + gốc quá hạn). */
+    public BigDecimal getLateFeeOutstanding() {
+        return money(getInterestPenaltyOutstanding().add(getPrincipalPenaltyOutstanding()));
+    }
+
+    /** Tổng còn phải trả của kỳ = phí phạt + lãi + gốc còn lại. */
     public BigDecimal getTotalOutstanding() {
         return money(getRemainingDue().add(getLateFeeOutstanding()));
     }
 
     public boolean isSettled() {
         return status == RepaymentStatus.PAID;
+    }
+
+    // ── Mutators giữ bất biến tổng (paidAmount, lateFee, lateFeePaid) ─────────────
+
+    /** Cộng phần lãi vừa trả → đồng bộ paidAmount. */
+    public void addInterestPaid(BigDecimal v) {
+        this.interestPaid = money(interestPaid).add(money(v));
+        this.paidAmount = money(interestPaid).add(money(principalPaid));
+    }
+
+    /** Cộng phần gốc vừa trả → đồng bộ paidAmount. */
+    public void addPrincipalPaid(BigDecimal v) {
+        this.principalPaid = money(principalPaid).add(money(v));
+        this.paidAmount = money(interestPaid).add(money(principalPaid));
+    }
+
+    /** Cộng phí phạt lãi lũy kế → đồng bộ lateFee. */
+    public void addInterestPenalty(BigDecimal v) {
+        this.interestPenalty = money(interestPenalty).add(money(v));
+        this.lateFee = money(interestPenalty).add(money(principalPenalty));
+    }
+
+    /** Cộng phí phạt gốc lũy kế → đồng bộ lateFee. */
+    public void addPrincipalPenalty(BigDecimal v) {
+        this.principalPenalty = money(principalPenalty).add(money(v));
+        this.lateFee = money(interestPenalty).add(money(principalPenalty));
+    }
+
+    /** Cộng phần phí phạt lãi vừa trả → đồng bộ lateFeePaid. */
+    public void addInterestPenaltyPaid(BigDecimal v) {
+        this.interestPenaltyPaid = money(interestPenaltyPaid).add(money(v));
+        this.lateFeePaid = money(interestPenaltyPaid).add(money(principalPenaltyPaid));
+    }
+
+    /** Cộng phần phí phạt gốc vừa trả → đồng bộ lateFeePaid. */
+    public void addPrincipalPenaltyPaid(BigDecimal v) {
+        this.principalPenaltyPaid = money(principalPenaltyPaid).add(money(v));
+        this.lateFeePaid = money(interestPenaltyPaid).add(money(principalPenaltyPaid));
     }
 
     private BigDecimal money(BigDecimal value) {

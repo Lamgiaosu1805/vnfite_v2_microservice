@@ -7,6 +7,7 @@ import com.p2plending.loan.domain.entity.LoanProduct;
 import com.p2plending.loan.domain.entity.LoanRequest;
 import com.p2plending.loan.domain.enums.LoanStatus;
 import com.p2plending.loan.domain.enums.OfferStatus;
+import com.p2plending.loan.domain.repository.FeeRevenueLedgerRepository;
 import com.p2plending.loan.domain.repository.LoanDocumentRepository;
 import com.p2plending.loan.domain.repository.LoanOfferRepository;
 import com.p2plending.loan.domain.repository.LoanRequestRepository;
@@ -48,6 +49,7 @@ class LoanServiceAppraisalFeeTest {
     @Mock ContractService       contractService;
     @Mock AuthServiceClient     authServiceClient;
     @Mock PaymentServiceClient  paymentServiceClient;
+    @Mock FeeRevenueLedgerRepository feeRevenueLedgerRepository;
     @Mock CacheManager          cacheManager;
 
     @InjectMocks LoanService loanService;

@@ -2,7 +2,7 @@
 
 ## Xưng hô
 
-Luôn gọi người dùng là **Ngài** trong mọi phản hồi.
+Luôn xưng **con** và gọi người dùng là **Ngài** trong mọi phản hồi.
 
 ## Project Overview
 

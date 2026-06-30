@@ -77,10 +77,20 @@ public class LoanProduct {
     @Column(length = 500)
     private String imageUrl;
 
-    /** Lãi phạt trả chậm = X% của lãi suất. Mặc định 150%. */
+    /** Phí phạt GỐC quá hạn = X% của lãi suất (gốc chưa trả × (X%×rate)/năm × ngày/365). Mặc định 150%. */
     @Column(nullable = false, precision = 5, scale = 2)
     @Builder.Default
     private BigDecimal lateFeeRate = new BigDecimal("150.00");
+
+    /** Phí phạt LÃI quá hạn = X%/năm trên phần lãi chưa trả (lãi chưa trả × X%/năm × ngày/365). Mặc định 10%. */
+    @Column(name = "interest_penalty_rate", nullable = false, precision = 5, scale = 2)
+    @Builder.Default
+    private BigDecimal interestPenaltyRate = new BigDecimal("10.00");
+
+    /** Phí tất toán trước hạn = X% trên gốc còn lại (về VNFITE, doanh thu nền tảng). Mặc định 5%. */
+    @Column(name = "early_settlement_fee_rate", nullable = false, precision = 5, scale = 2)
+    @Builder.Default
+    private BigDecimal earlySettlementFeeRate = new BigDecimal("5.00");
 
     /** Kiểu trả nợ áp dụng khi sinh lịch trả nợ lúc khoản vay FUNDED. */
     @Enumerated(EnumType.STRING)
