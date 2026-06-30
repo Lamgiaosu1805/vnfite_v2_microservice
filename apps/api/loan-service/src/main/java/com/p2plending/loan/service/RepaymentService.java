@@ -288,16 +288,30 @@ public class RepaymentService {
         for (RepaymentSchedule s : schedules) {
             if (remaining.signum() <= 0) break;
             if (s.isSettled()) continue;
+            // Bỏ qua kỳ không còn gì phải trả (cả gốc+lãi lẫn phí phạt)
+            if (s.getTotalOutstanding().signum() <= 0) continue;
 
-            BigDecimal due = s.getRemainingDue();
-            if (due.signum() <= 0) continue;
+            // 1) Ưu tiên trả gốc + lãi trước
+            BigDecimal piDue = s.getRemainingDue();
+            if (piDue.signum() > 0) {
+                BigDecimal toPi = remaining.min(piDue);
+                s.setPaidAmount(money(s.getPaidAmount().add(toPi)));
+                remaining = remaining.subtract(toPi);
+                if (firstTouchedScheduleId == null) firstTouchedScheduleId = s.getId();
+            }
 
-            BigDecimal applied = remaining.min(due);
-            s.setPaidAmount(money(s.getPaidAmount().add(applied)));
-            remaining = remaining.subtract(applied);
-            if (firstTouchedScheduleId == null) firstTouchedScheduleId = s.getId();
+            // 2) Phần dư tiếp tục áp vào phí phạt
+            BigDecimal lateFeeDue = s.getLateFeeOutstanding();
+            if (lateFeeDue.signum() > 0 && remaining.signum() > 0) {
+                BigDecimal toLf = remaining.min(lateFeeDue);
+                BigDecimal paidBefore = s.getLateFeePaid() != null ? s.getLateFeePaid() : BigDecimal.ZERO;
+                s.setLateFeePaid(money(paidBefore.add(toLf)));
+                remaining = remaining.subtract(toLf);
+                if (firstTouchedScheduleId == null) firstTouchedScheduleId = s.getId();
+            }
 
-            if (s.getRemainingDue().signum() <= 0) {
+            // 3) Kỳ chỉ PAID khi cả gốc+lãi+phí phạt đều hết
+            if (s.getTotalOutstanding().signum() <= 0) {
                 s.setStatus(RepaymentStatus.PAID);
                 s.setPaidAt(paidAt);
                 s.setDpd(0);
@@ -943,8 +957,11 @@ public class RepaymentService {
     @Transactional(readOnly = true)
     public List<com.p2plending.loan.dto.response.DueTodayItem> getDueTodayList(LocalDate date) {
         LocalDate today = date != null ? date : LocalDate.now(TZ);
+        // Trả về tất cả kỳ chưa trả (PENDING/OVERDUE/PARTIAL) có dueDate ≤ today
+        // để admin thấy đủ kỳ cũ còn nợ chứ không chỉ kỳ đúng hôm nay
         List<RepaymentSchedule> schedules =
-                scheduleRepository.findByDueDateAndIsDeletedFalseOrderByLoanIdAscPeriodNumberAsc(today);
+                scheduleRepository.findByDueDateLessThanEqualAndStatusNotAndIsDeletedFalseOrderByLoanIdAscDueDateAscPeriodNumberAsc(
+                        today, RepaymentStatus.PAID);
 
         java.util.Set<String> loanIds = schedules.stream()
                 .map(RepaymentSchedule::getLoanId)
@@ -952,6 +969,13 @@ public class RepaymentService {
         Map<String, LoanRequest> loans = new HashMap<>();
         loanRequestRepository.findAllById(loanIds)
                 .forEach(l -> loans.put(l.getId(), l));
+
+        // Tính tổng dư nợ (gốc+lãi+phí phạt) của tất cả kỳ chưa trả theo từng khoản
+        Map<String, BigDecimal> totalDebtByLoan = schedules.stream().collect(
+                java.util.stream.Collectors.groupingBy(
+                        RepaymentSchedule::getLoanId,
+                        java.util.stream.Collectors.reducing(BigDecimal.ZERO,
+                                RepaymentSchedule::getTotalOutstanding, BigDecimal::add)));
 
         return schedules.stream().map(s -> {
             LoanRequest loan = loans.get(s.getLoanId());
@@ -969,6 +993,7 @@ public class RepaymentService {
                     .paidAmount(money(s.getPaidAmount()))
                     .lateFeePaid(money(s.getLateFeePaid()))
                     .remaining(money(s.getTotalOutstanding()))
+                    .totalDebt(money(totalDebtByLoan.getOrDefault(s.getLoanId(), BigDecimal.ZERO)))
                     .status(s.getStatus().name())
                     .dpd(s.getDpd())
                     .build();

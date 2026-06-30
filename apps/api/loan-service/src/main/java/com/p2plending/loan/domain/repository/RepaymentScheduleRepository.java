@@ -17,4 +17,8 @@ public interface RepaymentScheduleRepository extends JpaRepository<RepaymentSche
             RepaymentStatus status);
 
     List<RepaymentSchedule> findByDueDateAndIsDeletedFalseOrderByLoanIdAscPeriodNumberAsc(LocalDate dueDate);
+
+    /** Tất cả kỳ chưa trả hết (PENDING/OVERDUE/PARTIAL) có dueDate ≤ ngày chỉ định — dùng cho màn "đến hạn hôm nay" */
+    List<RepaymentSchedule> findByDueDateLessThanEqualAndStatusNotAndIsDeletedFalseOrderByLoanIdAscDueDateAscPeriodNumberAsc(
+            LocalDate dueDate, RepaymentStatus excludedStatus);
 }
