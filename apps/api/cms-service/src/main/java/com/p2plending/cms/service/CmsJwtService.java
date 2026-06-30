@@ -53,6 +53,7 @@ public class CmsJwtService {
         return Jwts.builder()
                 .subject(admin.getUsername())
                 .claim("adminUserId", admin.getId())
+                .claim("fullName", admin.getFullName())
                 .claim("email", admin.getEmail())
                 .claim("roles", List.of("ROLE_" + admin.getRole()))
                 .issuedAt(Date.from(now))

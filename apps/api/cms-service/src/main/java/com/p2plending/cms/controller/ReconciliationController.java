@@ -26,7 +26,7 @@ public class ReconciliationController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
             @AuthenticationPrincipal CmsPrincipal principal) {
         LocalDate reconDate = date != null ? date : LocalDate.now(java.time.ZoneId.of("Asia/Ho_Chi_Minh"));
-        String runBy = principal != null ? principal.username() : "ops";
+        String runBy = principal != null ? principal.displayName() : "ops";
         return ResponseEntity.ok(sourceServiceClient.runReconciliation(reconDate, runBy));
     }
 
@@ -51,7 +51,7 @@ public class ReconciliationController {
             @PathVariable String itemId,
             @RequestBody Map<String, String> body,
             @AuthenticationPrincipal CmsPrincipal principal) {
-        String resolvedBy = principal != null ? principal.username() : "ops";
+        String resolvedBy = principal != null ? principal.displayName() : "ops";
         sourceServiceClient.resolveReconciliationItem(itemId, resolvedBy, body.get("notes"));
         return ResponseEntity.ok().build();
     }
@@ -60,7 +60,7 @@ public class ReconciliationController {
     public ResponseEntity<Void> investigate(
             @PathVariable String itemId,
             @AuthenticationPrincipal CmsPrincipal principal) {
-        String updatedBy = principal != null ? principal.username() : "ops";
+        String updatedBy = principal != null ? principal.displayName() : "ops";
         sourceServiceClient.markReconciliationItemInvestigating(itemId, updatedBy);
         return ResponseEntity.ok().build();
     }

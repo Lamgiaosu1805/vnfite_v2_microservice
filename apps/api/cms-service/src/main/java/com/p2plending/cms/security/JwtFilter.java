@@ -54,6 +54,7 @@ public class JwtFilter extends OncePerRequestFilter {
                         : null;
                 var auth = new UsernamePasswordAuthenticationToken(
                         new CmsPrincipal(adminUserId, claims.getSubject(),
+                                claims.get("fullName", String.class),
                                 claims.get("email", String.class), roleValue), null, authorities);
                 auth.setDetails(new WebAuthenticationDetailsSource().buildDetails(req));
                 SecurityContextHolder.getContext().setAuthentication(auth);

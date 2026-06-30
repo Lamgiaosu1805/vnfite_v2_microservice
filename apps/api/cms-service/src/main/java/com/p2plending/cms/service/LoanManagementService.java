@@ -104,7 +104,7 @@ public class LoanManagementService {
                 .attachmentFileId(req.getAttachmentFileId())
                 .note(req.getNote())
                 .consentConfirmed(req.isConsentConfirmed())
-                .enteredBy(operator != null ? operator.username() : "unknown")
+                .enteredBy(operator != null ? operator.displayName() : "unknown")
                 .build();
         entity = cicRepository.save(entity);
         log.info("CIC lookup saved: loanId={} debtGroup={} checkedAt={} by={}",
@@ -123,7 +123,7 @@ public class LoanManagementService {
 
     /** Chạy ngay job thu nợ tự động từ ví người gọi vốn. */
     public JsonNode autoDebitSweep(CmsPrincipal operator) {
-        String triggeredBy = operator != null ? operator.username() : "unknown";
+        String triggeredBy = operator != null ? operator.displayName() : "unknown";
         return sourceServiceClient.autoDebitSweep(triggeredBy);
     }
 
@@ -149,7 +149,7 @@ public class LoanManagementService {
 
     public LoanSummaryResponse disburse(String loanId, CmsPrincipal operator) {
         LoanSummaryResponse loanBefore = safeGetLoan(loanId);
-        String decidedBy   = operator != null ? operator.username() : "unknown";
+        String decidedBy   = operator != null ? operator.displayName() : "unknown";
         String deciderRole = operator != null ? operator.role() : null;
 
         LoanSummaryResponse result = sourceServiceClient.disburseLoan(loanId, decidedBy);
@@ -168,7 +168,7 @@ public class LoanManagementService {
      */
     public JsonNode recordRepayment(String loanId, RecordRepaymentRequest req, CmsPrincipal operator) {
         LoanSummaryResponse loanBefore = safeGetLoan(loanId);
-        String recordedBy  = operator != null ? operator.username() : "unknown";
+        String recordedBy  = operator != null ? operator.displayName() : "unknown";
         String deciderRole = operator != null ? operator.role() : null;
 
         JsonNode schedule = sourceServiceClient.recordRepayment(
@@ -192,7 +192,7 @@ public class LoanManagementService {
                         "Cần nhập kết quả tra CIC trước khi trình ban lãnh đạo."));
 
         return sourceServiceClient.proposeLoan(loanId, req.getProposedAmount(), req.getProposedInterestRate(),
-                req.getAppraisalFeeRate(), req.getNote(), proposer != null ? proposer.username() : null);
+                req.getAppraisalFeeRate(), req.getNote(), proposer != null ? proposer.displayName() : null);
     }
 
     /**
@@ -207,7 +207,7 @@ public class LoanManagementService {
         JsonNode appraisal = safeGetAppraisal(loanId);
 
         // 3. Gửi quyết định sang loan-service
-        String decidedBy  = reviewer != null ? reviewer.username() : "unknown";
+        String decidedBy  = reviewer != null ? reviewer.displayName() : "unknown";
         String deciderRole = reviewer != null ? reviewer.role() : null;
         LoanSummaryResponse result = sourceServiceClient.approveLoan(loanId, req, decidedBy);
 
@@ -233,7 +233,7 @@ public class LoanManagementService {
         JsonNode appraisal = safeGetAppraisal(loanId);
 
         // 3. Gửi quyết định sang loan-service
-        String decidedBy   = reviewer != null ? reviewer.username() : "unknown";
+        String decidedBy   = reviewer != null ? reviewer.displayName() : "unknown";
         String deciderRole = reviewer != null ? reviewer.role() : null;
         LoanSummaryResponse result = sourceServiceClient.rejectLoan(loanId, req, decidedBy);
 
