@@ -3,6 +3,7 @@ package com.p2plending.cms.controller;
 import com.p2plending.cms.dto.request.CicLookupRequest;
 import com.p2plending.cms.dto.request.LoanActionRequest;
 import com.p2plending.cms.dto.request.LoanProposeRequest;
+import com.p2plending.cms.dto.request.RecordRepaymentRequest;
 import com.p2plending.cms.dto.response.CicLookupResponse;
 import com.p2plending.cms.dto.response.LoanSummaryResponse;
 import com.p2plending.cms.dto.response.PagedResponse;
@@ -174,6 +175,17 @@ public class LoanManagementController {
     }
 
     /**
+     * GET /cms/loans/stats/fee-revenue
+     * Sổ cái doanh thu phí thẩm định + VAT (khoản đã giải ngân) — kế toán tra soát.
+     */
+    @GetMapping("/stats/fee-revenue")
+    public ResponseEntity<com.fasterxml.jackson.databind.JsonNode> getFeeRevenue(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "50") int size) {
+        return ResponseEntity.ok(loanService.getFeeRevenueReport(page, size));
+    }
+
+    /**
      * POST /cms/loans/{loanId}/disburse
      * ADMIN giải ngân vốn cho người gọi vốn: AWAITING_DISBURSEMENT → DISBURSED.
      * Sinh lịch trả nợ từ ngày giải ngân + bắn loan.disbursed.
@@ -184,6 +196,20 @@ public class LoanManagementController {
             @PathVariable String loanId,
             @AuthenticationPrincipal CmsPrincipal operator) {
         return ResponseEntity.ok(loanService.disburse(loanId, operator));
+    }
+
+    /**
+     * POST /cms/loans/{loanId}/repayments
+     * Admin ghi nhận một lần trả nợ thủ công khi khách trả tiền mặt / chuyển khoản ngoài ví VNFITE.
+     * Tiền áp vào kỳ sớm nhất chưa trả (gốc+lãi trước, dư trả phí phạt). Trả về lịch trả nợ mới.
+     */
+    @PostMapping("/{loanId}/repayments")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN')")
+    public ResponseEntity<JsonNode> recordRepayment(
+            @PathVariable String loanId,
+            @Valid @RequestBody RecordRepaymentRequest req,
+            @AuthenticationPrincipal CmsPrincipal operator) {
+        return ResponseEntity.ok(loanService.recordRepayment(loanId, req, operator));
     }
 
     /**

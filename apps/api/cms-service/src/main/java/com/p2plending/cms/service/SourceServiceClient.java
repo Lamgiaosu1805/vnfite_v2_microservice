@@ -419,6 +419,25 @@ public class SourceServiceClient {
         return exchangeForJson(url, HttpMethod.GET, null);
     }
 
+    /**
+     * Ghi nhận một lần trả nợ thủ công (admin nhập tay khi khách trả tiền mặt/chuyển khoản ngoài ví).
+     * Áp tiền vào kỳ sớm nhất chưa trả → gốc+lãi trước, dư trả phí phạt. Passthrough JSON lịch trả nợ mới.
+     */
+    public JsonNode recordRepayment(String loanId, BigDecimal amount, String reason,
+                                    String channel, String recordedBy, String note) {
+        String url = UriComponentsBuilder.fromHttpUrl(loanServiceUrl)
+                .path("/internal/loans/{loanId}/repayments")
+                .buildAndExpand(loanId)
+                .toUriString();
+        var body = new java.util.LinkedHashMap<String, Object>();
+        body.put("amount", amount);
+        body.put("reason", reason);
+        if (channel != null && !channel.isBlank()) body.put("channel", channel);
+        body.put("recordedBy", recordedBy);
+        if (note != null && !note.isBlank()) body.put("note", note);
+        return exchangeForJson(url, HttpMethod.POST, body);
+    }
+
     public LoanSummaryResponse getLoanById(String loanId) {
         String url = UriComponentsBuilder.fromHttpUrl(loanServiceUrl)
                 .path("/internal/loans/{loanId}")
@@ -725,6 +744,18 @@ public class SourceServiceClient {
                 .encode()
                 .toUriString();
         return exchangeForJson(url, HttpMethod.POST, null);
+    }
+
+    /** Sổ cái doanh thu phí — tổng + danh sách phân trang, passthrough JSON từ loan-service. */
+    public JsonNode getFeeRevenueReport(int page, int size) {
+        String url = UriComponentsBuilder.fromHttpUrl(loanServiceUrl)
+                .path("/internal/loans/stats/fee-revenue")
+                .queryParam("page", page)
+                .queryParam("size", size)
+                .build()
+                .encode()
+                .toUriString();
+        return exchangeForJson(url, HttpMethod.GET, null);
     }
 
     /** Lịch sử quét auto-debit — dùng cho CMS trang giám sát. */
@@ -1094,6 +1125,7 @@ public class SourceServiceClient {
                 .borrowerPortraitImageId(borrower != null ? borrower.getPortraitImageId() : null)
                 .productName(text(node, "productName"))
                 .amount(decimal(node, "amount"))
+                .fundedAmount(decimal(node, "fundedAmount"))
                 .interestRate(decimal(node, "interestRate"))
                 .proposedAmount(decimal(node, "proposedAmount"))
                 .proposedInterestRate(decimal(node, "proposedInterestRate"))

@@ -69,9 +69,14 @@ public class RepaymentService {
     private static final Set<LoanStatus> PAYABLE_STATUSES =
             EnumSet.of(LoanStatus.DISBURSED, LoanStatus.REPAYING, LoanStatus.DEFAULTED);
 
-    /** Khoản đang trong vòng đời trả nợ — đối tượng quét DPD. */
+    /**
+     * Khoản đang trong vòng đời trả nợ — đối tượng quét DPD và thu nợ tự động.
+     * Gồm cả DEFAULTED: khoản vỡ nợ vẫn phải tiếp tục cộng phí phạt theo ngày và
+     * vẫn được auto-debit nếu người gọi vốn nạp tiền vào ví. Nếu loại DEFAULTED ra,
+     * phí phạt sẽ đóng băng tại mốc default và ví có tiền cũng không thu được.
+     */
     private static final Set<LoanStatus> SERVICING_STATUSES =
-            EnumSet.of(LoanStatus.DISBURSED, LoanStatus.REPAYING);
+            EnumSet.of(LoanStatus.DISBURSED, LoanStatus.REPAYING, LoanStatus.DEFAULTED);
 
     private final RepaymentScheduleRepository      scheduleRepository;
     private final RepaymentTransactionRepository   transactionRepository;

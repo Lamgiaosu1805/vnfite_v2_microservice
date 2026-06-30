@@ -19,6 +19,10 @@ public class InternalLoanStatsResponse {
     private BigDecimal totalFundedVolume;
     private long newLoansToday;
     private BigDecimal todayLoanVolume;
+    /** Doanh thu phí đã thu (khoản đã giải ngân): phí thẩm định, VAT, tổng phí. */
+    private BigDecimal totalAppraisalFee;
+    private BigDecimal totalVatCollected;
+    private BigDecimal totalFeeRevenue;
     private List<DailyCount> dailyCounts;
 
     @Data @NoArgsConstructor @AllArgsConstructor

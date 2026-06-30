@@ -84,6 +84,16 @@ public class InternalLoanController {
         return ResponseEntity.ok(loanService.getLoanStats(from));
     }
 
+    /** Sổ cái doanh thu phí — tổng + danh sách phân trang (CMS màn "Doanh thu phí"). */
+    @GetMapping("/stats/fee-revenue")
+    public ResponseEntity<com.p2plending.loan.dto.response.FeeRevenueReportResponse> getFeeRevenue(
+            @RequestHeader(INTERNAL_SECRET_HEADER) String secret,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "50") int size) {
+        requireInternalSecret(secret);
+        return ResponseEntity.ok(loanService.getFeeRevenueReport(page, size));
+    }
+
     /** Tổng hợp dư nợ, kỳ sắp đến hạn và quá hạn cho Dashboard CMS. */
     @GetMapping("/repayment-monitoring")
     public ResponseEntity<RepaymentMonitoringResponse> getRepaymentMonitoring(

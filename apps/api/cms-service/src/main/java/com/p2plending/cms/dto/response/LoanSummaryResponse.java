@@ -36,6 +36,8 @@ public class LoanSummaryResponse {
     private String borrowerPortraitImageId;
     private String productName;
     private BigDecimal amount;
+    /** Tổng tiền nhà đầu tư đã cam kết (offer ACCEPTED) — tiến độ gọi vốn của khoản ACTIVE. */
+    private BigDecimal fundedAmount;
     private BigDecimal interestRate;
     private BigDecimal proposedAmount;
     private BigDecimal proposedInterestRate;

@@ -6,6 +6,7 @@ import com.p2plending.cms.domain.repository.CicManualLookupRepository;
 import com.p2plending.cms.dto.request.CicLookupRequest;
 import com.p2plending.cms.dto.request.LoanActionRequest;
 import com.p2plending.cms.dto.request.LoanProposeRequest;
+import com.p2plending.cms.dto.request.RecordRepaymentRequest;
 import com.p2plending.cms.dto.response.AuditLogResponse;
 import com.p2plending.cms.dto.response.CicLookupResponse;
 import com.p2plending.cms.dto.response.LoanSummaryResponse;
@@ -136,6 +137,11 @@ public class LoanManagementService {
         return sourceServiceClient.getDistributionLog(loanId, investorId, page, size);
     }
 
+    /** Sổ cái doanh thu phí — passthrough JSON từ loan-service. */
+    public JsonNode getFeeRevenueReport(int page, int size) {
+        return sourceServiceClient.getFeeRevenueReport(page, size);
+    }
+
     /** Kỳ trả nợ đến hạn theo ngày, enrich thông tin người gọi vốn. */
     public JsonNode getDueTodaySchedules(String date) {
         return sourceServiceClient.getDueTodaySchedules(date);
@@ -154,6 +160,29 @@ public class LoanManagementService {
             log.error("Failed to record audit log for disbursement of loan {}: {}", loanId, e.getMessage());
         }
         return result;
+    }
+
+    /**
+     * Admin ghi nhận một lần trả nợ thủ công khi khách trả tiền mặt / chuyển khoản ngoài ví VNFITE.
+     * Tiền áp vào kỳ sớm nhất chưa trả ở loan-service. Trả về lịch trả nợ mới + ghi audit trail.
+     */
+    public JsonNode recordRepayment(String loanId, RecordRepaymentRequest req, CmsPrincipal operator) {
+        LoanSummaryResponse loanBefore = safeGetLoan(loanId);
+        String recordedBy  = operator != null ? operator.username() : "unknown";
+        String deciderRole = operator != null ? operator.role() : null;
+
+        JsonNode schedule = sourceServiceClient.recordRepayment(
+                loanId, req.getAmount(), req.getReason(),
+                "MANUAL_ADMIN", recordedBy, req.getExternalRef());
+
+        try {
+            LoanSummaryResponse loanAfter = safeGetLoan(loanId);
+            auditService.record(loanBefore, loanAfter, "REPAYMENT_RECORDED",
+                    req.getReason(), recordedBy, deciderRole, null);
+        } catch (Exception e) {
+            log.error("Failed to record audit log for manual repayment of loan {}: {}", loanId, e.getMessage());
+        }
+        return schedule;
     }
 
     public LoanSummaryResponse propose(String loanId, LoanProposeRequest req, CmsPrincipal proposer) {

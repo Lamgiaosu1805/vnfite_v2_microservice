@@ -20,6 +20,10 @@ public class DashboardStatsResponse {
     private long fundedLoans;
     private BigDecimal activeFundingVolume;
     private BigDecimal totalFundedVolume;
+    /** Doanh thu phí đã thu (khoản đã giải ngân): phí thẩm định, VAT, tổng phí. */
+    private BigDecimal totalAppraisalFee;
+    private BigDecimal totalVatCollected;
+    private BigDecimal totalFeeRevenue;
     private long todayNewUsers;
     private long todayNewLoans;
     private BigDecimal todayLoanVolume;

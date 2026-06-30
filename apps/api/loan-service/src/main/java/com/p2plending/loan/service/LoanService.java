@@ -3,6 +3,7 @@ package com.p2plending.loan.service;
 import com.p2plending.loan.client.AuthServiceClient;
 import com.p2plending.loan.client.PaymentServiceClient;
 import com.p2plending.loan.config.CacheConfig;
+import com.p2plending.loan.domain.entity.FeeRevenueLedger;
 import com.p2plending.loan.domain.entity.LoanContract;
 import com.p2plending.loan.domain.entity.LoanDocument;
 import com.p2plending.loan.domain.entity.LoanOffer;
@@ -10,6 +11,7 @@ import com.p2plending.loan.domain.entity.LoanProduct;
 import com.p2plending.loan.domain.entity.LoanRequest;
 import com.p2plending.loan.domain.enums.LoanStatus;
 import com.p2plending.loan.domain.enums.OfferStatus;
+import com.p2plending.loan.domain.repository.FeeRevenueLedgerRepository;
 import com.p2plending.loan.domain.repository.LoanDocumentRepository;
 import com.p2plending.loan.domain.repository.LoanOfferRepository;
 import com.p2plending.loan.domain.repository.LoanRequestRepository;
@@ -76,6 +78,7 @@ public class LoanService {
     private final LoanRequestRepository  loanRequestRepository;
     private final LoanOfferRepository    loanOfferRepository;
     private final LoanDocumentRepository loanDocumentRepository;
+    private final FeeRevenueLedgerRepository feeRevenueLedgerRepository;
     private final LoanRequestMapper      loanRequestMapper;
     private final LoanOfferMapper        loanOfferMapper;
     private final KafkaProducerService   kafkaProducerService;
@@ -371,6 +374,25 @@ public class LoanService {
         paymentServiceClient.creditBorrower(loan.getBorrowerId(), netAmount,
                 "Nhận tiền giải ngân khoản vay " + loan.getLoanCode() + feeNote,
                 "CREDIT-BORROWER-" + loanId);
+
+        // Hạch toán doanh thu phí vào sổ cái (chỉ khoản mới có thu phí). Tiền phí thực tế đọng ở
+        // tài khoản tổng VNFITE — bảng này chỉ ghi sổ. Idempotent theo loanId: retry không ghi trùng.
+        if (isNewLoan && loan.getTotalFee() != null && loan.getTotalFee().signum() > 0
+                && !feeRevenueLedgerRepository.existsByLoanIdAndIsDeletedFalse(loanId)) {
+            feeRevenueLedgerRepository.save(FeeRevenueLedger.builder()
+                    .loanId(loanId)
+                    .loanCode(loan.getLoanCode())
+                    .borrowerId(loan.getBorrowerId())
+                    .loanAmount(loan.getAmount())
+                    .appraisalFeeRate(loan.getAppraisalFeeRate())
+                    .appraisalFee(loan.getAppraisalFee())
+                    .vatAmount(loan.getVatAmount())
+                    .totalFee(loan.getTotalFee())
+                    .disbursedAt(loan.getDisbursedAt())
+                    .disbursedBy(disbursedBy)
+                    .build());
+            log.info("Ghi sổ doanh thu phí khoản {}: totalFee={}", loanId, loan.getTotalFee());
+        }
 
         List<String> investorIds = acceptedOffers.stream()
                 .map(LoanOffer::getInvestorId)
@@ -844,6 +866,12 @@ public class LoanService {
         long todayCount = loanRequestRepository.countCreatedBetween(todayStart, tomorrowStart);
         java.math.BigDecimal todayVol = loanRequestRepository.sumAmountCreatedBetween(todayStart, tomorrowStart);
 
+        // Doanh thu phí — lấy từ sổ cái fee_revenue_ledger (nguồn source of truth, chỉ gồm khoản
+        // giải ngân thực qua hệ thống mới; phản ánh đúng phí VNFITE thực thu).
+        java.math.BigDecimal appraisalFeeTotal = feeRevenueLedgerRepository.sumAppraisalFee();
+        java.math.BigDecimal vatTotal          = feeRevenueLedgerRepository.sumVatAmount();
+        java.math.BigDecimal feeRevenue        = feeRevenueLedgerRepository.sumTotalFee();
+
         java.util.List<Object[]> rows = loanRequestRepository.countDailyNewLoans(fromDt);
         java.util.List<com.p2plending.loan.dto.response.InternalLoanStatsResponse.DailyCount> daily = new java.util.ArrayList<>();
         for (Object[] row : rows) {
@@ -862,7 +890,46 @@ public class LoanService {
                 .totalFundedVolume(totalVol != null ? totalVol : java.math.BigDecimal.ZERO)
                 .newLoansToday(todayCount)
                 .todayLoanVolume(todayVol != null ? todayVol : java.math.BigDecimal.ZERO)
+                .totalAppraisalFee(appraisalFeeTotal != null ? appraisalFeeTotal : java.math.BigDecimal.ZERO)
+                .totalVatCollected(vatTotal != null ? vatTotal : java.math.BigDecimal.ZERO)
+                .totalFeeRevenue(feeRevenue != null ? feeRevenue : java.math.BigDecimal.ZERO)
                 .dailyCounts(daily)
+                .build();
+    }
+
+    /** Sổ cái doanh thu phí — tổng + danh sách phân trang (CMS màn "Doanh thu phí"). */
+    @Transactional(readOnly = true)
+    public com.p2plending.loan.dto.response.FeeRevenueReportResponse getFeeRevenueReport(int page, int size) {
+        int safeSize = Math.max(1, Math.min(size, 200));
+        org.springframework.data.domain.Pageable pageable =
+                org.springframework.data.domain.PageRequest.of(Math.max(0, page), safeSize);
+        org.springframework.data.domain.Page<com.p2plending.loan.domain.entity.FeeRevenueLedger> p =
+                feeRevenueLedgerRepository.findByIsDeletedFalseOrderByDisbursedAtDesc(pageable);
+
+        java.util.List<com.p2plending.loan.dto.response.FeeRevenueReportResponse.Item> items = p.getContent().stream()
+                .map(f -> com.p2plending.loan.dto.response.FeeRevenueReportResponse.Item.builder()
+                        .loanId(f.getLoanId())
+                        .loanCode(f.getLoanCode())
+                        .borrowerId(f.getBorrowerId())
+                        .loanAmount(f.getLoanAmount())
+                        .appraisalFeeRate(f.getAppraisalFeeRate())
+                        .appraisalFee(f.getAppraisalFee())
+                        .vatAmount(f.getVatAmount())
+                        .totalFee(f.getTotalFee())
+                        .disbursedAt(f.getDisbursedAt())
+                        .disbursedBy(f.getDisbursedBy())
+                        .build())
+                .toList();
+
+        return com.p2plending.loan.dto.response.FeeRevenueReportResponse.builder()
+                .totalCount(feeRevenueLedgerRepository.countByIsDeletedFalse())
+                .totalAppraisalFee(feeRevenueLedgerRepository.sumAppraisalFee())
+                .totalVat(feeRevenueLedgerRepository.sumVatAmount())
+                .totalFeeRevenue(feeRevenueLedgerRepository.sumTotalFee())
+                .page(p.getNumber())
+                .size(p.getSize())
+                .totalPages(p.getTotalPages())
+                .items(items)
                 .build();
     }
 
