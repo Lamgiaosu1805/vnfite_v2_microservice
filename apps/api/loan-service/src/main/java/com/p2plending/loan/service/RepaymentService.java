@@ -824,14 +824,22 @@ public class RepaymentService {
                 if (s.isSettled()) continue;
                 if (s.getDueDate().isBefore(today)) {
                     int dpd = (int) ChronoUnit.DAYS.between(s.getDueDate(), today);
+                    // Số ngày tăng thêm từ lần sweep trước — thường = 1; > 1 nếu sweep bị skip một ngày.
+                    // Cộng dồn phí theo delta để phí tích lũy chính xác ngay cả khi remainingDue thay đổi
+                    // giữa các lần sweep (partial payment). Không tính lại từ đầu × dpd vì sẽ sai sau khi
+                    // borrower trả bớt một phần (fee mới < fee cũ → max đóng băng sai hướng).
+                    int prevDpd = s.getDpd() != null ? s.getDpd() : 0;
+                    int deltaDpd = dpd - prevDpd;
                     s.setDpd(dpd);
                     s.setStatus(RepaymentStatus.OVERDUE);
-                    // Phí phạt theo dpd. KHÔNG cho giảm: phí đã phát sinh thì giữ nguyên (max với mức cũ),
-                    // nếu không khi borrower trả hết gốc+lãi (remainingDue=0) lần quét sau sẽ tính ra 0 và
-                    // xóa mất phí phạt còn nợ. Lấy max nên cũng luôn ≥ phần phí đã trả.
-                    BigDecimal fee = computeLateFee(s.getRemainingDue(), loan.getInterestRate(), lateFeeRate, dpd);
-                    BigDecimal current = s.getLateFee() != null ? s.getLateFee() : BigDecimal.ZERO;
-                    s.setLateFee(fee.max(current));
+                    if (deltaDpd > 0) {
+                        BigDecimal additional = computeLateFee(
+                                s.getRemainingDue(), loan.getInterestRate(), lateFeeRate, deltaDpd);
+                        BigDecimal accumulated = (s.getLateFee() != null ? s.getLateFee() : BigDecimal.ZERO)
+                                .add(additional);
+                        BigDecimal alreadyPaid = s.getLateFeePaid() != null ? s.getLateFeePaid() : BigDecimal.ZERO;
+                        s.setLateFee(accumulated.max(alreadyPaid));
+                    }
                     maxDpd = Math.max(maxDpd, dpd);
                 }
             }
