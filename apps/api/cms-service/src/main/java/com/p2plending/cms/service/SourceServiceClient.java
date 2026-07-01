@@ -847,7 +847,46 @@ public class SourceServiceClient {
                 .queryParam("size", size);
         if (loanId != null && !loanId.isBlank())     builder.queryParam("loanId", loanId);
         if (investorId != null && !investorId.isBlank()) builder.queryParam("investorId", investorId);
-        return exchangeForJson(builder.build().encode().toUri(), HttpMethod.GET, null);
+        return enrichDistributionInvestors(exchangeForJson(builder.build().encode().toUri(), HttpMethod.GET, null));
+    }
+
+    private JsonNode enrichDistributionInvestors(JsonNode page) {
+        JsonNode content = page == null ? null : page.get("content");
+        if (content == null || !content.isArray()) return page;
+
+        Set<String> investorIds = new java.util.LinkedHashSet<>();
+        content.forEach(item -> {
+            JsonNode id = item.get("investorId");
+            if (id != null && !id.isNull() && !id.asText("").isBlank()) investorIds.add(id.asText());
+        });
+
+        Map<String, JsonNode> investorMap = new HashMap<>();
+        for (String id : investorIds) {
+            try {
+                String authUrl = UriComponentsBuilder.fromHttpUrl(authServiceUrl)
+                        .path("/internal/users/{userId}")
+                        .buildAndExpand(id).toUriString();
+                investorMap.put(id, exchangeForJson(authUrl, HttpMethod.GET, null));
+            } catch (Exception e) {
+                log.warn("Không lấy được thông tin nhà đầu tư {}: {}", id, e.getMessage());
+            }
+        }
+
+        com.fasterxml.jackson.databind.node.ArrayNode enriched = objectMapper.createArrayNode();
+        content.forEach(item -> {
+            com.fasterxml.jackson.databind.node.ObjectNode merged =
+                    (com.fasterxml.jackson.databind.node.ObjectNode) item.deepCopy();
+            String id = item.path("investorId").asText(null);
+            JsonNode investor = id == null ? null : investorMap.get(id);
+            merged.put("investorName", investor == null ? "" : investor.path("fullName").asText(""));
+            merged.put("investorPhone", investor == null ? "" : investor.path("phone").asText(""));
+            enriched.add(merged);
+        });
+
+        com.fasterxml.jackson.databind.node.ObjectNode result =
+                (com.fasterxml.jackson.databind.node.ObjectNode) page.deepCopy();
+        result.set("content", enriched);
+        return result;
     }
 
     /** Giải ngân vốn cho người gọi vốn (OPS bấm trên CMS). */
