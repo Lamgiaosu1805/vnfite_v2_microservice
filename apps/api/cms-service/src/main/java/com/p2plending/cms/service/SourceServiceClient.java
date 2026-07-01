@@ -758,6 +758,15 @@ public class SourceServiceClient {
         return exchangeForJson(url, HttpMethod.GET, null);
     }
 
+    /** Báo giá tất toán trước hạn của 1 khoản (chỉ xem, không trừ tiền) — passthrough JSON từ loan-service. */
+    public JsonNode getEarlySettlementQuote(String loanId) {
+        String url = UriComponentsBuilder.fromHttpUrl(loanServiceUrl)
+                .path("/internal/loans/{loanId}/early-settlement/quote")
+                .buildAndExpand(loanId)
+                .toUriString();
+        return exchangeForJson(url, HttpMethod.GET, null);
+    }
+
     /** Sổ cái doanh thu phí — tổng + danh sách phân trang, passthrough JSON từ loan-service. */
     public JsonNode getFeeRevenueReport(int page, int size) {
         String url = UriComponentsBuilder.fromHttpUrl(loanServiceUrl)

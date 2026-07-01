@@ -186,6 +186,17 @@ public class LoanManagementController {
     }
 
     /**
+     * GET /cms/loans/{loanId}/early-settlement/quote
+     * Admin/ops xem trước báo giá tất toán sớm của 1 khoản — chỉ xem, không trừ tiền,
+     * không đổi trạng thái khoản.
+     */
+    @GetMapping("/{loanId}/early-settlement/quote")
+    public ResponseEntity<com.fasterxml.jackson.databind.JsonNode> getEarlySettlementQuote(
+            @PathVariable String loanId) {
+        return ResponseEntity.ok(loanService.getEarlySettlementQuote(loanId));
+    }
+
+    /**
      * GET /cms/loans/stats/fee-revenue
      * Sổ cái doanh thu phí thẩm định + VAT (khoản đã giải ngân) — kế toán tra soát.
      */

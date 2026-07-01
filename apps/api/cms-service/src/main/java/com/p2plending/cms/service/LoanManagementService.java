@@ -142,6 +142,11 @@ public class LoanManagementService {
         return sourceServiceClient.getEarlySettlements(page, size);
     }
 
+    /** Báo giá tất toán trước hạn của 1 khoản (chỉ xem) — passthrough JSON từ loan-service. */
+    public JsonNode getEarlySettlementQuote(String loanId) {
+        return sourceServiceClient.getEarlySettlementQuote(loanId);
+    }
+
     /** Sổ cái doanh thu phí — passthrough JSON từ loan-service. */
     public JsonNode getFeeRevenueReport(int page, int size) {
         return sourceServiceClient.getFeeRevenueReport(page, size);

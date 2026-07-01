@@ -94,6 +94,19 @@ public class InternalLoanController {
         return ResponseEntity.ok(PagedResponse.from(repaymentService.listEarlySettlements(page, size)));
     }
 
+    /**
+     * GET /internal/loans/{loanId}/early-settlement/quote
+     * CMS xem trước báo giá tất toán sớm (không trừ tiền, không đổi trạng thái khoản) —
+     * dùng để admin/ops soi số trước khi công bố hoặc tư vấn cho người gọi vốn.
+     */
+    @GetMapping("/{loanId}/early-settlement/quote")
+    public ResponseEntity<com.p2plending.loan.dto.response.EarlySettlementQuoteResponse> getEarlySettlementQuote(
+            @RequestHeader(INTERNAL_SECRET_HEADER) String secret,
+            @PathVariable String loanId) {
+        requireInternalSecret(secret);
+        return ResponseEntity.ok(repaymentService.quoteEarlySettlement(loanId));
+    }
+
     /** Sổ cái doanh thu phí — tổng + danh sách phân trang (CMS màn "Doanh thu phí"). */
     @GetMapping("/stats/fee-revenue")
     public ResponseEntity<com.p2plending.loan.dto.response.FeeRevenueReportResponse> getFeeRevenue(
