@@ -207,7 +207,7 @@ public class InternalLoanController {
 
     /** Lịch sử quét auto-debit — CMS hiển thị. */
     @GetMapping("/repayments/auto-debit-audit")
-    public ResponseEntity<java.util.List<com.p2plending.loan.domain.entity.RepaymentAutoDebitAudit>> getAutoDebitAudit(
+    public ResponseEntity<java.util.List<com.p2plending.loan.dto.response.AutoDebitSweepResponse>> getAutoDebitAudit(
             @RequestHeader(INTERNAL_SECRET_HEADER) String secret,
             @RequestParam(defaultValue = "200") int limit) {
         requireInternalSecret(secret);

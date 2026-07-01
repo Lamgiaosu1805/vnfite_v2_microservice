@@ -1064,10 +1064,28 @@ public class RepaymentService {
 
     /** Lấy lịch sử quét auto-debit (mới nhất trước) — dùng cho CMS. */
     @Transactional(readOnly = true)
-    public List<RepaymentAutoDebitAudit> getAutoDebitAuditList(int limit) {
+    public List<com.p2plending.loan.dto.response.AutoDebitSweepResponse> getAutoDebitAuditList(int limit) {
         return autoDebitAuditRepository.findAll(
                 PageRequest.of(0, Math.min(limit, 500), Sort.by("startedAt").descending()))
-                .getContent();
+                .getContent().stream()
+                .map(a -> com.p2plending.loan.dto.response.AutoDebitSweepResponse.builder()
+                        .auditId(a.getId())
+                        .triggerSource(a.getTriggerSource())
+                        .triggeredBy(a.getTriggeredBy())
+                        .startedAt(a.getStartedAt())
+                        .finishedAt(a.getFinishedAt())
+                        .scannedLoans(a.getScannedLoans())
+                        .dueLoans(a.getDueLoans())
+                        .settledFull(a.getSettledFull())
+                        .settledPartial(a.getSettledPartial())
+                        .noBalance(a.getNoBalance())
+                        .balanceError(a.getBalanceError())
+                        .noDue(a.getNoDue())
+                        .failed(a.getFailed())
+                        .amountCollected(a.getAmountCollected())
+                        .errorSummary(a.getErrorSummary())
+                        .build())
+                .toList();
     }
 
     /** Chi tiết từng khoản trong một lần quét auto-debit — dùng cho CMS. */
