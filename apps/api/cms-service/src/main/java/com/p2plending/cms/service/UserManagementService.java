@@ -17,9 +17,9 @@ public class UserManagementService {
     private final SourceServiceClient sourceServiceClient;
 
     public PagedResponse<UserSummaryResponse> getUsers(
-            String kycStatus, String role, UserAccountStatus status,
+            String kycStatus, Boolean blacklisted, String role, UserAccountStatus status,
             String search, int page, int size) {
-        return sourceServiceClient.getUsers(kycStatus, role, status, search, page, size);
+        return sourceServiceClient.getUsers(kycStatus, blacklisted, role, status, search, page, size);
     }
 
     public UserSummaryResponse getUser(String userId) {
@@ -48,5 +48,9 @@ public class UserManagementService {
 
     public void resetDevice(String userId) {
         sourceServiceClient.resetCustomerDevice(userId);
+    }
+
+    public UserSummaryResponse setBlacklist(String userId, boolean blacklisted, String reason) {
+        return sourceServiceClient.setCustomerBlacklist(userId, blacklisted, reason);
     }
 }

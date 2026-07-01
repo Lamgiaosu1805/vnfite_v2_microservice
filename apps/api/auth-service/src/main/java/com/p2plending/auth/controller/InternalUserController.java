@@ -1,6 +1,7 @@
 package com.p2plending.auth.controller;
 
 import com.p2plending.auth.domain.enums.KycStatus;
+import com.p2plending.auth.dto.request.BlacklistInternalRequest;
 import com.p2plending.auth.dto.request.KycDecisionInternalRequest;
 import com.p2plending.auth.dto.response.InternalCustomerPasswordResetResponse;
 import com.p2plending.auth.dto.response.InternalUserStatsResponse;
@@ -42,12 +43,13 @@ public class InternalUserController {
     public ResponseEntity<PagedResponse<InternalUserSummaryResponse>> getUsers(
             @RequestHeader(INTERNAL_SECRET_HEADER) String secret,
             @RequestParam(required = false) KycStatus kycStatus,
+            @RequestParam(required = false) Boolean blacklisted,
             @RequestParam(required = false) String role,
             @RequestParam(required = false) String search,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
         requireInternalSecret(secret);
-        return ResponseEntity.ok(userQueryService.getUsers(kycStatus, role, search, page, size));
+        return ResponseEntity.ok(userQueryService.getUsers(kycStatus, blacklisted, role, search, page, size));
     }
 
     @GetMapping("/{userId}")
@@ -126,6 +128,16 @@ public class InternalUserController {
         requireInternalSecret(secret);
         customerAdminService.resetDevice(userId);
         return ResponseEntity.ok(Map.of("message", "Đã đặt lại thiết bị khách hàng"));
+    }
+
+    @PostMapping("/{userId}/blacklist")
+    public ResponseEntity<InternalUserSummaryResponse> setBlacklist(
+            @RequestHeader(INTERNAL_SECRET_HEADER) String secret,
+            @PathVariable String userId,
+            @Valid @RequestBody BlacklistInternalRequest request) {
+        requireInternalSecret(secret);
+        customerAdminService.setBlacklist(userId, request.isBlacklisted(), request.getReason());
+        return ResponseEntity.ok(userQueryService.getUser(userId));
     }
 
     private void requireInternalSecret(String secret) {

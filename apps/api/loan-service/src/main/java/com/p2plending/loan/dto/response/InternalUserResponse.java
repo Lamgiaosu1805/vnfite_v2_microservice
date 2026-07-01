@@ -11,4 +11,5 @@ public class InternalUserResponse {
     private String phone;
     private String cccdNumber;
     private String kycStatus;
+    private boolean blacklisted;
 }

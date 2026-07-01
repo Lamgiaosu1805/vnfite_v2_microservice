@@ -11,8 +11,11 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import java.security.SecureRandom;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 
 @Service
 @RequiredArgsConstructor
@@ -59,6 +62,19 @@ public class InternalCustomerAdminService {
         userRepository.save(user);
         revokeSessions(user);
         log.info("CMS admin reset customer device: userId={}", userId);
+    }
+
+    @Transactional
+    public void setBlacklist(String userId, boolean blacklisted, String reason) {
+        User user = findActiveUser(userId);
+        user.setBlacklisted(blacklisted);
+        user.setBlacklistedAt(blacklisted ? LocalDateTime.now(ZoneId.of("Asia/Ho_Chi_Minh")) : null);
+        user.setBlacklistSource(blacklisted ? "CMS" : null);
+        user.setBlacklistReason(blacklisted
+                ? (StringUtils.hasText(reason) ? reason.trim() : "Thiết lập blacklist từ CMS")
+                : null);
+        userRepository.save(user);
+        log.info("CMS admin {} customer blacklist: userId={}", blacklisted ? "set" : "removed", userId);
     }
 
     private User findActiveUser(String userId) {

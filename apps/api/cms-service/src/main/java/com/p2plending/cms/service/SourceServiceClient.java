@@ -85,10 +85,11 @@ public class SourceServiceClient {
     private String internalSecret;
 
     public PagedResponse<UserSummaryResponse> getUsers(
-            String kycStatus, String role, UserAccountStatus status, String search, int page, int size) {
+            String kycStatus, Boolean blacklisted, String role, UserAccountStatus status, String search, int page, int size) {
         URI uri = UriComponentsBuilder.fromHttpUrl(authServiceUrl)
                 .path("/internal/users")
                 .queryParamIfPresent("kycStatus", Optional.ofNullable(kycStatus))
+                .queryParamIfPresent("blacklisted", Optional.ofNullable(blacklisted))
                 .queryParamIfPresent("role", Optional.ofNullable(role))
                 .queryParamIfPresent("search", Optional.ofNullable(search))
                 .queryParam("page", page)
@@ -161,6 +162,19 @@ public class SourceServiceClient {
                 .buildAndExpand(userId)
                 .toUriString();
         exchangeForJson(url, HttpMethod.POST, null);
+    }
+
+    public UserSummaryResponse setCustomerBlacklist(String userId, boolean blacklisted, String reason) {
+        String url = UriComponentsBuilder.fromHttpUrl(authServiceUrl)
+                .path("/internal/users/{userId}/blacklist")
+                .buildAndExpand(userId)
+                .toUriString();
+        Map<String, Object> body = new HashMap<>();
+        body.put("blacklisted", blacklisted);
+        if (reason != null && !reason.isBlank()) {
+            body.put("reason", reason.trim());
+        }
+        return parseUser(exchangeForJson(url, HttpMethod.POST, body));
     }
 
     private WalletSummaryResponse safeGetWallet(String userId) {
@@ -1096,6 +1110,10 @@ public class SourceServiceClient {
                 .role(text(node, "role"))
                 .kycStatus(text(node, "kycStatus"))
                 .accountStatus(parseAccountStatus(text(node, "accountStatus")))
+                .blacklisted(node.path("blacklisted").asBoolean(false))
+                .blacklistedAt(dateTime(node, "blacklistedAt"))
+                .blacklistSource(text(node, "blacklistSource"))
+                .blacklistReason(text(node, "blacklistReason"))
                 .createdAt(dateTime(node, "createdAt"))
                 .dateOfBirth(date(node, "dateOfBirth"))
                 .gender(text(node, "gender"))

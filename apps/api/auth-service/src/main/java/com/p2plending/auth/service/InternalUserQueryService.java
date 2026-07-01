@@ -39,7 +39,7 @@ public class InternalUserQueryService {
 
     @Transactional(readOnly = true)
     public PagedResponse<InternalUserSummaryResponse> getUsers(
-            KycStatus kycStatus, String role, String search, int page, int size) {
+            KycStatus kycStatus, Boolean blacklisted, String role, String search, int page, int size) {
         PageRequest pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
         String trimmedSearch = StringUtils.hasText(search) ? search.trim() : null;
         List<String> matchedKycUserIds = StringUtils.hasText(trimmedSearch)
@@ -54,6 +54,9 @@ public class InternalUserQueryService {
             }
             if (kycStatus != null) {
                 predicates = cb.and(predicates, cb.equal(root.get("kycStatus"), kycStatus));
+            }
+            if (blacklisted != null) {
+                predicates = cb.and(predicates, cb.equal(root.get("blacklisted"), blacklisted));
             }
             if (StringUtils.hasText(trimmedSearch)) {
                 String pattern = "%" + trimmedSearch.toLowerCase() + "%";
@@ -157,6 +160,10 @@ public class InternalUserQueryService {
                 .role("USER")
                 .kycStatus(user.getKycStatus())
                 .accountStatus(user.isDeleted() ? "LOCKED" : "ACTIVE")
+                .blacklisted(user.isBlacklisted())
+                .blacklistedAt(user.getBlacklistedAt())
+                .blacklistSource(user.getBlacklistSource())
+                .blacklistReason(user.getBlacklistReason())
                 .createdAt(user.getCreatedAt())
                 .dateOfBirth(kyc.map(KycSubmission::getDateOfBirth).orElse(null))
                 .gender(kyc.map(KycSubmission::getGender).map(Enum::name).orElse(null))

@@ -44,6 +44,19 @@ public class User {
     @Column(length = 20)
     private String referredBy;
 
+    @Column(name = "blacklisted", nullable = false)
+    @Builder.Default
+    private boolean blacklisted = false;
+
+    @Column(name = "blacklisted_at")
+    private LocalDateTime blacklistedAt;
+
+    @Column(name = "blacklist_source", length = 50)
+    private String blacklistSource;
+
+    @Column(name = "blacklist_reason", length = 255)
+    private String blacklistReason;
+
     /**
      * Public key (base64 X.509 SPKI) cho đăng nhập sinh trắc học theo challenge–response.
      * Private key tương ứng nằm trong Secure Enclave / Android Keystore của thiết bị,

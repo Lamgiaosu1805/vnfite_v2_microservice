@@ -18,6 +18,10 @@ public class InternalUserSummaryResponse {
     private String role;
     private KycStatus kycStatus;
     private String accountStatus;
+    private boolean blacklisted;
+    private LocalDateTime blacklistedAt;
+    private String blacklistSource;
+    private String blacklistReason;
     private LocalDateTime createdAt;
     /** Ngày sinh từ KYC đã duyệt — null nếu chưa eKYC hoặc KYC chưa APPROVED. */
     private LocalDate dateOfBirth;

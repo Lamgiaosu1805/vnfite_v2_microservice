@@ -24,6 +24,11 @@ public class KycGuardService {
                     "Vui lòng hoàn tất xác minh danh tính eKYC trước khi " + actionLabel + ".");
         }
 
+        if (user.isBlacklisted()) {
+            throw new InvalidLoanStateException(
+                    "Tài khoản của bạn hiện không đủ điều kiện đăng ký gọi vốn. Vui lòng liên hệ VNFITE để được hỗ trợ.");
+        }
+
         return user;
     }
 }

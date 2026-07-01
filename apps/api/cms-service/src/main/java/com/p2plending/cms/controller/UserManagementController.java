@@ -2,6 +2,7 @@ package com.p2plending.cms.controller;
 
 import com.p2plending.cms.domain.enums.UserAccountStatus;
 import com.p2plending.cms.dto.request.KycDecisionRequest;
+import com.p2plending.cms.dto.request.UserBlacklistRequest;
 import com.p2plending.cms.dto.request.UserStatusRequest;
 import com.p2plending.cms.dto.response.CustomerDetailResponse;
 import com.p2plending.cms.dto.response.PagedResponse;
@@ -25,12 +26,13 @@ public class UserManagementController {
     @GetMapping
     public ResponseEntity<PagedResponse<UserSummaryResponse>> getUsers(
             @RequestParam(required = false) String kycStatus,
+            @RequestParam(required = false) Boolean blacklisted,
             @RequestParam(required = false) String role,
             @RequestParam(required = false) UserAccountStatus status,
             @RequestParam(required = false) String search,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        return ResponseEntity.ok(userService.getUsers(kycStatus, role, status, search, page, size));
+        return ResponseEntity.ok(userService.getUsers(kycStatus, blacklisted, role, status, search, page, size));
     }
 
     @GetMapping("/{userId}")
@@ -80,5 +82,13 @@ public class UserManagementController {
     public ResponseEntity<Void> resetDevice(@PathVariable String userId) {
         userService.resetDevice(userId);
         return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/{userId}/blacklist")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN')")
+    public ResponseEntity<UserSummaryResponse> setBlacklist(
+            @PathVariable String userId,
+            @Valid @RequestBody UserBlacklistRequest request) {
+        return ResponseEntity.ok(userService.setBlacklist(userId, request.isBlacklisted(), request.getReason()));
     }
 }
