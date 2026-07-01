@@ -365,25 +365,26 @@ class RepaymentAccountingTest {
     @Test
     void earlySettlementQuote_currentPeriodProRate_futurePeriodsFree() {
         LoanRequest loan = repayingLoan("loan-1");
+        // Mới dùng vốn 12 ngày trong kỳ hạn ~97 ngày → < 2/3 → phí tất toán ÁP DỤNG.
+        loan.setDisbursedAt(LocalDateTime.now().minusDays(12));
+
+        // Dùng ngày tương đối để test tất định (không phụ thuộc ngày chạy fixture).
+        LocalDate due1 = LocalDate.now().minusDays(5);   // kỳ 1 đã trả, là mốc bắt đầu kỳ 2
+        LocalDate due2 = LocalDate.now().plusDays(25);    // kỳ 2 đang chạy (start=due1 < today)
+        LocalDate due3 = LocalDate.now().plusDays(55);    // hoàn toàn tương lai
+        LocalDate due4 = LocalDate.now().plusDays(85);    // hoàn toàn tương lai
+
         // Kỳ 1: đã PAID
-        RepaymentSchedule paid = pendingSchedule("s1", 1, LocalDate.of(2026, 2, 20),
-                INTEREST_P1, PRINCIPAL_PER_KY);
+        RepaymentSchedule paid = pendingSchedule("s1", 1, due1, INTEREST_P1, PRINCIPAL_PER_KY);
         paid.setStatus(RepaymentStatus.PAID);
         paid.setInterestPaid(INTEREST_P1);
         paid.setPrincipalPaid(PRINCIPAL_PER_KY);
         paid.setPaidAmount(INTEREST_P1.add(PRINCIPAL_PER_KY));
 
-        // Kỳ 2: 20/02 → 20/03, hôm nay giả định là 01/03 (9 ngày vào kỳ, 19 ngày còn lại)
-        // Trong test, today = LocalDate.now() — dùng kỳ future rõ ràng để tránh timezone issue
-        // Ta đặt dueDate kỳ 2 xa trong tương lai để luôn là kỳ "đang chạy"
-        LocalDate futureDue2 = LocalDate.now().plusDays(15);   // chưa đến hạn
-        LocalDate futureDue3 = futureDue2.plusMonths(1);       // hoàn toàn tương lai
-        LocalDate futureDue4 = futureDue3.plusMonths(1);
-
-        RepaymentSchedule s2 = pendingSchedule("s2", 2, futureDue2, INTEREST_P2, PRINCIPAL_PER_KY);
-        RepaymentSchedule s3 = pendingSchedule("s3", 3, futureDue3,
+        RepaymentSchedule s2 = pendingSchedule("s2", 2, due2, INTEREST_P2, PRINCIPAL_PER_KY);
+        RepaymentSchedule s3 = pendingSchedule("s3", 3, due3,
                 new BigDecimal("1528767"), PRINCIPAL_PER_KY);
-        RepaymentSchedule s4 = pendingSchedule("s4", 4, futureDue4,
+        RepaymentSchedule s4 = pendingSchedule("s4", 4, due4,
                 new BigDecimal("1528767"), new BigDecimal("8333337")); // kỳ cuối
 
         when(loanRequestRepository.findById("loan-1")).thenReturn(Optional.of(loan));
@@ -406,7 +407,7 @@ class RepaymentAccountingTest {
         // Phí phạt = 0 (không quá hạn)
         assertThat(quote.penaltyOutstanding()).isEqualByComparingTo(BigDecimal.ZERO);
 
-        // Phí tất toán = 5% × gốc còn lại
+        // Phí tất toán = 5% × gốc còn lại (đã dùng < 2/3 kỳ hạn, và 5% > mức sàn 500k)
         BigDecimal expectedFee = expectedPrincipal.multiply(new BigDecimal("5"))
                 .divide(new BigDecimal("100"), 0, java.math.RoundingMode.HALF_UP);
         assertThat(quote.settlementFee()).isEqualByComparingTo(expectedFee);
@@ -425,6 +426,8 @@ class RepaymentAccountingTest {
     @Test
     void earlySettlementQuote_overdueCurrentPeriod_fullInterestAndPenalty() {
         LoanRequest loan = repayingLoan("loan-1");
+        // Khoản chỉ 1 kỳ, đã quá hạn → đã dùng vốn vượt kỳ hạn (≥ 2/3) → MIỄN phí tất toán.
+        loan.setDisbursedAt(LocalDateTime.now().minusDays(35));
         BigDecimal intPenalty  = new BigDecimal("2000");
         BigDecimal prinPenalty = new BigDecimal("30000");
 
@@ -457,15 +460,80 @@ class RepaymentAccountingTest {
         // Gốc = toàn bộ kỳ 1
         assertThat(quote.remainingPrincipal()).isEqualByComparingTo(PRINCIPAL_PER_KY);
 
-        // Total = gốc + lãi đủ + phí + 5% fee
-        BigDecimal fee = PRINCIPAL_PER_KY.multiply(new BigDecimal("0.05"))
-                .setScale(0, java.math.RoundingMode.HALF_UP);
-        assertThat(quote.settlementFee()).isEqualByComparingTo(fee);
+        // Phí tất toán = 0 (đã dùng vốn vượt kỳ hạn → miễn phí theo hợp đồng)
+        assertThat(quote.settlementFee()).isEqualByComparingTo(BigDecimal.ZERO);
+        // Total = gốc + lãi đủ + phí phạt (không có phí tất toán)
         assertThat(quote.totalPayoff())
                 .isEqualByComparingTo(PRINCIPAL_PER_KY
                         .add(INTEREST_P1)
-                        .add(intPenalty.add(prinPenalty))
-                        .add(fee));
+                        .add(intPenalty.add(prinPenalty)));
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // 11. Tất toán sớm: đã dùng vốn ≥ 2/3 kỳ hạn → MIỄN phí (theo hợp đồng)
+    // ═══════════════════════════════════════════════════════════════════════
+
+    @Test
+    void earlySettlementQuote_usedTwoThirdsOfTerm_feeWaived() {
+        LoanRequest loan = repayingLoan("loan-1");
+        // Đã dùng vốn 80 ngày, kỳ hạn còn tới hạn cuối +20 ngày → tổng ~100 ngày, tỷ lệ 0.8 ≥ 2/3.
+        loan.setDisbursedAt(LocalDateTime.now().minusDays(80));
+
+        LocalDate due1 = LocalDate.now().minusDays(5);   // kỳ 1 đã trả (mốc bắt đầu kỳ 2)
+        LocalDate due2 = LocalDate.now().plusDays(20);    // kỳ cuối, còn trong tương lai gần
+
+        RepaymentSchedule paid = pendingSchedule("s1", 1, due1, INTEREST_P1, PRINCIPAL_PER_KY);
+        paid.setStatus(RepaymentStatus.PAID);
+        paid.setInterestPaid(INTEREST_P1);
+        paid.setPrincipalPaid(PRINCIPAL_PER_KY);
+        paid.setPaidAmount(INTEREST_P1.add(PRINCIPAL_PER_KY));
+
+        RepaymentSchedule s2 = pendingSchedule("s2", 2, due2, INTEREST_P2, PRINCIPAL_PER_KY);
+
+        when(loanRequestRepository.findById("loan-1")).thenReturn(Optional.of(loan));
+        when(scheduleRepository.findByLoanIdAndIsDeletedFalseOrderByPeriodNumberAsc("loan-1"))
+                .thenReturn(List.of(paid, s2));
+        when(earlySettlementRepository.existsByLoanIdAndIsDeletedFalse("loan-1")).thenReturn(false);
+
+        EarlySettlementQuoteResponse quote = service.quoteEarlySettlement("loan-1");
+
+        // Còn gốc kỳ 2 để tất toán, nhưng phí = 0 vì đã dùng ≥ 2/3 kỳ hạn
+        assertThat(quote.remainingPrincipal()).isEqualByComparingTo(PRINCIPAL_PER_KY);
+        assertThat(quote.settlementFee()).isEqualByComparingTo(BigDecimal.ZERO);
+        // Tổng payoff không gồm phí tất toán
+        assertThat(quote.totalPayoff())
+                .isEqualByComparingTo(PRINCIPAL_PER_KY.add(quote.interestToDate()));
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // 12. Tất toán sớm: 5% × gốc còn lại < 500k → áp mức sàn 500.000đ
+    // ═══════════════════════════════════════════════════════════════════════
+
+    @Test
+    void earlySettlementQuote_feeBelowFloor_appliesMinimumFee() {
+        LoanRequest loan = repayingLoan("loan-1");
+        loan.setDisbursedAt(LocalDateTime.now().minusDays(10));  // mới dùng vốn → < 2/3
+
+        // Gốc còn lại nhỏ: 5,000,000 → 5% = 250,000 < 500,000 → phải nâng lên mức sàn 500k
+        BigDecimal smallPrincipal = new BigDecimal("5000000");
+        LocalDate due1 = LocalDate.now().plusDays(40);   // kỳ tương lai
+        LocalDate due2 = LocalDate.now().plusDays(70);
+
+        RepaymentSchedule s1 = pendingSchedule("s1", 1, due1,
+                new BigDecimal("100000"), new BigDecimal("2500000"));
+        RepaymentSchedule s2 = pendingSchedule("s2", 2, due2,
+                new BigDecimal("100000"), new BigDecimal("2500000"));
+
+        when(loanRequestRepository.findById("loan-1")).thenReturn(Optional.of(loan));
+        when(scheduleRepository.findByLoanIdAndIsDeletedFalseOrderByPeriodNumberAsc("loan-1"))
+                .thenReturn(List.of(s1, s2));
+        when(earlySettlementRepository.existsByLoanIdAndIsDeletedFalse("loan-1")).thenReturn(false);
+
+        EarlySettlementQuoteResponse quote = service.quoteEarlySettlement("loan-1");
+
+        assertThat(quote.remainingPrincipal()).isEqualByComparingTo(smallPrincipal);
+        // 5% × 5,000,000 = 250,000 < 500,000 → áp mức sàn
+        assertThat(quote.settlementFee()).isEqualByComparingTo(new BigDecimal("500000"));
     }
 
     // ═══════════════════════════════════════════════════════════════════════

@@ -202,6 +202,10 @@ public class RepaymentService {
     private static final BigDecimal DEFAULT_LATE_FEE_RATE = new BigDecimal("150.00");
     private static final BigDecimal DEFAULT_INTEREST_PENALTY_RATE = new BigDecimal("10.00");
     private static final BigDecimal DEFAULT_EARLY_SETTLEMENT_FEE_RATE = new BigDecimal("5.00");
+    /** Ngưỡng miễn phí tất toán: đã dùng vốn ≥ 2/3 kỳ hạn thì miễn phí. */
+    private static final BigDecimal DEFAULT_EARLY_SETTLEMENT_FREE_RATIO = new BigDecimal("0.6667");
+    /** Mức phí tất toán trước hạn tối thiểu (VND) khi phí áp dụng. */
+    private static final BigDecimal DEFAULT_EARLY_SETTLEMENT_MIN_FEE = new BigDecimal("500000");
     /** 100 × 365 — mẫu số lãi flat actual/365: gốc × rate(%) × ngày / 36500. */
     private static final BigDecimal RATE_BASE_36500 = new BigDecimal("36500");
 
@@ -420,6 +424,13 @@ public class RepaymentService {
 
     // ── Tất toán trước hạn ────────────────────────────────────────
 
+    /** Danh sách tất toán sớm — CMS sổ đối soát, phân trang, mới nhất trước. */
+    @Transactional(readOnly = true)
+    public org.springframework.data.domain.Page<EarlySettlement> listEarlySettlements(int page, int size) {
+        return earlySettlementRepository.findAllByIsDeletedFalseOrderBySettledAtDesc(
+                PageRequest.of(page, size));
+    }
+
     /** Báo giá tất toán trước hạn (không trừ tiền) — app/CMS hiển thị trước khi xác nhận. */
     @Transactional(readOnly = true)
     public EarlySettlementQuoteResponse quoteEarlySettlement(String loanId) {
@@ -592,8 +603,26 @@ public class RepaymentService {
             calc.periods.add(new PeriodPayoff(s, principalOut, interestOwed, penaltyOut));
         }
 
-        calc.settlementFee = money(calc.remainingPrincipal.multiply(feeRate)
-                .divide(HUNDRED, 0, RoundingMode.HALF_UP));
+        // Phí tất toán theo hợp đồng (Phụ Lục 01):
+        //   • Đã dùng vốn ≥ ngưỡng (mặc định 2/3) kỳ hạn → MIỄN PHÍ
+        //   • Ngược lại → feeRate% × gốc còn lại, nhưng không thấp hơn mức sàn (mặc định 500.000đ)
+        LocalDate lastDueDate = schedules.isEmpty()
+                ? today : schedules.get(schedules.size() - 1).getDueDate();
+        long termDays = ChronoUnit.DAYS.between(loanStart, lastDueDate);
+        long usedDays = ChronoUnit.DAYS.between(loanStart, today);
+        BigDecimal freeRatio = resolveEarlySettlementFreeRatio(loan);
+        boolean feeWaived = termDays > 0 && BigDecimal.valueOf(usedDays)
+                .divide(BigDecimal.valueOf(termDays), 6, RoundingMode.HALF_UP)
+                .compareTo(freeRatio) >= 0;
+
+        if (feeWaived || calc.remainingPrincipal.signum() <= 0) {
+            calc.settlementFeeRate = BigDecimal.ZERO;
+            calc.settlementFee     = BigDecimal.ZERO;
+        } else {
+            BigDecimal fee = money(calc.remainingPrincipal.multiply(feeRate)
+                    .divide(HUNDRED, 0, RoundingMode.HALF_UP));
+            calc.settlementFee = money(fee.max(resolveEarlySettlementMinFee(loan)));
+        }
         calc.totalPayoff = money(calc.remainingPrincipal.add(calc.interestToDate)
                 .add(calc.penaltyOutstanding).add(calc.settlementFee));
         return calc;
@@ -606,6 +635,24 @@ public class RepaymentService {
                 .map(p -> p.getEarlySettlementFeeRate() != null
                         ? p.getEarlySettlementFeeRate() : DEFAULT_EARLY_SETTLEMENT_FEE_RATE)
                 .orElse(DEFAULT_EARLY_SETTLEMENT_FEE_RATE);
+    }
+
+    /** Ngưỡng miễn phí tất toán (tỷ lệ kỳ hạn đã dùng, mặc định 2/3) — theo sản phẩm. */
+    private BigDecimal resolveEarlySettlementFreeRatio(LoanRequest loan) {
+        if (loan.getProductId() == null) return DEFAULT_EARLY_SETTLEMENT_FREE_RATIO;
+        return loanProductService.findProductById(loan.getProductId())
+                .map(p -> p.getEarlySettlementFreeRatio() != null
+                        ? p.getEarlySettlementFreeRatio() : DEFAULT_EARLY_SETTLEMENT_FREE_RATIO)
+                .orElse(DEFAULT_EARLY_SETTLEMENT_FREE_RATIO);
+    }
+
+    /** Mức phí tất toán tối thiểu (VND, mặc định 500.000) — theo sản phẩm. */
+    private BigDecimal resolveEarlySettlementMinFee(LoanRequest loan) {
+        if (loan.getProductId() == null) return DEFAULT_EARLY_SETTLEMENT_MIN_FEE;
+        return loanProductService.findProductById(loan.getProductId())
+                .map(p -> p.getEarlySettlementMinFee() != null
+                        ? p.getEarlySettlementMinFee() : DEFAULT_EARLY_SETTLEMENT_MIN_FEE)
+                .orElse(DEFAULT_EARLY_SETTLEMENT_MIN_FEE);
     }
 
     /** Mốc bắt đầu kỳ 1 = ngày giải ngân (fallback fundedAt / hôm nay). */

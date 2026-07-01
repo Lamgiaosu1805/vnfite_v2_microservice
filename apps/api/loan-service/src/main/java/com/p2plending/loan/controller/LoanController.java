@@ -249,6 +249,19 @@ public class LoanController {
     }
 
     /**
+     * GET /api/loans/early-settlements?page=0&size=20
+     * CMS sổ tất toán sớm: danh sách tất toán trước hạn, phân trang, mới nhất trước.
+     */
+    @GetMapping("/early-settlements")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<PagedResponse<com.p2plending.loan.domain.entity.EarlySettlement>> listEarlySettlements(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size
+    ) {
+        return ResponseEntity.ok(PagedResponse.from(repaymentService.listEarlySettlements(page, size)));
+    }
+
+    /**
      * GET /api/loans/{id}/early-settlement/quote
      * Báo giá tất toán trước hạn: gốc còn lại + lãi tới ngày tất toán + phí phạt quá hạn + phí 5%.
      * Không trừ tiền — app hiển thị để người gọi vốn xác nhận trước khi tất toán.

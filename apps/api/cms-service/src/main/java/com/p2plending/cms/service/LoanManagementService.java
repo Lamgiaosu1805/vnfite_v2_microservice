@@ -137,6 +137,11 @@ public class LoanManagementService {
         return sourceServiceClient.getDistributionLog(loanId, investorId, page, size);
     }
 
+    /** Sổ tất toán trước hạn — passthrough JSON từ loan-service. */
+    public JsonNode getEarlySettlements(int page, int size) {
+        return sourceServiceClient.getEarlySettlements(page, size);
+    }
+
     /** Sổ cái doanh thu phí — passthrough JSON từ loan-service. */
     public JsonNode getFeeRevenueReport(int page, int size) {
         return sourceServiceClient.getFeeRevenueReport(page, size);

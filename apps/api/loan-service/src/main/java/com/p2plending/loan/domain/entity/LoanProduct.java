@@ -92,6 +92,16 @@ public class LoanProduct {
     @Builder.Default
     private BigDecimal earlySettlementFeeRate = new BigDecimal("5.00");
 
+    /** Ngưỡng miễn phí tất toán: nếu thời gian đã dùng vốn ≥ tỷ lệ này của kỳ hạn thì phí = 0. Mặc định 2/3 (0.6667). */
+    @Column(name = "early_settlement_free_ratio", nullable = false, precision = 5, scale = 4)
+    @Builder.Default
+    private BigDecimal earlySettlementFreeRatio = new BigDecimal("0.6667");
+
+    /** Mức phí tất toán trước hạn tối thiểu (VND) khi phí áp dụng (< ngưỡng miễn phí). Mặc định 500.000. */
+    @Column(name = "early_settlement_min_fee", nullable = false, precision = 15, scale = 2)
+    @Builder.Default
+    private BigDecimal earlySettlementMinFee = new BigDecimal("500000");
+
     /** Kiểu trả nợ áp dụng khi sinh lịch trả nợ lúc khoản vay FUNDED. */
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 40)

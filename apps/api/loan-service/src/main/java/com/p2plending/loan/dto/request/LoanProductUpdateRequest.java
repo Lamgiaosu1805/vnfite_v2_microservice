@@ -31,8 +31,20 @@ public class LoanProductUpdateRequest {
     /** Lãi suất tối đa (%/năm). Null = không giới hạn cứng. */
     private BigDecimal maxInterestRate;
 
-    /** Lãi phạt trả chậm (% của lãi suất). */
+    /** Lãi phạt GỐC quá hạn (% của lãi suất). */
     private BigDecimal lateFeeRate;
+
+    /** Phí phạt LÃI quá hạn (%/năm trên lãi chưa trả). */
+    private BigDecimal interestPenaltyRate;
+
+    /** Phí tất toán trước hạn (% gốc còn lại). */
+    private BigDecimal earlySettlementFeeRate;
+
+    /** Ngưỡng miễn phí tất toán (tỷ lệ kỳ hạn đã dùng, ví dụ 0.6667 = 2/3). */
+    private BigDecimal earlySettlementFreeRatio;
+
+    /** Mức phí tất toán tối thiểu (VND). */
+    private BigDecimal earlySettlementMinFee;
 
     /** Thứ tự hiển thị. */
     private Integer sortOrder;

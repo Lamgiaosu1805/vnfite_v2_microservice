@@ -175,6 +175,17 @@ public class LoanManagementController {
     }
 
     /**
+     * GET /cms/loans/early-settlements?page=0&size=20
+     * Sổ tất toán trước hạn — CMS đối soát doanh thu phí tất toán.
+     */
+    @GetMapping("/early-settlements")
+    public ResponseEntity<com.fasterxml.jackson.databind.JsonNode> getEarlySettlements(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        return ResponseEntity.ok(loanService.getEarlySettlements(page, size));
+    }
+
+    /**
      * GET /cms/loans/stats/fee-revenue
      * Sổ cái doanh thu phí thẩm định + VAT (khoản đã giải ngân) — kế toán tra soát.
      */

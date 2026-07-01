@@ -50,6 +50,10 @@ public class LoanProductService {
                         .orElse(""));
         product.setMaxInterestRate(req.getMaxInterestRate());
         if (req.getLateFeeRate() != null) product.setLateFeeRate(req.getLateFeeRate());
+        if (req.getInterestPenaltyRate() != null) product.setInterestPenaltyRate(req.getInterestPenaltyRate());
+        if (req.getEarlySettlementFeeRate() != null) product.setEarlySettlementFeeRate(req.getEarlySettlementFeeRate());
+        if (req.getEarlySettlementFreeRatio() != null) product.setEarlySettlementFreeRatio(req.getEarlySettlementFreeRatio());
+        if (req.getEarlySettlementMinFee() != null) product.setEarlySettlementMinFee(req.getEarlySettlementMinFee());
         if (req.getSortOrder() != null) product.setSortOrder(req.getSortOrder());
         if (req.getActive() != null) product.setActive(req.getActive());
 
@@ -78,6 +82,10 @@ public class LoanProductService {
                 .imageUrl(p.getImageUrl())
                 .maxInterestRate(p.getMaxInterestRate())
                 .lateFeeRate(p.getLateFeeRate())
+                .interestPenaltyRate(p.getInterestPenaltyRate())
+                .earlySettlementFeeRate(p.getEarlySettlementFeeRate())
+                .earlySettlementFreeRatio(p.getEarlySettlementFreeRatio())
+                .earlySettlementMinFee(p.getEarlySettlementMinFee())
                 .sortOrder(p.getSortOrder())
                 .build();
     }

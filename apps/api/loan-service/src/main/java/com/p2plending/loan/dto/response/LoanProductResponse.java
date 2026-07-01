@@ -29,7 +29,15 @@ public class LoanProductResponse {
     private String imageUrl;
     /** Lãi suất tối đa (%/năm) — null = CMS quyết định */
     private BigDecimal maxInterestRate;
-    /** Lãi phạt trả chậm (% của lãi suất hiện tại) */
+    /** Lãi phạt GỐC quá hạn (% của lãi suất hiện tại), mặc định 150 */
     private BigDecimal lateFeeRate;
+    /** Phí phạt LÃI quá hạn (%/năm trên lãi chưa trả), mặc định 10 */
+    private BigDecimal interestPenaltyRate;
+    /** Phí tất toán trước hạn (% gốc còn lại), mặc định 5 */
+    private BigDecimal earlySettlementFeeRate;
+    /** Ngưỡng miễn phí tất toán (tỷ lệ kỳ hạn đã dùng, mặc định 0.6667 = 2/3) */
+    private BigDecimal earlySettlementFreeRatio;
+    /** Mức phí tất toán tối thiểu (VND), mặc định 500.000 */
+    private BigDecimal earlySettlementMinFee;
     private int sortOrder;
 }

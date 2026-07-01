@@ -84,6 +84,16 @@ public class InternalLoanController {
         return ResponseEntity.ok(loanService.getLoanStats(from));
     }
 
+    /** Sổ tất toán trước hạn — CMS màn "Tất toán sớm", phân trang, mới nhất trước. */
+    @GetMapping("/early-settlements")
+    public ResponseEntity<PagedResponse<com.p2plending.loan.domain.entity.EarlySettlement>> listEarlySettlements(
+            @RequestHeader(INTERNAL_SECRET_HEADER) String secret,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        requireInternalSecret(secret);
+        return ResponseEntity.ok(PagedResponse.from(repaymentService.listEarlySettlements(page, size)));
+    }
+
     /** Sổ cái doanh thu phí — tổng + danh sách phân trang (CMS màn "Doanh thu phí"). */
     @GetMapping("/stats/fee-revenue")
     public ResponseEntity<com.p2plending.loan.dto.response.FeeRevenueReportResponse> getFeeRevenue(
