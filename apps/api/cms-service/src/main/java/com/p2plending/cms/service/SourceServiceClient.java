@@ -790,6 +790,16 @@ public class SourceServiceClient {
         return exchangeForJson(url, HttpMethod.GET, null);
     }
 
+    /** Chi tiết từng khoản trong một lần quét auto-debit, đã enrich thông tin người gọi vốn. */
+    public JsonNode getAutoDebitAuditItems(String auditId) {
+        String url = UriComponentsBuilder.fromHttpUrl(loanServiceUrl)
+                .path("/internal/loans/repayments/auto-debit-audit/{auditId}/items")
+                .buildAndExpand(auditId)
+                .toUriString();
+        JsonNode items = exchangeForJson(url, HttpMethod.GET, null);
+        return enrichBorrowers(items);
+    }
+
     /** Danh sách kỳ trả nợ đến hạn theo ngày, đã enrich thông tin người gọi vốn. */
     public JsonNode getDueTodaySchedules(String date) {
         UriComponentsBuilder builder = UriComponentsBuilder.fromHttpUrl(loanServiceUrl)
@@ -797,16 +807,18 @@ public class SourceServiceClient {
         if (date != null && !date.isBlank()) builder.queryParam("date", date);
         String url = builder.build().toUriString();
         JsonNode items = exchangeForJson(url, HttpMethod.GET, null);
+        return enrichBorrowers(items);
+    }
+
+    private JsonNode enrichBorrowers(JsonNode items) {
         if (items == null || !items.isArray()) return items;
 
-        // Collect unique borrower IDs
         Set<String> borrowerIds = new java.util.LinkedHashSet<>();
         items.forEach(item -> {
             JsonNode bid = item.get("borrowerId");
-            if (bid != null && !bid.isNull()) borrowerIds.add(bid.asText());
+            if (bid != null && !bid.isNull() && !bid.asText("").isBlank()) borrowerIds.add(bid.asText());
         });
 
-        // Fetch borrower info (phone + fullName) for each unique borrower
         Map<String, JsonNode> borrowerMap = new HashMap<>();
         for (String bid : borrowerIds) {
             try {
@@ -819,21 +831,14 @@ public class SourceServiceClient {
             }
         }
 
-        // Merge borrower info into each item
-        com.fasterxml.jackson.databind.node.ArrayNode enriched =
-                objectMapper.createArrayNode();
+        com.fasterxml.jackson.databind.node.ArrayNode enriched = objectMapper.createArrayNode();
         items.forEach(item -> {
             com.fasterxml.jackson.databind.node.ObjectNode merged =
                     (com.fasterxml.jackson.databind.node.ObjectNode) item.deepCopy();
             String bid = item.path("borrowerId").asText(null);
-            if (bid != null && borrowerMap.containsKey(bid)) {
-                JsonNode borrow = borrowerMap.get(bid);
-                merged.put("borrowerPhone",    borrow.path("phone").asText(""));
-                merged.put("borrowerFullName", borrow.path("fullName").asText(""));
-            } else {
-                merged.put("borrowerPhone", "");
-                merged.put("borrowerFullName", "");
-            }
+            JsonNode borrow = bid == null ? null : borrowerMap.get(bid);
+            merged.put("borrowerPhone", borrow == null ? "" : borrow.path("phone").asText(""));
+            merged.put("borrowerFullName", borrow == null ? "" : borrow.path("fullName").asText(""));
             enriched.add(merged);
         });
         return enriched;

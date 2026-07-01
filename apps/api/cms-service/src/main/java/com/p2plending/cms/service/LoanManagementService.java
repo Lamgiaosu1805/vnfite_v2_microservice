@@ -132,6 +132,11 @@ public class LoanManagementService {
         return sourceServiceClient.getAutoDebitAudit(limit);
     }
 
+    /** Chi tiết từng khoản trong một lần quét auto-debit. */
+    public JsonNode getAutoDebitAuditItems(String auditId) {
+        return sourceServiceClient.getAutoDebitAuditItems(auditId);
+    }
+
     /** Log phân bổ nhà đầu tư (thuế TNCN) — passthrough JSON từ loan-service. */
     public JsonNode getDistributionLog(String loanId, String investorId, int page, int size) {
         return sourceServiceClient.getDistributionLog(loanId, investorId, page, size);

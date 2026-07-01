@@ -214,6 +214,15 @@ public class InternalLoanController {
         return ResponseEntity.ok(repaymentService.getAutoDebitAuditList(limit));
     }
 
+    /** Chi tiết từng khoản trong một lần quét auto-debit — CMS hiển thị khi bấm vào lịch sử. */
+    @GetMapping("/repayments/auto-debit-audit/{auditId}/items")
+    public ResponseEntity<java.util.List<com.p2plending.loan.domain.entity.RepaymentAutoDebitAuditItem>> getAutoDebitAuditItems(
+            @RequestHeader(INTERNAL_SECRET_HEADER) String secret,
+            @PathVariable String auditId) {
+        requireInternalSecret(secret);
+        return ResponseEntity.ok(repaymentService.getAutoDebitAuditItems(auditId));
+    }
+
     /** Danh sách kỳ trả nợ đến hạn theo ngày — CMS theo dõi ai đã/chưa trả. */
     @GetMapping("/repayments/due-today")
     public ResponseEntity<List<com.p2plending.loan.dto.response.DueTodayItem>> getDueTodayList(

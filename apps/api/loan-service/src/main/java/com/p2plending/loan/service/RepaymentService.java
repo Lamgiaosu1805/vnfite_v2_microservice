@@ -23,6 +23,7 @@ import com.p2plending.loan.domain.repository.LoanOfferRepository;
 import com.p2plending.loan.domain.repository.LoanRequestRepository;
 import com.p2plending.loan.domain.repository.PendingInvestorCreditRepository;
 import com.p2plending.loan.domain.repository.RepaymentAutoDebitAuditRepository;
+import com.p2plending.loan.domain.repository.RepaymentAutoDebitAuditItemRepository;
 import com.p2plending.loan.domain.repository.RepaymentScheduleRepository;
 import com.p2plending.loan.domain.repository.RepaymentTransactionRepository;
 import com.p2plending.loan.dto.request.RecordPaymentRequest;
@@ -89,6 +90,7 @@ public class RepaymentService {
     private final InvestorDistributionLogRepository distributionLogRepository;
     private final EarlySettlementRepository         earlySettlementRepository;
     private final RepaymentAutoDebitAuditRepository autoDebitAuditRepository;
+    private final RepaymentAutoDebitAuditItemRepository autoDebitAuditItemRepository;
     private final LoanProductService               loanProductService;
     private final RepaymentScheduleGenerator       generator;
     private final PaymentServiceClient             paymentServiceClient;
@@ -775,6 +777,7 @@ public class RepaymentService {
             return AutoDebitLoanResult.builder()
                     .loanId(loan.getId())
                     .loanCode(loan.getLoanCode())
+                    .borrowerId(loan.getBorrowerId())
                     .status(AutoDebitLoanResultStatus.NO_DUE)
                     .amountCollected(BigDecimal.ZERO)
                     .message("Chưa có kỳ đến hạn")
@@ -790,6 +793,7 @@ public class RepaymentService {
             return AutoDebitLoanResult.builder()
                     .loanId(loan.getId())
                     .loanCode(loan.getLoanCode())
+                    .borrowerId(loan.getBorrowerId())
                     .status(AutoDebitLoanResultStatus.BALANCE_ERROR)
                     .amountCollected(BigDecimal.ZERO)
                     .message("Không lấy được số dư ví")
@@ -812,6 +816,7 @@ public class RepaymentService {
             return AutoDebitLoanResult.builder()
                     .loanId(loan.getId())
                     .loanCode(loan.getLoanCode())
+                    .borrowerId(loan.getBorrowerId())
                     .status(AutoDebitLoanResultStatus.NO_BALANCE)
                     .amountCollected(BigDecimal.ZERO)
                     .message("Ví không có số dư khả dụng")
@@ -823,6 +828,7 @@ public class RepaymentService {
             return AutoDebitLoanResult.builder()
                     .loanId(loan.getId())
                     .loanCode(loan.getLoanCode())
+                    .borrowerId(loan.getBorrowerId())
                     .status(AutoDebitLoanResultStatus.NO_BALANCE)
                     .amountCollected(BigDecimal.ZERO)
                     .message("Số dư khả dụng sau làm tròn không đủ để thu")
@@ -833,6 +839,7 @@ public class RepaymentService {
         return AutoDebitLoanResult.builder()
                 .loanId(loan.getId())
                 .loanCode(loan.getLoanCode())
+                .borrowerId(loan.getBorrowerId())
                 .status(settledFull
                         ? AutoDebitLoanResultStatus.SETTLED_FULL
                         : AutoDebitLoanResultStatus.SETTLED_PARTIAL)
@@ -1061,6 +1068,12 @@ public class RepaymentService {
         return autoDebitAuditRepository.findAll(
                 PageRequest.of(0, Math.min(limit, 500), Sort.by("startedAt").descending()))
                 .getContent();
+    }
+
+    /** Chi tiết từng khoản trong một lần quét auto-debit — dùng cho CMS. */
+    @Transactional(readOnly = true)
+    public List<com.p2plending.loan.domain.entity.RepaymentAutoDebitAuditItem> getAutoDebitAuditItems(String auditId) {
+        return autoDebitAuditItemRepository.findByAuditIdAndIsDeletedFalseOrderByCreatedAtAsc(auditId);
     }
 
     /** Lấy log phân bổ nhà đầu tư có phân trang và lọc theo loanId/investorId — dùng cho CMS. */

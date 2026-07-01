@@ -5,5 +5,6 @@ public enum AutoDebitLoanResultStatus {
     NO_BALANCE,
     BALANCE_ERROR,
     SETTLED_FULL,
-    SETTLED_PARTIAL
+    SETTLED_PARTIAL,
+    FAILED
 }

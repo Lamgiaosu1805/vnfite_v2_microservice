@@ -162,6 +162,16 @@ public class LoanManagementController {
     }
 
     /**
+     * GET /cms/loans/repayments/auto-debit-audit/{auditId}/items
+     * Chi tiết từng khoản trong một lần quét auto-debit.
+     */
+    @GetMapping("/repayments/auto-debit-audit/{auditId}/items")
+    public ResponseEntity<com.fasterxml.jackson.databind.JsonNode> getAutoDebitAuditItems(
+            @PathVariable String auditId) {
+        return ResponseEntity.ok(loanService.getAutoDebitAuditItems(auditId));
+    }
+
+    /**
      * GET /cms/loans/repayments/distribution-log
      * Log phân bổ nhà đầu tư: gốc/lãi/phí phạt/thuế TNCN/net — kế toán tra soát.
      */

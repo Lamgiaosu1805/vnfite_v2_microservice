@@ -11,6 +11,7 @@ import java.math.BigDecimal;
 public class AutoDebitLoanResult {
     private String loanId;
     private String loanCode;
+    private String borrowerId;
     private AutoDebitLoanResultStatus status;
     private BigDecimal amountCollected;
     private String message;

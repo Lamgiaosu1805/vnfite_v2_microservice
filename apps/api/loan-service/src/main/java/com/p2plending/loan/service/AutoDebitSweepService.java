@@ -1,7 +1,9 @@
 package com.p2plending.loan.service;
 
 import com.p2plending.loan.domain.entity.RepaymentAutoDebitAudit;
+import com.p2plending.loan.domain.entity.RepaymentAutoDebitAuditItem;
 import com.p2plending.loan.domain.enums.AutoDebitLoanResultStatus;
+import com.p2plending.loan.domain.repository.RepaymentAutoDebitAuditItemRepository;
 import com.p2plending.loan.domain.repository.RepaymentAutoDebitAuditRepository;
 import com.p2plending.loan.dto.response.AutoDebitLoanResult;
 import com.p2plending.loan.dto.response.AutoDebitSweepResponse;
@@ -24,6 +26,7 @@ public class AutoDebitSweepService {
 
     private final RepaymentService repaymentService;
     private final RepaymentAutoDebitAuditRepository auditRepository;
+    private final RepaymentAutoDebitAuditItemRepository auditItemRepository;
 
     public AutoDebitSweepResponse runSweep(String triggerSource, String triggeredBy) {
         LocalDateTime startedAt = LocalDateTime.now(TZ);
@@ -38,6 +41,7 @@ public class AutoDebitSweepService {
         int failed = 0;
         BigDecimal amountCollected = BigDecimal.ZERO;
         List<String> errors = new ArrayList<>();
+        List<AutoDebitLoanResult> itemResults = new ArrayList<>();
 
         log.info("Auto-debit sweep triggered: source={} by={} loans={}",
                 triggerSource, triggeredBy, loanIds.size());
@@ -45,6 +49,7 @@ public class AutoDebitSweepService {
         for (String loanId : loanIds) {
             try {
                 AutoDebitLoanResult result = repaymentService.autoDebitLoan(loanId);
+                itemResults.add(result);
                 if (result.getStatus() != AutoDebitLoanResultStatus.NO_DUE) {
                     dueLoans++;
                 }
@@ -63,6 +68,12 @@ public class AutoDebitSweepService {
                 }
             } catch (Exception e) {
                 failed++;
+                itemResults.add(AutoDebitLoanResult.builder()
+                        .loanId(loanId)
+                        .status(AutoDebitLoanResultStatus.FAILED)
+                        .amountCollected(BigDecimal.ZERO)
+                        .message(e.getMessage() != null ? e.getMessage() : "unknown")
+                        .build());
                 if (errors.size() < 5) {
                     errors.add(loanId + ": " + (e.getMessage() != null ? e.getMessage() : "unknown"));
                 }
@@ -92,6 +103,18 @@ public class AutoDebitSweepService {
                 .amountCollected(amountCollected)
                 .errorSummary(errorSummary)
                 .build());
+
+        auditItemRepository.saveAll(itemResults.stream()
+                .map(result -> RepaymentAutoDebitAuditItem.builder()
+                        .auditId(audit.getId())
+                        .loanId(result.getLoanId())
+                        .loanCode(result.getLoanCode())
+                        .borrowerId(result.getBorrowerId())
+                        .resultStatus(result.getStatus())
+                        .amountCollected(result.getAmountCollected() != null ? result.getAmountCollected() : BigDecimal.ZERO)
+                        .message(result.getMessage())
+                        .build())
+                .toList());
 
         log.info("Auto-debit sweep done: audit={} scanned={} due={} full={} partial={} noBalance={} balanceError={} failed={} amount={}",
                 audit.getId(), loanIds.size(), dueLoans, settledFull, settledPartial,
