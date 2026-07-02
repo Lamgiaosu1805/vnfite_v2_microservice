@@ -749,15 +749,22 @@ public class SourceServiceClient {
         return exchangeForJson(url, HttpMethod.POST, null);
     }
 
-    /** Chạy ngay job thu nợ tự động từ ví người gọi vốn (CMS bấm tay). */
+    /**
+     * Chạy ngay job thu nợ tự động từ ví người gọi vốn (CMS bấm tay).
+     *
+     * <p>Dùng {@code .toUri()} + overload nhận {@link URI} (không phải {@code String}) — nếu build
+     * ra String đã encode rồi truyền cho {@code RestTemplate.exchange(String, ...)}, RestTemplate sẽ
+     * encode lại lần nữa (dấu '%' bị coi là ký tự thường), khiến giá trị tiếng Việt như "Quản trị..."
+     * bị lưu lại dạng double-encode nửa vời ở phía nhận.
+     */
     public JsonNode autoDebitSweep(String triggeredBy) {
-        String url = UriComponentsBuilder.fromHttpUrl(loanServiceUrl)
+        URI uri = UriComponentsBuilder.fromHttpUrl(loanServiceUrl)
                 .path("/internal/loans/repayments/auto-debit-sweep")
                 .queryParam("triggeredBy", triggeredBy)
                 .build()
                 .encode()
-                .toUriString();
-        return exchangeForJson(url, HttpMethod.POST, null);
+                .toUri();
+        return exchangeForJson(uri, HttpMethod.POST, null);
     }
 
     /** Sổ tất toán trước hạn — passthrough JSON từ loan-service. */
