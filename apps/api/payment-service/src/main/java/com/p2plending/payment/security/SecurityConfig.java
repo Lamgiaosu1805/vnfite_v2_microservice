@@ -29,6 +29,7 @@ public class SecurityConfig {
                         .requestMatchers("/internal/**").permitAll()
                         // Callback từ TIKLUY (deposit notification)
                         .requestMatchers("/notification/save-by-ms-account").permitAll()
+                        .requestMatchers("/transaction-management/add-transaction-by-ms-account").permitAll()
                         // Actuator
                         .requestMatchers("/actuator/health", "/actuator/info").permitAll()
                         // Mọi endpoint khác yêu cầu JWT
