@@ -2,6 +2,7 @@ package com.p2plending.payment.event;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.p2plending.payment.domain.enums.WalletOwnerType;
 import com.p2plending.payment.domain.repository.WalletRepository;
 import com.p2plending.payment.service.WalletService;
 import lombok.RequiredArgsConstructor;
@@ -34,7 +35,7 @@ public class KycApprovedConsumer {
             String cccdNumber  = event.path("cccdNumber").asText(null);
 
             // Idempotent: bỏ qua nếu ví đã được tạo (vd sync call từ CMS đã tạo rồi)
-            if (walletRepository.existsByUserId(userId)) {
+            if (walletRepository.existsByUserIdAndOwnerTypeAndIsDeletedFalse(userId, WalletOwnerType.PERSONAL)) {
                 log.debug("kyc.approved: wallet đã tồn tại cho userId={}, bỏ qua", userId);
                 return;
             }

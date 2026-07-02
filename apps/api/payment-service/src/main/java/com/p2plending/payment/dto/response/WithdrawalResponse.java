@@ -14,6 +14,7 @@ public class WithdrawalResponse {
 
     private String id;
     private String userId;
+    private String ownerType;
     /** Số điện thoại khách hàng — chỉ có trong monitoring endpoint (enriched từ auth-service) */
     private String customerPhone;
     /** Họ tên khách hàng — chỉ có trong monitoring endpoint */
@@ -38,6 +39,7 @@ public class WithdrawalResponse {
         return WithdrawalResponse.builder()
                 .id(wr.getId())
                 .userId(wr.getUserId())
+                .ownerType(wr.getOwnerType().name())
                 .amount(wr.getAmount())
                 .status(wr.getStatus())
                 .statusLabel(toLabel(wr.getStatus()))

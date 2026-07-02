@@ -10,6 +10,7 @@ import java.time.LocalDateTime;
 @Builder
 public class WalletResponse {
     private String walletId;
+    private String ownerType;
     private String vnfAccountNo;
     private BigDecimal totalBalance;
     private BigDecimal lockedBalance;

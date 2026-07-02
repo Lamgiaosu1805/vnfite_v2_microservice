@@ -5,6 +5,7 @@ import com.p2plending.loan.config.CacheConfig;
 import com.p2plending.loan.domain.entity.EarlySettlement;
 import com.p2plending.loan.domain.entity.InvestorDistributionLog;
 import com.p2plending.loan.domain.entity.LoanOffer;
+import com.p2plending.loan.domain.entity.LoanProduct;
 import com.p2plending.loan.domain.entity.LoanRequest;
 import com.p2plending.loan.domain.entity.PendingInvestorCredit;
 import com.p2plending.loan.domain.entity.RepaymentAutoDebitAudit;
@@ -15,6 +16,7 @@ import com.p2plending.loan.domain.enums.OfferStatus;
 import com.p2plending.loan.domain.enums.AutoDebitLoanResultStatus;
 import com.p2plending.loan.domain.enums.PaymentChannel;
 import com.p2plending.loan.domain.enums.PendingCreditStatus;
+import com.p2plending.loan.domain.enums.ProductCategory;
 import com.p2plending.loan.domain.enums.RepaymentMethod;
 import com.p2plending.loan.domain.enums.RepaymentStatus;
 import com.p2plending.loan.domain.repository.EarlySettlementRepository;
@@ -482,7 +484,7 @@ public class RepaymentService {
         String borrowerRef = "EARLY-OUT-" + loanId;
 
         // 1) Trừ ví borrower MỘT lần cho toàn bộ payoff (fail-closed: ví thiếu → ném → rollback)
-        paymentServiceClient.debitRepayment(loan.getBorrowerId(), calc.totalPayoff,
+        paymentServiceClient.debitRepayment(loan.getBorrowerId(), borrowerWalletOwnerType(loan), calc.totalPayoff,
                 "Tất toán trước hạn khoản %s".formatted(loan.getLoanCode()), borrowerRef);
 
         // 2) Áp vào từng kỳ chưa trả + phân bổ NĐT; miễn lãi các kỳ tương lai
@@ -786,7 +788,7 @@ public class RepaymentService {
 
         BigDecimal available;
         try {
-            available = paymentServiceClient.getAvailableBalance(loan.getBorrowerId());
+            available = paymentServiceClient.getAvailableBalance(loan.getBorrowerId(), borrowerWalletOwnerType(loan));
         } catch (Exception e) {
             log.warn("Auto-debit loan {}: không lấy được số dư ví borrower {}: {}",
                     loanId, loan.getBorrowerId(), e.getMessage());
@@ -871,7 +873,7 @@ public class RepaymentService {
         String borrowerRef = "REPAY-OUT-" + baseRef;
 
         // 1) Trừ ví người gọi vốn (fail-closed: ví thiếu → ném → rollback toàn bộ)
-        paymentServiceClient.debitRepayment(loan.getBorrowerId(), payAmount,
+        paymentServiceClient.debitRepayment(loan.getBorrowerId(), borrowerWalletOwnerType(loan), payAmount,
                 "Trả nợ kỳ %d khoản %s".formatted(period.getPeriodNumber(), loan.getLoanCode()),
                 borrowerRef);
 
@@ -1295,6 +1297,17 @@ public class RepaymentService {
 
     private BigDecimal money(BigDecimal value) {
         return value == null ? BigDecimal.ZERO : value.setScale(0, RoundingMode.HALF_UP);
+    }
+
+    private String borrowerWalletOwnerType(LoanRequest loan) {
+        if (loan.getProductId() == null || loan.getProductId().isBlank()) {
+            return "PERSONAL";
+        }
+        return loanProductService.findProductById(loan.getProductId())
+                .map(LoanProduct::getCategory)
+                .filter(category -> category == ProductCategory.BUSINESS || category == ProductCategory.ENTERPRISE)
+                .map(category -> "BUSINESS")
+                .orElse("PERSONAL");
     }
 
     private RepaymentScheduleResponse toResponse(RepaymentSchedule s) {

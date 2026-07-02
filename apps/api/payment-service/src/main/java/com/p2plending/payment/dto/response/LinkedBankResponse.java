@@ -7,6 +7,7 @@ import lombok.Data;
 @Builder
 public class LinkedBankResponse {
     private String id;
+    private String ownerType;
     private String bankCode;
     private String bankName;
     private String bankAccountNo;

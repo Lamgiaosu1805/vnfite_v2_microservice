@@ -11,6 +11,7 @@ import com.p2plending.loan.domain.entity.LoanProduct;
 import com.p2plending.loan.domain.entity.LoanRequest;
 import com.p2plending.loan.domain.enums.LoanStatus;
 import com.p2plending.loan.domain.enums.OfferStatus;
+import com.p2plending.loan.domain.enums.ProductCategory;
 import com.p2plending.loan.domain.repository.FeeRevenueLedgerRepository;
 import com.p2plending.loan.domain.repository.LoanDocumentRepository;
 import com.p2plending.loan.domain.repository.LoanOfferRepository;
@@ -371,9 +372,16 @@ public class LoanService {
         String feeNote = isNewLoan
                 ? " (đã trừ phí thẩm định %,.0f VNĐ)".formatted(loan.getTotalFee())
                 : "";
-        paymentServiceClient.creditBorrower(loan.getBorrowerId(), netAmount,
-                "Nhận tiền giải ngân khoản vay " + loan.getLoanCode() + feeNote,
-                "CREDIT-BORROWER-" + loanId);
+        String borrowerWalletOwnerType = borrowerWalletOwnerType(loan);
+        String borrowerCreditDescription = "Nhận tiền giải ngân khoản gọi vốn " + loan.getLoanCode() + feeNote;
+        String borrowerCreditReference = "CREDIT-BORROWER-" + loanId;
+        if ("BUSINESS".equals(borrowerWalletOwnerType)) {
+            paymentServiceClient.creditBorrower(loan.getBorrowerId(), borrowerWalletOwnerType, netAmount,
+                    borrowerCreditDescription, borrowerCreditReference);
+        } else {
+            paymentServiceClient.creditBorrower(loan.getBorrowerId(), netAmount,
+                    borrowerCreditDescription, borrowerCreditReference);
+        }
 
         // Hạch toán doanh thu phí vào sổ cái (chỉ khoản mới có thu phí). Tiền phí thực tế đọng ở
         // tài khoản tổng VNFITE — bảng này chỉ ghi sổ. Idempotent theo loanId: retry không ghi trùng.
@@ -402,6 +410,17 @@ public class LoanService {
 
         log.info("Loan {} disbursed by {} — schedule generated, loan.disbursed published", loanId, disbursedBy);
         return buildResponse(loan, false);
+    }
+
+    private String borrowerWalletOwnerType(LoanRequest loan) {
+        if (loan.getProductId() == null || loan.getProductId().isBlank()) {
+            return "PERSONAL";
+        }
+        return loanProductService.findProductById(loan.getProductId())
+                .map(LoanProduct::getCategory)
+                .filter(category -> category == ProductCategory.BUSINESS || category == ProductCategory.ENTERPRISE)
+                .map(category -> "BUSINESS")
+                .orElse("PERSONAL");
     }
 
     // ── Hết hạn gọi vốn / ký khế ước (scheduler) ──────────────────

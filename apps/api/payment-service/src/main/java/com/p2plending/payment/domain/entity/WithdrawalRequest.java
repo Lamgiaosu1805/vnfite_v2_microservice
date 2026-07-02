@@ -1,5 +1,6 @@
 package com.p2plending.payment.domain.entity;
 
+import com.p2plending.payment.domain.enums.WalletOwnerType;
 import com.p2plending.payment.domain.enums.WithdrawalStatus;
 import jakarta.persistence.*;
 import lombok.*;
@@ -24,6 +25,11 @@ public class WithdrawalRequest {
 
     @Column(name = "user_id", nullable = false, length = 36)
     private String userId;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "owner_type", nullable = false, length = 20)
+    @Builder.Default
+    private WalletOwnerType ownerType = WalletOwnerType.PERSONAL;
 
     @Column(name = "wallet_id", nullable = false, length = 36)
     private String walletId;

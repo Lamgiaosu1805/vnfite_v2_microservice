@@ -46,9 +46,17 @@ public class PaymentServiceClient {
 
     /** Số dư khả dụng của ví nhà đầu tư. Lỗi/không kết nối được → ném InvalidLoanStateException. */
     public BigDecimal getAvailableBalance(String userId) {
+        return getAvailableBalance(userId, "PERSONAL");
+    }
+
+    public BigDecimal getAvailableBalance(String userId, String ownerType) {
         try {
+            URI uri = UriComponentsBuilder
+                    .fromHttpUrl(paymentBaseUrl + "/internal/payment/wallet/" + userId)
+                    .queryParam("ownerType", ownerType)
+                    .build().encode().toUri();
             ResponseEntity<WalletBalanceResponse> resp = restTemplate.exchange(
-                    paymentBaseUrl + "/internal/payment/wallet/" + userId,
+                    uri,
                     HttpMethod.GET,
                     new HttpEntity<>(authHeaders()),
                     WalletBalanceResponse.class);
@@ -99,6 +107,12 @@ public class PaymentServiceClient {
         post(userId, "repay-debit", amount, description, referenceId, "Không thể trừ tiền trả nợ từ ví.");
     }
 
+    public void debitRepayment(String userId, String ownerType, BigDecimal amount,
+                               String description, String referenceId) {
+        post(userId, "repay-debit", ownerType, amount, description, referenceId,
+                "Không thể trừ tiền trả nợ từ ví.");
+    }
+
     /**
      * Cộng ví nhà đầu tư khi nhận hoàn trả (vế CỘNG của chuyển nội bộ).
      * referenceId (vd "REPAY-IN-{...}-{offerId}") để idempotent, chống cộng trùng khi retry.
@@ -115,11 +129,23 @@ public class PaymentServiceClient {
         post(userId, "credit-disbursement", amount, description, referenceId, "Không thể cộng tiền giải ngân vào ví người gọi vốn.");
     }
 
+    public void creditBorrower(String userId, String ownerType, BigDecimal amount,
+                               String description, String referenceId) {
+        post(userId, "credit-disbursement", ownerType, amount, description, referenceId,
+                "Không thể cộng tiền giải ngân vào ví người gọi vốn.");
+    }
+
 
     private void post(String userId, String action, BigDecimal amount, String description,
                       String referenceId, String fallback) {
+        post(userId, action, "PERSONAL", amount, description, referenceId, fallback);
+    }
+
+    private void post(String userId, String action, String ownerType, BigDecimal amount, String description,
+                      String referenceId, String fallback) {
         UriComponentsBuilder builder = UriComponentsBuilder
                 .fromHttpUrl(paymentBaseUrl + "/internal/payment/wallet/" + userId + "/" + action)
+                .queryParam("ownerType", ownerType)
                 .queryParam("amount", amount.toPlainString())
                 .queryParam("description", description);
         if (referenceId != null) {

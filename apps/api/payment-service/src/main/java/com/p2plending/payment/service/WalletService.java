@@ -5,6 +5,7 @@ import com.p2plending.payment.domain.entity.Wallet;
 import com.p2plending.payment.domain.entity.WalletTransaction;
 import com.p2plending.payment.domain.enums.TransactionStatus;
 import com.p2plending.payment.domain.enums.TransactionType;
+import com.p2plending.payment.domain.enums.WalletOwnerType;
 import com.p2plending.payment.domain.repository.WalletRepository;
 import com.p2plending.payment.domain.repository.WalletTransactionRepository;
 import com.p2plending.payment.dto.response.TransactionResponse;
@@ -42,7 +43,17 @@ public class WalletService {
 
     @Transactional
     public WalletResponse createWallet(String userId, String fullName, String cccdNumber) {
-        if (walletRepository.existsByUserId(userId)) {
+        return createWallet(userId, WalletOwnerType.PERSONAL, fullName, cccdNumber);
+    }
+
+    @Transactional
+    public WalletResponse createBusinessWallet(String userId, String businessName, String taxCode) {
+        return createWallet(userId, WalletOwnerType.BUSINESS, businessName, taxCode);
+    }
+
+    @Transactional
+    public WalletResponse createWallet(String userId, WalletOwnerType ownerType, String displayName, String identityNo) {
+        if (walletRepository.existsByUserIdAndOwnerTypeAndIsDeletedFalse(userId, ownerType)) {
             throw new IllegalStateException("Wallet đã tồn tại cho user " + userId);
         }
 
@@ -50,15 +61,17 @@ public class WalletService {
         String accNo;
 
         if (appProperties.getPayment().isMock()) {
-            accNo = "VNF" + String.format("%010d", Math.abs(userId.hashCode() % 9_999_999_999L));
+            accNo = "VNF" + String.format("%010d",
+                    Math.abs((userId + ":" + ownerType.name()).hashCode() % 9_999_999_999L));
             log.info("txnId={} [MOCK] Tạo VNF account mock: {}", txnId, accNo);
         } else {
-            accNo = tikluyClient.createAccount(txnId, fullName, cccdNumber);
+            accNo = tikluyClient.createAccount(txnId, displayName, identityNo);
             log.info("txnId={} Đã tạo VNF account từ TIKLUY: {}", txnId, accNo);
         }
 
         Wallet wallet = walletRepository.save(Wallet.builder()
                 .userId(userId)
+                .ownerType(ownerType)
                 .vnfAccountNo(accNo)
                 .lockedBalance(BigDecimal.ZERO)
                 .build());
@@ -70,7 +83,12 @@ public class WalletService {
 
     @Transactional
     public WalletResponse linkExistingAccount(String userId, String vnfAccountNo) {
-        return walletRepository.findByUserIdAndIsDeletedFalse(userId)
+        return linkExistingAccount(userId, WalletOwnerType.PERSONAL, vnfAccountNo);
+    }
+
+    @Transactional
+    public WalletResponse linkExistingAccount(String userId, WalletOwnerType ownerType, String vnfAccountNo) {
+        return walletRepository.findByUserIdAndOwnerTypeAndIsDeletedFalse(userId, ownerType)
                 .map(this::toResponse)
                 .orElseGet(() -> {
                     String txnId = "MIGRATE-" + UUID.randomUUID();
@@ -91,6 +109,7 @@ public class WalletService {
 
                     Wallet wallet = walletRepository.save(Wallet.builder()
                             .userId(userId)
+                            .ownerType(ownerType)
                             .vnfAccountNo(vnfAccountNo)
                             .lockedBalance(lockedBalance)
                             .build());
@@ -103,13 +122,23 @@ public class WalletService {
 
     @Transactional(readOnly = true)
     public WalletResponse getWallet(String userId) {
-        Wallet wallet = findByUser(userId);
+        return getWallet(userId, WalletOwnerType.PERSONAL);
+    }
+
+    @Transactional(readOnly = true)
+    public WalletResponse getWallet(String userId, WalletOwnerType ownerType) {
+        Wallet wallet = findByUser(userId, ownerType);
         return toResponse(wallet);
     }
 
     @Transactional(readOnly = true)
     public Page<TransactionResponse> getTransactions(String userId, int page, int size) {
-        Wallet wallet = findByUser(userId);
+        return getTransactions(userId, WalletOwnerType.PERSONAL, page, size);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<TransactionResponse> getTransactions(String userId, WalletOwnerType ownerType, int page, int size) {
+        Wallet wallet = findByUser(userId, ownerType);
         PageRequest pageable = PageRequest.of(page, size);
         return transactionRepository
                 .findByWalletIdAndIsDeletedFalseOrderByCreatedAtDesc(wallet.getId(), pageable)
@@ -224,13 +253,19 @@ public class WalletService {
 
     @Transactional
     public void lockAmount(String userId, BigDecimal amount, String description, String referenceId) {
+        lockAmount(userId, WalletOwnerType.PERSONAL, amount, description, referenceId);
+    }
+
+    @Transactional
+    public void lockAmount(String userId, WalletOwnerType ownerType, BigDecimal amount,
+                           String description, String referenceId) {
         amount = money(amount);
         if (referenceId != null && transactionRepository.existsByReferenceId(referenceId)) {
             log.warn("Idempotent lock skip: referenceId={} đã xử lý", referenceId);
             return;
         }
 
-        Wallet wallet = walletRepository.findWithLockByUserIdAndIsDeletedFalse(userId)
+        Wallet wallet = walletRepository.findWithLockByUserIdAndOwnerTypeAndIsDeletedFalse(userId, ownerType)
                 .orElseThrow(() -> new IllegalStateException("Wallet not found for user " + userId));
         BigDecimal available = computeAvailable(wallet);
 
@@ -265,13 +300,19 @@ public class WalletService {
 
     @Transactional
     public void unlockAmount(String userId, BigDecimal amount, String description, String referenceId) {
+        unlockAmount(userId, WalletOwnerType.PERSONAL, amount, description, referenceId);
+    }
+
+    @Transactional
+    public void unlockAmount(String userId, WalletOwnerType ownerType, BigDecimal amount,
+                             String description, String referenceId) {
         amount = money(amount);
         if (referenceId != null && transactionRepository.existsByReferenceId(referenceId)) {
             log.warn("Idempotent unlock skip: referenceId={} đã xử lý", referenceId);
             return;
         }
 
-        Wallet wallet = findByUser(userId);
+        Wallet wallet = findByUser(userId, ownerType);
         BigDecimal newLocked = money(wallet.getLockedBalance().subtract(amount));
         if (newLocked.compareTo(BigDecimal.ZERO) < 0) newLocked = BigDecimal.ZERO;
 
@@ -303,13 +344,19 @@ public class WalletService {
 
     @Transactional
     public void debitInvestment(String userId, BigDecimal amount, String description, String referenceId) {
+        debitInvestment(userId, WalletOwnerType.PERSONAL, amount, description, referenceId);
+    }
+
+    @Transactional
+    public void debitInvestment(String userId, WalletOwnerType ownerType, BigDecimal amount,
+                                String description, String referenceId) {
         amount = money(amount);
         if (referenceId != null && transactionRepository.existsByReferenceId(referenceId)) {
             log.warn("Idempotent debit skip: referenceId={} đã xử lý", referenceId);
             return;
         }
 
-        Wallet wallet = findByUser(userId);
+        Wallet wallet = findByUser(userId, ownerType);
         boolean mock = appProperties.getPayment().isMock();
         BigDecimal tikluyTotal = mock ? BigDecimal.ZERO : getTikluyBalance(wallet);
 
@@ -344,13 +391,19 @@ public class WalletService {
      */
     @Transactional
     public void creditDisbursement(String userId, BigDecimal amount, String description, String referenceId) {
+        creditDisbursement(userId, WalletOwnerType.PERSONAL, amount, description, referenceId);
+    }
+
+    @Transactional
+    public void creditDisbursement(String userId, WalletOwnerType ownerType, BigDecimal amount,
+                                   String description, String referenceId) {
         amount = money(amount);
         if (referenceId != null && transactionRepository.existsByReferenceId(referenceId)) {
             log.warn("Idempotent disbursement-credit skip: referenceId={} đã xử lý", referenceId);
             return;
         }
 
-        Wallet wallet = findByUser(userId);
+        Wallet wallet = findByUser(userId, ownerType);
         boolean mock = appProperties.getPayment().isMock();
 
         if (!mock) {
@@ -378,13 +431,19 @@ public class WalletService {
      */
     @Transactional
     public void creditRepayment(String userId, BigDecimal amount, String description, String referenceId) {
+        creditRepayment(userId, WalletOwnerType.PERSONAL, amount, description, referenceId);
+    }
+
+    @Transactional
+    public void creditRepayment(String userId, WalletOwnerType ownerType, BigDecimal amount,
+                                String description, String referenceId) {
         amount = money(amount);
         if (referenceId != null && transactionRepository.existsByReferenceId(referenceId)) {
             log.warn("Idempotent repay-credit skip: referenceId={} đã xử lý", referenceId);
             return;
         }
 
-        Wallet wallet = findByUser(userId);
+        Wallet wallet = findByUser(userId, ownerType);
         boolean mock = appProperties.getPayment().isMock();
 
         // Cộng TIKLUY TRƯỚC khi ghi DB: nếu cộng thất bại (ném) thì rollback, không ghi ledger ảo.
@@ -414,13 +473,19 @@ public class WalletService {
      */
     @Transactional
     public void debitRepayment(String userId, BigDecimal amount, String description, String referenceId) {
+        debitRepayment(userId, WalletOwnerType.PERSONAL, amount, description, referenceId);
+    }
+
+    @Transactional
+    public void debitRepayment(String userId, WalletOwnerType ownerType, BigDecimal amount,
+                               String description, String referenceId) {
         amount = money(amount);
         if (referenceId != null && transactionRepository.existsByReferenceId(referenceId)) {
             log.warn("Idempotent repay-debit skip: referenceId={} đã xử lý", referenceId);
             return;
         }
 
-        Wallet wallet = findByUser(userId);
+        Wallet wallet = findByUser(userId, ownerType);
         boolean mock = appProperties.getPayment().isMock();
         BigDecimal tikluyTotal = mock ? BigDecimal.ZERO : getTikluyBalance(wallet);
         BigDecimal locked = money(wallet.getLockedBalance());
@@ -453,9 +518,13 @@ public class WalletService {
     // ─── Internal helpers ─────────────────────────────────────────────────────
 
     public Wallet findByUser(String userId) {
-        return walletRepository.findByUserIdAndIsDeletedFalse(userId)
+        return findByUser(userId, WalletOwnerType.PERSONAL);
+    }
+
+    public Wallet findByUser(String userId, WalletOwnerType ownerType) {
+        return walletRepository.findByUserIdAndOwnerTypeAndIsDeletedFalse(userId, ownerType)
                 .orElseThrow(() -> new IllegalStateException(
-                        "Wallet chưa được tạo cho user " + userId + ". KYC cần được duyệt trước."));
+                        "Wallet " + ownerType + " chưa được tạo cho user " + userId + ". KYC/hồ sơ doanh nghiệp cần được duyệt trước."));
     }
 
     /** Số dư thực từ TIKLUY (MB Bank). Mock mode trả 0. */
@@ -524,6 +593,7 @@ public class WalletService {
         BigDecimal available = computeAvailableFromProvider(info, w);
         return WalletResponse.builder()
                 .walletId(w.getId())
+                .ownerType(w.getOwnerType().name())
                 .vnfAccountNo(w.getVnfAccountNo())
                 .totalBalance(total)
                 .lockedBalance(w.getLockedBalance())

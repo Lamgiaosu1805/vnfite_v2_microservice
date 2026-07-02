@@ -1,6 +1,7 @@
 package com.p2plending.payment.domain.repository;
 
 import com.p2plending.payment.domain.entity.WithdrawalRequest;
+import com.p2plending.payment.domain.enums.WalletOwnerType;
 import com.p2plending.payment.domain.enums.WithdrawalStatus;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
@@ -20,10 +21,14 @@ public interface WithdrawalRequestRepository extends JpaRepository<WithdrawalReq
 
     /** Kiểm tra user có đang có withdrawal chưa kết thúc không */
     boolean existsByUserIdAndStatusInAndIsDeletedFalse(String userId, Set<WithdrawalStatus> statuses);
+    boolean existsByUserIdAndOwnerTypeAndStatusInAndIsDeletedFalse(
+            String userId, WalletOwnerType ownerType, Set<WithdrawalStatus> statuses);
 
     /** Lấy withdrawal đang active của user (nếu có) — dùng để khôi phục trạng thái trên app */
     Optional<WithdrawalRequest> findFirstByUserIdAndStatusInAndIsDeletedFalse(
             String userId, Set<WithdrawalStatus> statuses);
+    Optional<WithdrawalRequest> findFirstByUserIdAndOwnerTypeAndStatusInAndIsDeletedFalse(
+            String userId, WalletOwnerType ownerType, Set<WithdrawalStatus> statuses);
 
     Optional<WithdrawalRequest> findByIdAndUserIdAndIsDeletedFalse(String id, String userId);
 
@@ -56,11 +61,13 @@ public interface WithdrawalRequestRepository extends JpaRepository<WithdrawalReq
         SELECT COALESCE(SUM(w.amount), 0)
         FROM WithdrawalRequest w
         WHERE w.userId = :userId
+          AND w.ownerType = :ownerType
           AND w.status = 'COMPLETED'
           AND w.createdAt >= :startOfDay
           AND w.isDeleted = false
         """)
     BigDecimal sumCompletedAmountToday(@Param("userId") String userId,
+                                       @Param("ownerType") WalletOwnerType ownerType,
                                        @Param("startOfDay") LocalDateTime startOfDay);
 
     /** Đếm số giao dịch đã rút thành công trong ngày */
@@ -68,11 +75,13 @@ public interface WithdrawalRequestRepository extends JpaRepository<WithdrawalReq
         SELECT COUNT(w)
         FROM WithdrawalRequest w
         WHERE w.userId = :userId
+          AND w.ownerType = :ownerType
           AND w.status = 'COMPLETED'
           AND w.createdAt >= :startOfDay
           AND w.isDeleted = false
         """)
     long countCompletedToday(@Param("userId") String userId,
+                             @Param("ownerType") WalletOwnerType ownerType,
                              @Param("startOfDay") LocalDateTime startOfDay);
 
     /** Reconciliation: tìm withdrawal của ngày tra soát có providerTransferRef để kiểm tra vs MB */

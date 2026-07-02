@@ -9,6 +9,7 @@ import com.p2plending.payment.dto.response.SystemTransactionResponse;
 import com.p2plending.payment.dto.response.WalletResponse;
 import com.p2plending.payment.domain.enums.TransactionStatus;
 import com.p2plending.payment.domain.enums.TransactionType;
+import com.p2plending.payment.domain.enums.WalletOwnerType;
 import com.p2plending.payment.service.LinkedBankService;
 import com.p2plending.payment.service.TikluyClient;
 import com.p2plending.payment.service.WalletService;
@@ -132,12 +133,13 @@ public class InternalPaymentController {
     @GetMapping("/internal/payment/wallet/{userId}")
     public ResponseEntity<WalletResponse> getWallet(
             @RequestHeader(value = "X-Internal-Secret", required = false) String secret,
-            @PathVariable String userId) {
+            @PathVariable String userId,
+            @RequestParam(required = false) String ownerType) {
 
         if (!appProperties.getInternal().getSecret().equals(secret)) {
             return ResponseEntity.status(401).build();
         }
-        return ResponseEntity.ok(walletService.getWallet(userId));
+        return ResponseEntity.ok(walletService.getWallet(userId, parseOwnerType(ownerType)));
     }
 
     /** CMS xem lịch sử biến động ví: cộng/trừ tiền, đầu tư, hoàn tiền, hoàn trả... */
@@ -145,13 +147,14 @@ public class InternalPaymentController {
     public ResponseEntity<Page<TransactionResponse>> getWalletTransactions(
             @RequestHeader(value = "X-Internal-Secret", required = false) String secret,
             @PathVariable String userId,
+            @RequestParam(required = false) String ownerType,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
 
         if (!appProperties.getInternal().getSecret().equals(secret)) {
             return ResponseEntity.status(401).build();
         }
-        return ResponseEntity.ok(walletService.getTransactions(userId, page, size));
+        return ResponseEntity.ok(walletService.getTransactions(userId, parseOwnerType(ownerType), page, size));
     }
 
     /** CMS xem toàn bộ giao dịch nạp/rút của hệ thống. */
@@ -190,13 +193,14 @@ public class InternalPaymentController {
             @PathVariable String userId,
             @RequestParam BigDecimal amount,
             @RequestParam(required = false) String description,
-            @RequestParam(required = false) String referenceId) {
+            @RequestParam(required = false) String referenceId,
+            @RequestParam(required = false) String ownerType) {
 
         if (!appProperties.getInternal().getSecret().equals(secret)) {
             return ResponseEntity.status(401).body(Map.of("error", "Unauthorized"));
         }
 
-        walletService.lockAmount(userId, amount, description, referenceId);
+        walletService.lockAmount(userId, parseOwnerType(ownerType), amount, description, referenceId);
         return ResponseEntity.ok(Map.of("status", "OK"));
     }
 
@@ -207,13 +211,14 @@ public class InternalPaymentController {
             @PathVariable String userId,
             @RequestParam BigDecimal amount,
             @RequestParam(required = false) String description,
-            @RequestParam(required = false) String referenceId) {
+            @RequestParam(required = false) String referenceId,
+            @RequestParam(required = false) String ownerType) {
 
         if (!appProperties.getInternal().getSecret().equals(secret)) {
             return ResponseEntity.status(401).body(Map.of("error", "Unauthorized"));
         }
 
-        walletService.unlockAmount(userId, amount, description, referenceId);
+        walletService.unlockAmount(userId, parseOwnerType(ownerType), amount, description, referenceId);
         return ResponseEntity.ok(Map.of("status", "OK"));
     }
 
@@ -224,13 +229,14 @@ public class InternalPaymentController {
             @PathVariable String userId,
             @RequestParam BigDecimal amount,
             @RequestParam(required = false) String description,
-            @RequestParam(required = false) String referenceId) {
+            @RequestParam(required = false) String referenceId,
+            @RequestParam(required = false) String ownerType) {
 
         if (!appProperties.getInternal().getSecret().equals(secret)) {
             return ResponseEntity.status(401).body(Map.of("error", "Unauthorized"));
         }
 
-        walletService.debitInvestment(userId, amount, description, referenceId);
+        walletService.debitInvestment(userId, parseOwnerType(ownerType), amount, description, referenceId);
         return ResponseEntity.ok(Map.of("status", "OK"));
     }
 
@@ -241,13 +247,14 @@ public class InternalPaymentController {
             @PathVariable String userId,
             @RequestParam BigDecimal amount,
             @RequestParam(required = false) String description,
-            @RequestParam(required = false) String referenceId) {
+            @RequestParam(required = false) String referenceId,
+            @RequestParam(required = false) String ownerType) {
 
         if (!appProperties.getInternal().getSecret().equals(secret)) {
             return ResponseEntity.status(401).body(Map.of("error", "Unauthorized"));
         }
 
-        walletService.creditDisbursement(userId, amount, description, referenceId);
+        walletService.creditDisbursement(userId, parseOwnerType(ownerType), amount, description, referenceId);
         return ResponseEntity.ok(Map.of("status", "OK"));
     }
 
@@ -258,13 +265,14 @@ public class InternalPaymentController {
             @PathVariable String userId,
             @RequestParam BigDecimal amount,
             @RequestParam(required = false) String description,
-            @RequestParam(required = false) String referenceId) {
+            @RequestParam(required = false) String referenceId,
+            @RequestParam(required = false) String ownerType) {
 
         if (!appProperties.getInternal().getSecret().equals(secret)) {
             return ResponseEntity.status(401).body(Map.of("error", "Unauthorized"));
         }
 
-        walletService.creditRepayment(userId, amount, description, referenceId);
+        walletService.creditRepayment(userId, parseOwnerType(ownerType), amount, description, referenceId);
         return ResponseEntity.ok(Map.of("status", "OK"));
     }
 
@@ -278,13 +286,14 @@ public class InternalPaymentController {
             @PathVariable String userId,
             @RequestParam BigDecimal amount,
             @RequestParam(required = false) String description,
-            @RequestParam(required = false) String referenceId) {
+            @RequestParam(required = false) String referenceId,
+            @RequestParam(required = false) String ownerType) {
 
         if (!appProperties.getInternal().getSecret().equals(secret)) {
             return ResponseEntity.status(401).body(Map.of("error", "Unauthorized"));
         }
 
-        walletService.debitRepayment(userId, amount, description, referenceId);
+        walletService.debitRepayment(userId, parseOwnerType(ownerType), amount, description, referenceId);
         return ResponseEntity.ok(Map.of("status", "OK"));
     }
 
@@ -303,13 +312,14 @@ public class InternalPaymentController {
     public ResponseEntity<WalletResponse> linkExistingWallet(
             @RequestHeader(value = "X-Internal-Secret", required = false) String secret,
             @RequestParam String userId,
-            @RequestParam String vnfAccountNo) {
+            @RequestParam String vnfAccountNo,
+            @RequestParam(required = false) String ownerType) {
 
         if (!appProperties.getInternal().getSecret().equals(secret)) {
             return ResponseEntity.status(401).build();
         }
 
-        return ResponseEntity.ok(walletService.linkExistingAccount(userId, vnfAccountNo));
+        return ResponseEntity.ok(walletService.linkExistingAccount(userId, parseOwnerType(ownerType), vnfAccountNo));
     }
 
     /** CMS / auth-service gọi khi KYC user được duyệt → tạo ví + VA */
@@ -318,25 +328,27 @@ public class InternalPaymentController {
             @RequestHeader(value = "X-Internal-Secret", required = false) String secret,
             @RequestParam String userId,
             @RequestParam String fullName,
-            @RequestParam String cccdNumber) {
+            @RequestParam String cccdNumber,
+            @RequestParam(required = false) String ownerType) {
 
         if (!appProperties.getInternal().getSecret().equals(secret)) {
             return ResponseEntity.status(401).build();
         }
 
-        return ResponseEntity.ok(walletService.createWallet(userId, fullName, cccdNumber));
+        return ResponseEntity.ok(walletService.createWallet(userId, parseOwnerType(ownerType), fullName, cccdNumber));
     }
 
     /** Lấy danh sách bank đã liên kết (cho CMS xem) */
     @GetMapping("/internal/payment/wallet/{userId}/banks")
     public ResponseEntity<List<LinkedBankResponse>> listBanks(
             @RequestHeader(value = "X-Internal-Secret", required = false) String secret,
-            @PathVariable String userId) {
+            @PathVariable String userId,
+            @RequestParam(required = false) String ownerType) {
 
         if (!appProperties.getInternal().getSecret().equals(secret)) {
             return ResponseEntity.status(401).build();
         }
-        return ResponseEntity.ok(linkedBankService.listBanks(userId));
+        return ResponseEntity.ok(linkedBankService.listBanks(userId, parseOwnerType(ownerType)));
     }
 
     /** Mock: thêm tiền trực tiếp vào ví để test (chỉ hoạt động khi mock=true) */
@@ -344,14 +356,15 @@ public class InternalPaymentController {
     public ResponseEntity<Map<String, Object>> mockDeposit(
             @RequestHeader(value = "X-Internal-Secret", required = false) String secret,
             @PathVariable String userId,
-            @RequestParam BigDecimal amount) {
+            @RequestParam BigDecimal amount,
+            @RequestParam(required = false) String ownerType) {
 
         if (!appProperties.getInternal().getSecret().equals(secret)) {
             return ResponseEntity.status(401).body(Map.of("error", "Unauthorized"));
         }
 
         String txnId = "MOCK_DEP_" + System.currentTimeMillis();
-        WalletResponse wallet = walletService.getWallet(userId);
+        WalletResponse wallet = walletService.getWallet(userId, parseOwnerType(ownerType));
 
         // 1. Cập nhật TOTAL_MONEY trên TIKLUY để số dư live khớp
         tikluyClient.topUpAccount(txnId, wallet.getVnfAccountNo(), amount);
@@ -368,6 +381,13 @@ public class InternalPaymentController {
     private boolean isValidInternalSecret(String secret) {
         String expected = appProperties.getInternal().getSecret();
         return expected != null && !expected.isBlank() && expected.equals(secret);
+    }
+
+    private WalletOwnerType parseOwnerType(String ownerType) {
+        if (ownerType == null || ownerType.isBlank()) {
+            return WalletOwnerType.PERSONAL;
+        }
+        return WalletOwnerType.valueOf(ownerType.trim().toUpperCase());
     }
 
     private boolean isAllowedTikluyCallback(String secret, String forwardedFor, String remoteAddr) {

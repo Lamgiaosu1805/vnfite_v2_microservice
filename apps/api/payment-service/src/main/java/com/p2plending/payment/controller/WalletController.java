@@ -2,6 +2,7 @@ package com.p2plending.payment.controller;
 
 import com.p2plending.payment.domain.entity.LinkedBank;
 import com.p2plending.payment.domain.entity.WithdrawalRequest;
+import com.p2plending.payment.domain.enums.WalletOwnerType;
 import com.p2plending.payment.domain.repository.LinkedBankRepository;
 import com.p2plending.payment.dto.request.WithdrawalConfirmOtpRequest;
 import com.p2plending.payment.dto.request.WithdrawalInitiateRequest;
@@ -35,18 +36,21 @@ public class WalletController {
 
     /** Lấy thông tin ví + số dư */
     @GetMapping("/wallet")
-    public ResponseEntity<WalletResponse> getWallet(@AuthenticationPrincipal AuthenticatedUser user) {
+    public ResponseEntity<WalletResponse> getWallet(
+            @AuthenticationPrincipal AuthenticatedUser user,
+            @RequestParam(required = false) String ownerType) {
         kycGuardService.requireApproved(user.userId(), "nạp tiền");
-        return ResponseEntity.ok(walletService.getWallet(user.userId()));
+        return ResponseEntity.ok(walletService.getWallet(user.userId(), parseOwnerType(ownerType)));
     }
 
     /** Lịch sử giao dịch */
     @GetMapping("/wallet/transactions")
     public ResponseEntity<Page<TransactionResponse>> getTransactions(
             @AuthenticationPrincipal AuthenticatedUser user,
+            @RequestParam(required = false) String ownerType,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        return ResponseEntity.ok(walletService.getTransactions(user.userId(), page, size));
+        return ResponseEntity.ok(walletService.getTransactions(user.userId(), parseOwnerType(ownerType), page, size));
     }
 
     // ─── Luồng rút tiền state machine ────────────────────────────────────────
@@ -61,7 +65,7 @@ public class WalletController {
             @RequestBody @Valid WithdrawalInitiateRequest req) {
         kycGuardService.requireApproved(user.userId(), "rút tiền");
         WithdrawalRequest wr = withdrawalRequestService.initiate(
-                user.userId(), req.getAmount(), req.getLinkedBankId());
+                user.userId(), parseOwnerType(req.getOwnerType()), req.getAmount(), req.getLinkedBankId());
         return ResponseEntity.ok(Map.of(
                 "withdrawalId", wr.getId(),
                 "message", "OTP đã được gửi. Vui lòng xác nhận trong 5 phút."));
@@ -87,8 +91,9 @@ public class WalletController {
      */
     @GetMapping("/wallet/withdrawal/active")
     public ResponseEntity<WithdrawalResponse> getActiveWithdrawal(
-            @AuthenticationPrincipal AuthenticatedUser user) {
-        return withdrawalRequestService.getActiveForUser(user.userId())
+            @AuthenticationPrincipal AuthenticatedUser user,
+            @RequestParam(required = false) String ownerType) {
+        return withdrawalRequestService.getActiveForUser(user.userId(), parseOwnerType(ownerType))
                 .map(wr -> ResponseEntity.ok(toWithdrawalResponse(wr)))
                 .orElse(ResponseEntity.noContent().build());
     }
@@ -137,5 +142,12 @@ public class WalletController {
             bankAccountNo = bank.get().getBankAccountNo();
         }
         return WithdrawalResponse.from(wr, bankName, bankAccountNo);
+    }
+
+    private WalletOwnerType parseOwnerType(String ownerType) {
+        if (ownerType == null || ownerType.isBlank()) {
+            return WalletOwnerType.PERSONAL;
+        }
+        return WalletOwnerType.valueOf(ownerType.trim().toUpperCase());
     }
 }

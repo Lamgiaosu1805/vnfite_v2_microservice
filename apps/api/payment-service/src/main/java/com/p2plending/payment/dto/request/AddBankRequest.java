@@ -5,6 +5,9 @@ import lombok.Data;
 
 @Data
 public class AddBankRequest {
+    /** PERSONAL mặc định; BUSINESS dùng cho tài khoản ngân hàng doanh nghiệp. */
+    private String ownerType;
+
     @NotBlank
     private String bankCode;
     @NotBlank

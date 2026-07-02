@@ -3,6 +3,7 @@ package com.p2plending.payment.controller;
 import com.p2plending.payment.dto.request.AddBankRequest;
 import com.p2plending.payment.dto.response.BankCatalogItem;
 import com.p2plending.payment.dto.response.LinkedBankResponse;
+import com.p2plending.payment.domain.enums.WalletOwnerType;
 import com.p2plending.payment.security.AuthenticatedUser;
 import com.p2plending.payment.service.KycGuardService;
 import com.p2plending.payment.service.LinkedBankService;
@@ -25,8 +26,9 @@ public class BankController {
 
     @GetMapping
     public ResponseEntity<List<LinkedBankResponse>> listBanks(
-            @AuthenticationPrincipal AuthenticatedUser user) {
-        return ResponseEntity.ok(linkedBankService.listBanks(user.userId()));
+            @AuthenticationPrincipal AuthenticatedUser user,
+            @RequestParam(required = false) String ownerType) {
+        return ResponseEntity.ok(linkedBankService.listBanks(user.userId(), parseOwnerType(ownerType)));
     }
 
     @PostMapping
@@ -60,5 +62,12 @@ public class BankController {
         kycGuardService.requireApproved(user.userId(), "xác minh tài khoản ngân hàng");
         String name = linkedBankService.verifyBankAccount(user.userId(), bankCode, bankAccountNo);
         return ResponseEntity.ok(Map.of("accountName", name));
+    }
+
+    private WalletOwnerType parseOwnerType(String ownerType) {
+        if (ownerType == null || ownerType.isBlank()) {
+            return WalletOwnerType.PERSONAL;
+        }
+        return WalletOwnerType.valueOf(ownerType.trim().toUpperCase());
     }
 }

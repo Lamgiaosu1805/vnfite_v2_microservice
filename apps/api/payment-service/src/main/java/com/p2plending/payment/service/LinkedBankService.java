@@ -2,6 +2,7 @@ package com.p2plending.payment.service;
 
 import com.p2plending.payment.config.AppProperties;
 import com.p2plending.payment.domain.entity.LinkedBank;
+import com.p2plending.payment.domain.enums.WalletOwnerType;
 import com.p2plending.payment.domain.repository.LinkedBankRepository;
 import com.p2plending.payment.dto.request.AddBankRequest;
 import com.p2plending.payment.dto.response.BankCatalogItem;
@@ -28,8 +29,13 @@ public class LinkedBankService {
 
     @Transactional(readOnly = true)
     public List<LinkedBankResponse> listBanks(String userId) {
+        return listBanks(userId, WalletOwnerType.PERSONAL);
+    }
+
+    @Transactional(readOnly = true)
+    public List<LinkedBankResponse> listBanks(String userId, WalletOwnerType ownerType) {
         return linkedBankRepository
-                .findByUserIdAndIsDeletedFalseOrderByIsDefaultDescCreatedAtDesc(userId)
+                .findByUserIdAndOwnerTypeAndIsDeletedFalseOrderByIsDefaultDescCreatedAtDesc(userId, ownerType)
                 .stream()
                 .map(this::toResponse)
                 .toList();
@@ -37,8 +43,9 @@ public class LinkedBankService {
 
     @Transactional
     public LinkedBankResponse addBank(String userId, AddBankRequest req) {
-        if (linkedBankRepository.existsByUserIdAndBankCodeAndBankAccountNoAndIsDeletedFalse(
-                userId, req.getBankCode(), req.getBankAccountNo())) {
+        WalletOwnerType ownerType = parseOwnerType(req.getOwnerType());
+        if (linkedBankRepository.existsByUserIdAndOwnerTypeAndBankCodeAndBankAccountNoAndIsDeletedFalse(
+                userId, ownerType, req.getBankCode(), req.getBankAccountNo())) {
             throw new IllegalStateException("Tài khoản ngân hàng này đã được liên kết");
         }
 
@@ -57,17 +64,25 @@ public class LinkedBankService {
                         "Không tìm thấy số tài khoản " + req.getBankAccountNo()
                         + " tại " + req.getBankName() + ". Vui lòng kiểm tra lại.");
             }
-            validateAccountNameMatchesKyc(userId, accountName, req.getBankAccountNo());
+            if (ownerType == WalletOwnerType.PERSONAL) {
+                validateAccountNameMatchesKyc(userId, accountName, req.getBankAccountNo());
+            } else {
+                log.info("userId={} BUSINESS bank verified accountName='{}' stk={}",
+                        userId, accountName, req.getBankAccountNo());
+            }
         }
 
         if (req.isDefault()) {
-            resetDefaults(userId);
+            resetDefaults(userId, ownerType);
         }
         boolean shouldBeDefault = req.isDefault() ||
-                linkedBankRepository.findByUserIdAndIsDeletedFalseOrderByIsDefaultDescCreatedAtDesc(userId).isEmpty();
+                linkedBankRepository
+                        .findByUserIdAndOwnerTypeAndIsDeletedFalseOrderByIsDefaultDescCreatedAtDesc(userId, ownerType)
+                        .isEmpty();
 
         LinkedBank bank = linkedBankRepository.save(LinkedBank.builder()
                 .userId(userId)
+                .ownerType(ownerType)
                 .bankCode(req.getBankCode())
                 .bankName(req.getBankName())
                 .bankAccountNo(req.getBankAccountNo())
@@ -89,7 +104,8 @@ public class LinkedBankService {
 
         if (bank.isDefault()) {
             linkedBankRepository
-                    .findByUserIdAndIsDeletedFalseOrderByIsDefaultDescCreatedAtDesc(userId)
+                    .findByUserIdAndOwnerTypeAndIsDeletedFalseOrderByIsDefaultDescCreatedAtDesc(
+                            userId, bank.getOwnerType())
                     .stream().findFirst()
                     .ifPresent(b -> {
                         b.setDefault(true);
@@ -134,9 +150,9 @@ public class LinkedBankService {
         }
     }
 
-    private void resetDefaults(String userId) {
+    private void resetDefaults(String userId, WalletOwnerType ownerType) {
         linkedBankRepository
-                .findByUserIdAndIsDeletedFalseOrderByIsDefaultDescCreatedAtDesc(userId)
+                .findByUserIdAndOwnerTypeAndIsDeletedFalseOrderByIsDefaultDescCreatedAtDesc(userId, ownerType)
                 .forEach(b -> {
                     if (b.isDefault()) {
                         b.setDefault(false);
@@ -148,11 +164,19 @@ public class LinkedBankService {
     private LinkedBankResponse toResponse(LinkedBank b) {
         return LinkedBankResponse.builder()
                 .id(b.getId())
+                .ownerType(b.getOwnerType().name())
                 .bankCode(b.getBankCode())
                 .bankName(b.getBankName())
                 .bankAccountNo(b.getBankAccountNo())
                 .accountName(b.getAccountName())
                 .isDefault(b.isDefault())
                 .build();
+    }
+
+    private WalletOwnerType parseOwnerType(String ownerType) {
+        if (ownerType == null || ownerType.isBlank()) {
+            return WalletOwnerType.PERSONAL;
+        }
+        return WalletOwnerType.valueOf(ownerType.trim().toUpperCase());
     }
 }

@@ -1,5 +1,6 @@
 package com.p2plending.payment.domain.entity;
 
+import com.p2plending.payment.domain.enums.WalletOwnerType;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
@@ -22,6 +23,11 @@ public class LinkedBank {
 
     @Column(name = "user_id", nullable = false, length = 36)
     private String userId;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "owner_type", nullable = false, length = 20)
+    @Builder.Default
+    private WalletOwnerType ownerType = WalletOwnerType.PERSONAL;
 
     @Column(name = "bank_code", nullable = false, length = 20)
     private String bankCode;

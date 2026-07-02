@@ -4,6 +4,7 @@ import com.p2plending.payment.config.AppProperties;
 import com.p2plending.payment.domain.entity.*;
 import com.p2plending.payment.domain.enums.TransactionStatus;
 import com.p2plending.payment.domain.enums.TransactionType;
+import com.p2plending.payment.domain.enums.WalletOwnerType;
 import com.p2plending.payment.domain.enums.WithdrawalStatus;
 import com.p2plending.payment.domain.repository.*;
 import lombok.RequiredArgsConstructor;
@@ -74,11 +75,17 @@ public class WithdrawalRequestService {
 
     @Transactional
     public WithdrawalRequest initiate(String userId, BigDecimal amount, String linkedBankId) {
+        return initiate(userId, WalletOwnerType.PERSONAL, amount, linkedBankId);
+    }
+
+    @Transactional
+    public WithdrawalRequest initiate(String userId, WalletOwnerType ownerType,
+                                      BigDecimal amount, String linkedBankId) {
         WithdrawalTransferConfig cfg = activeConfig();
 
         // Một user chỉ được có 1 withdrawal active tại một thời điểm
-        if (withdrawalRepository.existsByUserIdAndStatusInAndIsDeletedFalse(
-                userId, WithdrawalStatus.ACTIVE)) {
+        if (withdrawalRepository.existsByUserIdAndOwnerTypeAndStatusInAndIsDeletedFalse(
+                userId, ownerType, WithdrawalStatus.ACTIVE)) {
             throw new IllegalStateException(
                     "Ngài đang có một yêu cầu rút tiền đang xử lý. Vui lòng hoàn tất hoặc thử lại sau.");
         }
@@ -95,12 +102,12 @@ public class WithdrawalRequestService {
         // Kiểm tra hạn mức ngày
         LocalDateTime startOfDay = LocalDateTime.now(ZoneId.of("Asia/Ho_Chi_Minh"))
                 .with(LocalTime.MIDNIGHT);
-        long todayCount = withdrawalRepository.countCompletedToday(userId, startOfDay);
+        long todayCount = withdrawalRepository.countCompletedToday(userId, ownerType, startOfDay);
         if (todayCount >= cfg.getMaxDailyCount()) {
             throw new IllegalStateException(
                     "Đã đạt giới hạn " + cfg.getMaxDailyCount() + " lần rút tiền trong ngày.");
         }
-        BigDecimal todayTotal = withdrawalRepository.sumCompletedAmountToday(userId, startOfDay);
+        BigDecimal todayTotal = withdrawalRepository.sumCompletedAmountToday(userId, ownerType, startOfDay);
         if (todayTotal.add(amount).compareTo(cfg.getMaxDailyTotal()) > 0) {
             throw new IllegalStateException(
                     "Số tiền rút vượt hạn mức ngày " + cfg.getMaxDailyTotal().toPlainString() + " VND.");
@@ -108,12 +115,12 @@ public class WithdrawalRequestService {
 
         // Validate tài khoản ngân hàng
         LinkedBank bank = linkedBankRepository
-                .findByIdAndUserIdAndIsDeletedFalse(linkedBankId, userId)
+                .findByIdAndUserIdAndOwnerTypeAndIsDeletedFalse(linkedBankId, userId, ownerType)
                 .orElseThrow(() -> new IllegalArgumentException(
                         "Tài khoản ngân hàng không tồn tại hoặc không thuộc về Ngài."));
 
         // Kiểm tra số dư
-        Wallet wallet = walletService.findByUser(userId);
+        Wallet wallet = walletService.findByUser(userId, ownerType);
         BigDecimal available = walletService.computeAvailable(wallet);
         if (available.compareTo(amount) < 0) {
             throw new IllegalStateException(
@@ -124,6 +131,7 @@ public class WithdrawalRequestService {
         // Tạo withdrawal request
         WithdrawalRequest wr = withdrawalRepository.save(WithdrawalRequest.builder()
                 .userId(userId)
+                .ownerType(ownerType)
                 .walletId(wallet.getId())
                 .linkedBankId(bank.getId())
                 .amount(amount)
@@ -136,7 +144,8 @@ public class WithdrawalRequestService {
         sendOtp(wr.getId(), userId);
         transition(wr, WithdrawalStatus.OTP_PENDING, "USER", userId, "Đã gửi OTP");
 
-        log.info("withdrawal.initiate withdrawalId={} userId={} amount={}", wr.getId(), userId, amount);
+        log.info("withdrawal.initiate withdrawalId={} userId={} ownerType={} amount={}",
+                wr.getId(), userId, ownerType, amount);
         return wr;
     }
 
@@ -193,13 +202,13 @@ public class WithdrawalRequestService {
 
         // Khóa ví bằng PESSIMISTIC_WRITE — cùng cơ chế với luồng đầu tư (lockAmount),
         // để rút tiền và đầu tư cùng nối hàng đợi khóa, chống lost-update làm lệch lockedBalance.
-        Wallet wallet = walletRepository.findWithLockByUserIdAndIsDeletedFalse(userId)
+        Wallet wallet = walletRepository.findWithLockByUserIdAndOwnerTypeAndIsDeletedFalse(userId, wr.getOwnerType())
                 .orElseThrow(() -> new IllegalStateException("Wallet không tồn tại."));
 
         // Re-check DƯỚI KHÓA: không cho 2 lệnh rút của cùng user cùng đi qua bước lock tiền
         // (chặn race của check "1 active" ở initiate vốn không có ràng buộc DB).
-        if (withdrawalRepository.existsByUserIdAndStatusInAndIsDeletedFalse(
-                userId, Set.of(WithdrawalStatus.FUNDS_LOCKED,
+        if (withdrawalRepository.existsByUserIdAndOwnerTypeAndStatusInAndIsDeletedFalse(
+                userId, wr.getOwnerType(), Set.of(WithdrawalStatus.FUNDS_LOCKED,
                         WithdrawalStatus.TRANSFER_INITIATED,
                         WithdrawalStatus.PROCESSING))) {
             throw new IllegalStateException("Đã có một lệnh rút tiền khác đang được xử lý.");
@@ -282,7 +291,7 @@ public class WithdrawalRequestService {
                     "Chuyển tiền thành công. FT=" + ftNumber);
             // TIKLUY/MB đã trừ tiền thật khỏi VA → giải phóng phần đã khóa (tiền đã rời ví).
             // Nếu KHÔNG bỏ lock ở đây, lockedBalance phình vĩnh viễn → tiền nạp sau bị "vô hình".
-            releaseLock(wr.getUserId(), wr.getAmount());
+            releaseLock(wr.getUserId(), wr.getOwnerType(), wr.getAmount());
             updateWalletTxnStatus(wr, TransactionStatus.SUCCESS);
             log.info("withdrawal.completed withdrawalId={} transferRef={} FT={}", wr.getId(), transferRef, ftNumber);
             return Optional.empty();
@@ -384,7 +393,7 @@ public class WithdrawalRequestService {
             wr.setMbFtNumber(ftNumber);
             transition(wr, WithdrawalStatus.COMPLETED, "ADMIN", adminId,
                     "Ops xác minh ĐÃ chuyển. FT=" + ftNumber + (note != null ? ". " + note : ""));
-            releaseLock(wr.getUserId(), wr.getAmount());
+            releaseLock(wr.getUserId(), wr.getOwnerType(), wr.getAmount());
             updateWalletTxnStatus(wr, TransactionStatus.SUCCESS);
             log.warn("withdrawal.resolved.sent withdrawalId={} adminId={} FT={}", wr.getId(), adminId, ftNumber);
         } else {
@@ -616,7 +625,7 @@ public class WithdrawalRequestService {
     }
 
     private void releaseFunds(WithdrawalRequest wr, String reason) {
-        releaseLock(wr.getUserId(), wr.getAmount());
+        releaseLock(wr.getUserId(), wr.getOwnerType(), wr.getAmount());
         transition(wr, WithdrawalStatus.FUNDS_RELEASED, "SYSTEM", "SYSTEM",
                 "Mở khóa " + wr.getAmount() + " VND. Lý do: " + reason);
         log.info("withdrawal.fundsReleased withdrawalId={} amount={}", wr.getId(), wr.getAmount());
@@ -627,8 +636,8 @@ public class WithdrawalRequestService {
      * tiền rời ví khi success (COMPLETED) và hoàn về ví khi fail (FUNDS_RELEASED).
      * Phải khóa row để không đua với luồng đầu tư/rút khác.
      */
-    private void releaseLock(String userId, BigDecimal amount) {
-        Wallet wallet = walletRepository.findWithLockByUserIdAndIsDeletedFalse(userId).orElse(null);
+    private void releaseLock(String userId, WalletOwnerType ownerType, BigDecimal amount) {
+        Wallet wallet = walletRepository.findWithLockByUserIdAndOwnerTypeAndIsDeletedFalse(userId, ownerType).orElse(null);
         if (wallet == null) return;
         BigDecimal newLocked = wallet.getLockedBalance().subtract(amount);
         wallet.setLockedBalance(newLocked.compareTo(BigDecimal.ZERO) < 0 ? BigDecimal.ZERO : newLocked);
@@ -756,8 +765,13 @@ public class WithdrawalRequestService {
      */
     @Transactional(readOnly = true)
     public Optional<WithdrawalRequest> getActiveForUser(String userId) {
-        return withdrawalRepository.findFirstByUserIdAndStatusInAndIsDeletedFalse(
-                userId, WithdrawalStatus.ACTIVE);
+        return getActiveForUser(userId, WalletOwnerType.PERSONAL);
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<WithdrawalRequest> getActiveForUser(String userId, WalletOwnerType ownerType) {
+        return withdrawalRepository.findFirstByUserIdAndOwnerTypeAndStatusInAndIsDeletedFalse(
+                userId, ownerType, WithdrawalStatus.ACTIVE);
     }
 
     private WithdrawalTransferConfig activeConfig() {
