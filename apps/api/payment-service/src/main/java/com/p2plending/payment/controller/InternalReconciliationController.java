@@ -33,11 +33,12 @@ public class InternalReconciliationController {
     public ResponseEntity<ReconciliationSessionResponse> runReconciliation(
             @RequestHeader("X-Internal-Secret") String secret,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
-            @RequestParam(defaultValue = "system") String runBy) {
+            @RequestParam(defaultValue = "system") String runBy,
+            @RequestParam(defaultValue = "false") boolean autoFixDeposits) {
         checkSecret(secret);
         LocalDate reconDate = date != null ? date : LocalDate.now(java.time.ZoneId.of("Asia/Ho_Chi_Minh"));
-        log.info("Reconciliation triggered by={} date={}", runBy, reconDate);
-        var session = reconciliationService.runReconciliation(reconDate, runBy);
+        log.info("Reconciliation triggered by={} date={} autoFixDeposits={}", runBy, reconDate, autoFixDeposits);
+        var session = reconciliationService.runReconciliation(reconDate, runBy, autoFixDeposits);
         return ResponseEntity.ok(ReconciliationSessionResponse.from(session));
     }
 
@@ -82,6 +83,16 @@ public class InternalReconciliationController {
             @RequestBody Map<String, String> body) {
         checkSecret(secret);
         reconciliationService.markItemInvestigating(itemId, body.getOrDefault("updatedBy", "ops"));
+        return ResponseEntity.ok().build();
+    }
+
+    @PostMapping("/items/{itemId}/backfill-deposit")
+    public ResponseEntity<Void> backfillDeposit(
+            @RequestHeader("X-Internal-Secret") String secret,
+            @PathVariable String itemId,
+            @RequestBody Map<String, String> body) {
+        checkSecret(secret);
+        reconciliationService.backfillMissingDeposit(itemId, body.getOrDefault("resolvedBy", "ops"));
         return ResponseEntity.ok().build();
     }
 }

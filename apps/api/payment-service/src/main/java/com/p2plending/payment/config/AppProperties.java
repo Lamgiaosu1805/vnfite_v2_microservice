@@ -14,6 +14,7 @@ public class AppProperties {
     private Otp otp = new Otp();
     private Payment payment = new Payment();
     private Tikluy tikluy = new Tikluy();
+    private Reconciliation reconciliation = new Reconciliation();
     private Auth auth = new Auth();
     private VnfOtp vnfOtp = new VnfOtp();
 
@@ -62,6 +63,21 @@ public class AppProperties {
             private String secret;
             /** Comma-separated exact IP allowlist. Empty keeps current TIKLUY flow compatible. */
             private String allowedIps = "";
+        }
+    }
+
+    @Data
+    public static class Reconciliation {
+        private boolean autoDepositFixEnabled = false;
+        private TikluyDb tikluyDb = new TikluyDb();
+
+        @Data
+        public static class TikluyDb {
+            private String host = "";
+            private int port = 3306;
+            private String database = "VNF_ACCOUNT_MANAGEMENT";
+            private String username = "";
+            private String password = "";
         }
     }
 }

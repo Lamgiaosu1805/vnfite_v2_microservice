@@ -1302,11 +1302,12 @@ public class SourceServiceClient {
 
     // ─── Reconciliation ───────────────────────────────────────────────────────
 
-    public JsonNode runReconciliation(LocalDate date, String runBy) {
+    public JsonNode runReconciliation(LocalDate date, String runBy, boolean autoFixDeposits) {
         URI uri = UriComponentsBuilder.fromHttpUrl(paymentServiceUrl)
                 .path("/internal/reconciliation/run")
                 .queryParam("date", date.toString())
                 .queryParam("runBy", runBy)
+                .queryParam("autoFixDeposits", autoFixDeposits)
                 .build()
                 .encode()
                 .toUri();
@@ -1355,6 +1356,16 @@ public class SourceServiceClient {
         var body = new java.util.LinkedHashMap<String, String>();
         body.put("updatedBy", updatedBy);
         exchangeForJson(uri, HttpMethod.PUT, body);
+    }
+
+    public void backfillMissingDeposit(String itemId, String resolvedBy) {
+        URI uri = UriComponentsBuilder.fromHttpUrl(paymentServiceUrl)
+                .path("/internal/reconciliation/items/{itemId}/backfill-deposit")
+                .buildAndExpand(itemId)
+                .toUri();
+        var body = new java.util.LinkedHashMap<String, String>();
+        body.put("resolvedBy", resolvedBy);
+        exchangeForJson(uri, HttpMethod.POST, body);
     }
 
     private UserAccountStatus parseAccountStatus(String value) {

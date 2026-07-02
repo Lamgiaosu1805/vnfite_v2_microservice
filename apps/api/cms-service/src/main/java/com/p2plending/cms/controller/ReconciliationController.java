@@ -24,10 +24,11 @@ public class ReconciliationController {
     @PostMapping("/run")
     public ResponseEntity<JsonNode> run(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+            @RequestParam(defaultValue = "false") boolean autoFixDeposits,
             @AuthenticationPrincipal CmsPrincipal principal) {
         LocalDate reconDate = date != null ? date : LocalDate.now(java.time.ZoneId.of("Asia/Ho_Chi_Minh"));
         String runBy = principal != null ? principal.displayName() : "ops";
-        return ResponseEntity.ok(sourceServiceClient.runReconciliation(reconDate, runBy));
+        return ResponseEntity.ok(sourceServiceClient.runReconciliation(reconDate, runBy, autoFixDeposits));
     }
 
     @GetMapping("/sessions")
@@ -62,6 +63,15 @@ public class ReconciliationController {
             @AuthenticationPrincipal CmsPrincipal principal) {
         String updatedBy = principal != null ? principal.displayName() : "ops";
         sourceServiceClient.markReconciliationItemInvestigating(itemId, updatedBy);
+        return ResponseEntity.ok().build();
+    }
+
+    @PostMapping("/items/{itemId}/backfill-deposit")
+    public ResponseEntity<Void> backfillDeposit(
+            @PathVariable String itemId,
+            @AuthenticationPrincipal CmsPrincipal principal) {
+        String resolvedBy = principal != null ? principal.displayName() : "ops";
+        sourceServiceClient.backfillMissingDeposit(itemId, resolvedBy);
         return ResponseEntity.ok().build();
     }
 }

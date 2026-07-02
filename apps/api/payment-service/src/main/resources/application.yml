@@ -90,6 +90,14 @@ app:
     callback:
       secret: ${TIKLUY_CALLBACK_SECRET:}
       allowed-ips: ${TIKLUY_CALLBACK_ALLOWED_IPS:}
+  reconciliation:
+    auto-deposit-fix-enabled: ${APP_RECON_AUTO_DEPOSIT_FIX_ENABLED:false}
+    tikluy-db:
+      host: ${APP_RECON_TIKLUY_DB_HOST:}
+      port: ${APP_RECON_TIKLUY_DB_PORT:3306}
+      database: ${APP_RECON_TIKLUY_DB_NAME:VNF_ACCOUNT_MANAGEMENT}
+      username: ${APP_RECON_TIKLUY_DB_USERNAME:}
+      password: ${APP_RECON_TIKLUY_DB_PASSWORD:}
 
 tikluy:
   # ⚠️ Mặc định trỏ TEST để tránh chạm tiền thật.
