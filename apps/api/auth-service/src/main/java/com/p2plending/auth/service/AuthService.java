@@ -96,6 +96,7 @@ public class AuthService {
     private final UserRepository           userRepository;
     private final KycDocumentRepository    kycDocumentRepository;
     private final KycSubmissionRepository  kycSubmissionRepository;
+    private final com.p2plending.auth.domain.repository.BusinessProfileRepository businessProfileRepository;
     private final JwtService            jwtService;
     private final PasswordEncoder       passwordEncoder;
     private final UserMapper            userMapper;
@@ -439,7 +440,16 @@ public class AuthService {
                 .phone(user.getPhone())
                 .email(user.getEmail())
                 .kycStatus(user.getKycStatus())
+                .accountType(user.getAccountType())
                 .createdAt(user.getCreatedAt());
+
+        businessProfileRepository.findTopByUserIdAndIsDeletedFalseOrderByCreatedAtDesc(userId)
+                .ifPresent(bp -> builder
+                        .businessProfileStatus(bp.getStatus())
+                        .businessType(bp.getBusinessType())
+                        .businessName(bp.getBusinessName())
+                        .businessRejectReason(bp.getRejectReason())
+                );
 
         kycSubmissionRepository.findTopByUserIdAndStatusOrderByCreatedAtDesc(userId, user.getKycStatus())
                 .ifPresent(kyc -> builder

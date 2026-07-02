@@ -2,11 +2,14 @@ package com.p2plending.auth.controller;
 
 import com.p2plending.auth.domain.enums.KycStatus;
 import com.p2plending.auth.dto.request.BlacklistInternalRequest;
+import com.p2plending.auth.dto.request.BusinessProfileDecisionInternalRequest;
 import com.p2plending.auth.dto.request.KycDecisionInternalRequest;
+import com.p2plending.auth.dto.response.BusinessProfileResponse;
 import com.p2plending.auth.dto.response.InternalCustomerPasswordResetResponse;
 import com.p2plending.auth.dto.response.InternalUserStatsResponse;
 import com.p2plending.auth.dto.response.InternalUserSummaryResponse;
 import com.p2plending.auth.dto.response.PagedResponse;
+import com.p2plending.auth.service.BusinessProfileService;
 import com.p2plending.auth.service.FcmTokenService;
 import com.p2plending.auth.service.InternalCustomerAdminService;
 import com.p2plending.auth.service.InternalUserQueryService;
@@ -35,6 +38,7 @@ public class InternalUserController {
     private final FcmTokenService          fcmTokenService;
     private final KycDecisionService       kycDecisionService;
     private final InternalCustomerAdminService customerAdminService;
+    private final BusinessProfileService   businessProfileService;
 
     @Value("${app.internal.secret}")
     private String internalSecret;
@@ -110,6 +114,55 @@ public class InternalUserController {
             @Valid @RequestBody KycDecisionInternalRequest request) {
         requireInternalSecret(secret);
         kycDecisionService.decide(userId, request.isApproved(), request.getReason());
+        return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * GET /internal/users/business-profiles?status=&page=&size=
+     * Danh sách hồ sơ doanh nghiệp cho CMS duyệt (mới nhất trước).
+     */
+    @GetMapping("/business-profiles")
+    public ResponseEntity<PagedResponse<BusinessProfileResponse>> getBusinessProfiles(
+            @RequestHeader(INTERNAL_SECRET_HEADER) String secret,
+            @RequestParam(required = false) KycStatus status,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        requireInternalSecret(secret);
+        return ResponseEntity.ok(businessProfileService.list(status, page, size));
+    }
+
+    /** GET /internal/users/{userId}/business-profile — chi tiết hồ sơ DN của 1 user. */
+    @GetMapping("/{userId}/business-profile")
+    public ResponseEntity<BusinessProfileResponse> getBusinessProfile(
+            @RequestHeader(INTERNAL_SECRET_HEADER) String secret,
+            @PathVariable String userId) {
+        requireInternalSecret(secret);
+        return ResponseEntity.ok(businessProfileService.getByUserId(userId));
+    }
+
+    /**
+     * POST /internal/users/{userId}/business-profile/decision
+     * CMS admin duyệt/từ chối hồ sơ doanh nghiệp. Duyệt → account_type BUSINESS|ENTERPRISE
+     * + publish business-profile.approved (giai đoạn B: payment-service tạo ví DN).
+     */
+    @PostMapping("/{userId}/business-profile/decision")
+    public ResponseEntity<Void> businessProfileDecision(
+            @RequestHeader(INTERNAL_SECRET_HEADER) String secret,
+            @PathVariable String userId,
+            @Valid @RequestBody BusinessProfileDecisionInternalRequest request) {
+        requireInternalSecret(secret);
+        businessProfileService.decide(userId, request.isApproved(), request.getReason(), request.getReviewedBy());
+        return ResponseEntity.noContent().build();
+    }
+
+    /** POST /internal/users/{userId}/business-profile/ai-result — lưu kết quả AI tham khảo. */
+    @PostMapping("/{userId}/business-profile/ai-result")
+    public ResponseEntity<Void> saveBusinessProfileAiResult(
+            @RequestHeader(INTERNAL_SECRET_HEADER) String secret,
+            @PathVariable String userId,
+            @RequestBody Map<String, String> body) {
+        requireInternalSecret(secret);
+        businessProfileService.saveAiResult(userId, body.get("verdict"), body.get("summary"));
         return ResponseEntity.noContent().build();
     }
 

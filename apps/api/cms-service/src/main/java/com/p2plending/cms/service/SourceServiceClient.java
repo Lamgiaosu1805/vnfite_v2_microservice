@@ -143,6 +143,81 @@ public class SourceServiceClient {
                 .build();
     }
 
+    // ─── Hồ sơ doanh nghiệp ──────────────────────────────────────────────────
+
+    /** Danh sách hồ sơ doanh nghiệp chờ duyệt — passthrough JSON từ auth-service. */
+    public JsonNode getBusinessProfiles(String status, int page, int size) {
+        URI uri = UriComponentsBuilder.fromHttpUrl(authServiceUrl)
+                .path("/internal/users/business-profiles")
+                .queryParamIfPresent("status", Optional.ofNullable(status).filter(s -> !s.isBlank()))
+                .queryParam("page", page)
+                .queryParam("size", size)
+                .build()
+                .encode()
+                .toUri();
+        return exchangeForJson(uri, HttpMethod.GET, null);
+    }
+
+    /** Chi tiết hồ sơ doanh nghiệp của 1 user. */
+    public JsonNode getBusinessProfile(String userId) {
+        String url = UriComponentsBuilder.fromHttpUrl(authServiceUrl)
+                .path("/internal/users/{userId}/business-profile")
+                .buildAndExpand(userId)
+                .toUriString();
+        return exchangeForJson(url, HttpMethod.GET, null);
+    }
+
+    /** Duyệt/từ chối hồ sơ doanh nghiệp. Body: {approved, reason, reviewedBy}. */
+    public void decideBusinessProfile(String userId, boolean approved, String reason, String reviewedBy) {
+        String url = UriComponentsBuilder.fromHttpUrl(authServiceUrl)
+                .path("/internal/users/{userId}/business-profile/decision")
+                .buildAndExpand(userId)
+                .toUriString();
+        Map<String, Object> body = new HashMap<>();
+        body.put("approved", approved);
+        body.put("reason", reason);
+        body.put("reviewedBy", reviewedBy);
+        exchangeForJson(url, HttpMethod.POST, body);
+    }
+
+    /**
+     * AI đọc GPKD + đối chiếu thông tin khai báo (credit-service), rồi lưu verdict/summary
+     * về hồ sơ trên auth-service để lần sau mở lại vẫn thấy. Kết quả chỉ tham khảo.
+     */
+    public JsonNode analyzeBusinessLicense(String userId) {
+        JsonNode profile = getBusinessProfile(userId);
+
+        var body = new java.util.LinkedHashMap<String, Object>();
+        body.put("userId", userId);
+        body.put("fileId", text(profile, "licenseImageId"));
+        body.put("expectedBusinessName", text(profile, "businessName"));
+        body.put("expectedRegistrationNumber", text(profile, "registrationNumber"));
+        body.put("expectedTaxCode", text(profile, "taxCode"));
+        body.put("expectedRepresentativeName", text(profile, "representativeName"));
+        body.put("expectedRepresentativeCccd", text(profile, "representativeCccd"));
+        body.put("expectedBusinessType", text(profile, "businessType"));
+
+        String url = UriComponentsBuilder.fromHttpUrl(creditServiceUrl)
+                .path("/internal/credit/business-license/analyze")
+                .toUriString();
+        JsonNode result = exchangeForJson(url, HttpMethod.POST, body, aiRestTemplate);
+
+        // Lưu verdict + summary về auth-service (best-effort — lỗi lưu không chặn hiển thị kết quả)
+        try {
+            String saveUrl = UriComponentsBuilder.fromHttpUrl(authServiceUrl)
+                    .path("/internal/users/{userId}/business-profile/ai-result")
+                    .buildAndExpand(userId)
+                    .toUriString();
+            Map<String, Object> aiResult = new HashMap<>();
+            aiResult.put("verdict", text(result, "verdict"));
+            aiResult.put("summary", text(result, "summary"));
+            exchangeForJson(saveUrl, HttpMethod.POST, aiResult);
+        } catch (Exception e) {
+            log.warn("Không lưu được kết quả AI GPKD cho user {}: {}", userId, e.getMessage());
+        }
+        return result;
+    }
+
     public ResetCustomerPasswordResponse resetCustomerPassword(String userId) {
         String url = UriComponentsBuilder.fromHttpUrl(authServiceUrl)
                 .path("/internal/users/{userId}/reset-password")

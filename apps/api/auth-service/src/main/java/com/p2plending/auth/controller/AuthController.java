@@ -7,6 +7,7 @@ import com.p2plending.auth.dto.request.ForgotPasswordCheckRequest;
 import com.p2plending.auth.dto.request.ForgotPasswordOtpVerifyRequest;
 import com.p2plending.auth.dto.request.ForgotPasswordRequest;
 import com.p2plending.auth.dto.request.ForgotPasswordResetRequest;
+import com.p2plending.auth.dto.request.BusinessProfileSubmitRequest;
 import com.p2plending.auth.dto.request.KycInitRequest;
 import com.p2plending.auth.dto.request.KycVerifyRequest;
 import com.p2plending.auth.dto.request.LoginRequest;
@@ -19,12 +20,14 @@ import com.p2plending.auth.dto.request.DeviceResetVerifyRequest;
 import com.p2plending.auth.dto.request.RefreshTokenRequest;
 import com.p2plending.auth.dto.request.RegisterRequest;
 import com.p2plending.auth.dto.response.AuthResponse;
+import com.p2plending.auth.dto.response.BusinessProfileResponse;
 import com.p2plending.auth.dto.response.DeviceSessionResponse;
 import com.p2plending.auth.dto.response.KycSubmissionResponse;
 import com.p2plending.auth.dto.response.RegisterInitResponse;
 import com.p2plending.auth.dto.response.UserProfileResponse;
 import com.p2plending.auth.dto.response.VnptEkycTokenResponse;
 import com.p2plending.auth.service.AuthService;
+import com.p2plending.auth.service.BusinessProfileService;
 import com.p2plending.auth.service.ChangePasswordService;
 import com.p2plending.auth.service.FcmTokenService;
 import com.p2plending.auth.service.KycService;
@@ -48,12 +51,13 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class AuthController {
 
-    private final AuthService           authService;
-    private final KycService            kycService;
-    private final PasswordResetService  passwordResetService;
-    private final ChangePasswordService changePasswordService;
-    private final FcmTokenService       fcmTokenService;
-    private final VnptEkycTokenService  vnptEkycTokenService;
+    private final AuthService            authService;
+    private final KycService             kycService;
+    private final PasswordResetService   passwordResetService;
+    private final ChangePasswordService  changePasswordService;
+    private final FcmTokenService        fcmTokenService;
+    private final VnptEkycTokenService   vnptEkycTokenService;
+    private final BusinessProfileService businessProfileService;
 
     /**
      * POST /api/auth/check-phone
@@ -355,6 +359,36 @@ public class AuthController {
         }
         fcmTokenService.saveToken(userId, fcmToken, deviceKey);
         return ResponseEntity.ok(Map.of("message", "FCM token đã được lưu"));
+    }
+
+    /**
+     * POST /api/auth/business-profile
+     * Nộp hồ sơ doanh nghiệp (multipart: thông tin DN + 1–3 ảnh GPKD).
+     * Yêu cầu eKYC cá nhân APPROVED. Hồ sơ chờ admin CMS duyệt tay.
+     */
+    @PostMapping(value = "/business-profile", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<BusinessProfileResponse> submitBusinessProfile(
+            @Valid @ModelAttribute BusinessProfileSubmitRequest request,
+            @AuthenticationPrincipal UserDetails principal
+    ) {
+        String userId = authService.getUserIdByPhone(principal.getUsername());
+        return ResponseEntity.status(HttpStatus.CREATED).body(businessProfileService.submit(userId, request));
+    }
+
+    /**
+     * GET /api/auth/business-profile
+     * Hồ sơ doanh nghiệp mới nhất của chính mình (204 nếu chưa nộp).
+     */
+    @GetMapping("/business-profile")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<BusinessProfileResponse> getMyBusinessProfile(
+            @AuthenticationPrincipal UserDetails principal
+    ) {
+        String userId = authService.getUserIdByPhone(principal.getUsername());
+        return businessProfileService.getMine(userId)
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.noContent().build());
     }
 
     @GetMapping("/me")

@@ -19,6 +19,7 @@ public class KafkaProducerService {
     private static final String TOPIC_KYC_SUBMITTED  = "kyc.submitted";
     private static final String TOPIC_KYC_APPROVED   = "kyc.approved";
     private static final String TOPIC_USER_REGISTERED = "user.registered";
+    private static final String TOPIC_BUSINESS_PROFILE_APPROVED = "business-profile.approved";
 
     private final KafkaTemplate<String, String> kafkaTemplate;
     private final ObjectMapper objectMapper;
@@ -57,6 +58,30 @@ public class KafkaProducerService {
                     });
         } catch (JsonProcessingException e) {
             log.error("Serialisation error for kyc.approved userId={}", userId, e);
+        }
+    }
+
+    /**
+     * Publish khi CMS duyệt hồ sơ doanh nghiệp.
+     * Giai đoạn B: payment-service lắng nghe để tạo ví + VA riêng đứng tên doanh nghiệp.
+     */
+    public void publishBusinessProfileApproved(String userId, String businessName, String businessType,
+                                               String registrationNumber, String taxCode) {
+        try {
+            java.util.Map<String, Object> data = new java.util.HashMap<>();
+            data.put("userId", userId);
+            data.put("businessName", businessName);
+            data.put("businessType", businessType);
+            data.put("registrationNumber", registrationNumber);
+            data.put("taxCode", taxCode);
+            data.put("approvedAt", LocalDateTime.now(ZoneId.of("Asia/Ho_Chi_Minh")).toString());
+            kafkaTemplate.send(TOPIC_BUSINESS_PROFILE_APPROVED, userId, objectMapper.writeValueAsString(data))
+                    .whenComplete((result, ex) -> {
+                        if (ex != null) log.error("Failed to publish business-profile.approved userId={}: {}", userId, ex.getMessage());
+                        else log.info("Published business-profile.approved userId={}", userId);
+                    });
+        } catch (JsonProcessingException e) {
+            log.error("Serialisation error for business-profile.approved userId={}", userId, e);
         }
     }
 

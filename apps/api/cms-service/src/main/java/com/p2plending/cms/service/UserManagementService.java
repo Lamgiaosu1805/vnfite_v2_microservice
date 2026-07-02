@@ -7,6 +7,7 @@ import com.p2plending.cms.dto.response.CustomerDetailResponse;
 import com.p2plending.cms.dto.response.PagedResponse;
 import com.p2plending.cms.dto.response.ResetCustomerPasswordResponse;
 import com.p2plending.cms.dto.response.UserSummaryResponse;
+import com.fasterxml.jackson.databind.JsonNode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -36,6 +37,24 @@ public class UserManagementService {
 
     public UserSummaryResponse decideKyc(String userId, KycDecisionRequest req) {
         throw new UnsupportedOperationException("CMS no longer stores user mirror data. Send KYC decisions to auth-service.");
+    }
+
+    // ─── Hồ sơ doanh nghiệp — passthrough auth-service / credit-service ─────
+
+    public JsonNode getBusinessProfiles(String status, int page, int size) {
+        return sourceServiceClient.getBusinessProfiles(status, page, size);
+    }
+
+    public JsonNode getBusinessProfile(String userId) {
+        return sourceServiceClient.getBusinessProfile(userId);
+    }
+
+    public void decideBusinessProfile(String userId, boolean approved, String reason, String reviewedBy) {
+        sourceServiceClient.decideBusinessProfile(userId, approved, reason, reviewedBy);
+    }
+
+    public JsonNode analyzeBusinessLicense(String userId) {
+        return sourceServiceClient.analyzeBusinessLicense(userId);
     }
 
     public UserSummaryResponse updateStatus(String userId, UserStatusRequest req) {

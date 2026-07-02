@@ -1,5 +1,6 @@
 package com.p2plending.auth.domain.entity;
 
+import com.p2plending.auth.domain.enums.AccountType;
 import com.p2plending.auth.domain.enums.KycStatus;
 import jakarta.persistence.*;
 import lombok.*;
@@ -40,6 +41,15 @@ public class User {
     @Column(nullable = false, length = 20)
     @Builder.Default
     private KycStatus kycStatus = KycStatus.NONE;
+
+    /**
+     * Tier tài khoản sau khi hồ sơ doanh nghiệp được duyệt (INDIVIDUAL mặc định).
+     * Chỉ mở khóa thêm nhóm sản phẩm BUSINESS/ENTERPRISE — không giới hạn quyền cá nhân.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "account_type", nullable = false, length = 20)
+    @Builder.Default
+    private AccountType accountType = AccountType.INDIVIDUAL;
 
     @Column(length = 20)
     private String referredBy;

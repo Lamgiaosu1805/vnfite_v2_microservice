@@ -3,6 +3,7 @@ package com.p2plending.credit.controller;
 import com.p2plending.credit.config.AppProperties;
 import com.p2plending.credit.domain.entity.BorrowerProfile;
 import com.p2plending.credit.domain.entity.DocumentAnalysis;
+import com.p2plending.credit.dto.request.AnalyzeBusinessLicenseRequest;
 import com.p2plending.credit.dto.request.AnalyzeDocumentRequest;
 import com.p2plending.credit.dto.request.BorrowerProfileRequest;
 import com.p2plending.credit.dto.request.EvaluateScoreRequest;
@@ -105,6 +106,20 @@ public class InternalCreditController {
 
         if (unauthorized(secret)) return ResponseEntity.status(401).body(Map.of("error", "Unauthorized"));
         DocumentAnalysis result = documentAnalysisService.analyze(req);
+        return ResponseEntity.ok(result);
+    }
+
+    /**
+     * Phân tích GPKD hồ sơ doanh nghiệp: trích xuất + đối chiếu tên DN/số ĐKKD/MST/người đại diện
+     * với thông tin khai báo. Chỉ tham khảo — admin CMS vẫn duyệt tay.
+     */
+    @PostMapping("/business-license/analyze")
+    public ResponseEntity<?> analyzeBusinessLicense(
+            @RequestHeader(value = "X-Internal-Secret", required = false) String secret,
+            @Valid @RequestBody AnalyzeBusinessLicenseRequest req) {
+
+        if (unauthorized(secret)) return ResponseEntity.status(401).body(Map.of("error", "Unauthorized"));
+        DocumentAnalysis result = documentAnalysisService.analyzeBusinessLicense(req);
         return ResponseEntity.ok(result);
     }
 

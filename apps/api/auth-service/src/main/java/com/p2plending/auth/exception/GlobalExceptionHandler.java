@@ -61,6 +61,11 @@ public class GlobalExceptionHandler {
         return build(HttpStatus.CONFLICT, ex.getMessage());
     }
 
+    @ExceptionHandler(BusinessProfileConflictException.class)
+    public ResponseEntity<ApiResponse<Void>> handleBusinessProfileConflict(BusinessProfileConflictException ex) {
+        return build(HttpStatus.CONFLICT, ex.getMessage());
+    }
+
     @ExceptionHandler(DeviceConflictException.class)
     public ResponseEntity<ApiResponse<Void>> handleDeviceConflict(DeviceConflictException ex) {
         return ResponseEntity.status(HttpStatus.CONFLICT)

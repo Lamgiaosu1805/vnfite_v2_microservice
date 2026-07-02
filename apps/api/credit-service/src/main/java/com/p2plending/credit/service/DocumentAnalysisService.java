@@ -5,6 +5,7 @@ import com.p2plending.credit.client.FileManagerClient;
 import com.p2plending.credit.config.AppProperties;
 import com.p2plending.credit.domain.entity.DocumentAnalysis;
 import com.p2plending.credit.domain.repository.DocumentAnalysisRepository;
+import com.p2plending.credit.dto.request.AnalyzeBusinessLicenseRequest;
 import com.p2plending.credit.dto.request.AnalyzeDocumentRequest;
 import com.p2plending.credit.dto.request.EvaluateScoreRequest;
 import com.p2plending.credit.service.ai.AiDocumentAnalyzer;
@@ -82,6 +83,60 @@ public class DocumentAnalysisService {
                 req.getUserId(), req.getLoanRequestId(), req.getDocType(),
                 entity.getVerdict(), entity.getTrustScore());
         return entity;
+    }
+
+    /**
+     * Phân tích GPKD của hồ sơ doanh nghiệp: trích xuất tên DN/số ĐKKD/MST/người đại diện
+     * và đối chiếu với thông tin khai báo. Kết quả chỉ tham khảo — admin vẫn duyệt tay.
+     */
+    @Transactional
+    public DocumentAnalysis analyzeBusinessLicense(AnalyzeBusinessLicenseRequest req) {
+        FileManagerClient.FetchedFile file = fileManagerClient.fetch(req.getFileId());
+        String mimeType = file.mimeType();
+        String fileBase64 = Base64.getEncoder().encodeToString(file.bytes());
+        validateFile(mimeType, fileBase64);
+
+        AiDocumentAnalyzer.DocumentCheckResult result =
+                documentAnalyzer.analyze(mimeType, fileBase64, buildBusinessLicenseContext(req));
+        if (result == null) {
+            throw new IllegalStateException(
+                    "AI phân tích chứng từ chưa được bật — cần APP_AI_ENABLED=true và API key tương ứng");
+        }
+
+        DocumentAnalysis entity = DocumentAnalysis.builder()
+                .userId(req.getUserId())
+                .docType("BUSINESS_LICENSE")
+                .fileId(req.getFileId())
+                .verdict(result.verdict() != null ? result.verdict() : "UNREADABLE")
+                .trustScore(result.trustScore())
+                .extractedData(toJson(result))
+                .summary(result.summary())
+                .build();
+        entity = analysisRepository.save(entity);
+
+        log.info("Phân tích GPKD xong: userId={} fileId={} verdict={} trustScore={}",
+                req.getUserId(), req.getFileId(), entity.getVerdict(), entity.getTrustScore());
+        return entity;
+    }
+
+    private String buildBusinessLicenseContext(AnalyzeBusinessLicenseRequest req) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("Chứng từ đính kèm là GIẤY CHỨNG NHẬN ĐĂNG KÝ KINH DOANH (hoặc GCN đăng ký hộ kinh doanh) ")
+                .append("của Việt Nam. Nhiệm vụ: trích xuất và đối chiếu.\n\n");
+        sb.append("TRÍCH XUẤT từ chứng từ: tên doanh nghiệp/hộ kinh doanh (ghi vào organizationName), ")
+                .append("tên người đại diện pháp luật/chủ hộ (ghi vào ownerName), số GCN đăng ký, mã số thuế, ")
+                .append("ngày cấp, nơi cấp, địa chỉ trụ sở, loại hình (liệt kê trong findings).\n\n");
+        sb.append("THÔNG TIN NGƯỜI DÙNG KHAI BÁO (để đối chiếu — mọi điểm lệch ghi vào consistencyIssues):\n");
+        sb.append("- Loại hình: ").append(orUnknown(req.getExpectedBusinessType())).append("\n");
+        sb.append("- Tên doanh nghiệp/hộ KD: ").append(orUnknown(req.getExpectedBusinessName())).append("\n");
+        sb.append("- Số GCN đăng ký: ").append(orUnknown(req.getExpectedRegistrationNumber())).append("\n");
+        sb.append("- Mã số thuế: ").append(orUnknown(req.getExpectedTaxCode())).append("\n");
+        sb.append("- Người đại diện: ").append(orUnknown(req.getExpectedRepresentativeName())).append("\n");
+        sb.append("- CCCD người đại diện (đã eKYC): ").append(orUnknown(req.getExpectedRepresentativeCccd())).append("\n\n");
+        sb.append("QUAN TRỌNG: người đại diện trên GPKD phải trùng người đã eKYC. ")
+                .append("Nếu tên người đại diện trên chứng từ khác tên khai báo → verdict SUSPICIOUS trở lên. ")
+                .append("Kiểm tra thêm dấu hiệu chỉnh sửa: font không đồng nhất, con dấu mờ/bất thường, căn lề lệch.");
+        return sb.toString();
     }
 
     /**
