@@ -262,6 +262,25 @@ public class LoanManagementService {
         return result;
     }
 
+    /**
+     * CMS hủy khoản gọi vốn trước khi giải ngân. loan-service sẽ hoàn tiền/void hợp đồng nếu đã có nhà đầu tư.
+     */
+    public LoanSummaryResponse cancel(String loanId, LoanActionRequest req, CmsPrincipal reviewer) {
+        LoanSummaryResponse loanBefore = safeGetLoan(loanId);
+        String decidedBy = reviewer != null ? reviewer.displayName() : "unknown";
+        String deciderRole = reviewer != null ? reviewer.role() : null;
+
+        LoanSummaryResponse result = sourceServiceClient.cancelLoan(loanId, req, decidedBy);
+
+        try {
+            auditService.record(loanBefore, result, "CANCELLED", req.getReason(), decidedBy, deciderRole, null);
+        } catch (Exception e) {
+            log.error("Failed to record audit log for cancellation of loan {}: {}", loanId, e.getMessage());
+        }
+
+        return result;
+    }
+
     // ─── Audit log queries ────────────────────────────────────────────────────────
 
     public PagedResponse<AuditLogResponse> listAuditLogs(String loanId, String decision,

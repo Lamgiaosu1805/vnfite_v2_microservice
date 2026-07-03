@@ -1054,6 +1054,10 @@ public class SourceServiceClient {
         return reviewLoan(loanId, "reject", request, reviewedBy);
     }
 
+    public LoanSummaryResponse cancelLoan(String loanId, LoanActionRequest request, String cancelledBy) {
+        return reviewLoan(loanId, "cancel", request, cancelledBy);
+    }
+
     private JsonNode findLoanDocument(String loanId, String documentId) {
         JsonNode documents = getLoanDocuments(loanId);
         for (JsonNode document : documents) {
@@ -1081,7 +1085,9 @@ public class SourceServiceClient {
                 .buildAndExpand(loanId, action)
                 .toUriString();
         var body = new java.util.LinkedHashMap<String, Object>();
+        body.put("approvedAmount", request.getApprovedAmount());
         body.put("interestRate", request.getInterestRate());
+        body.put("termMonths", request.getTermMonths());
         body.put("reason", request.getReason());
         body.put("reviewedBy", reviewedBy);
         return parseLoan(exchangeForJson(url, HttpMethod.PUT, body));

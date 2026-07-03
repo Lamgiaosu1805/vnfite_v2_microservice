@@ -286,4 +286,17 @@ public class LoanManagementController {
         return ResponseEntity.ok(loanService.reject(loanId, req, reviewer));
     }
 
+    /**
+     * PUT /cms/loans/{loanId}/cancel
+     * CMS hủy khoản gọi vốn trước khi giải ngân. Nếu đã có nhà đầu tư, loan-service hoàn tiền/void hợp đồng.
+     */
+    @PutMapping("/{loanId}/cancel")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN')")
+    public ResponseEntity<LoanSummaryResponse> cancel(
+            @PathVariable String loanId,
+            @Valid @RequestBody LoanActionRequest req,
+            @AuthenticationPrincipal CmsPrincipal reviewer) {
+        return ResponseEntity.ok(loanService.cancel(loanId, req, reviewer));
+    }
+
 }
