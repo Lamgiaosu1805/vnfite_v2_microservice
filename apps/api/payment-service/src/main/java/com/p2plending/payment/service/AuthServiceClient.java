@@ -50,6 +50,47 @@ public class AuthServiceClient {
                 && "APPROVED".equalsIgnoreCase(kycNode.asText());
     }
 
+    /** Thông tin hồ sơ doanh nghiệp cần cho đối chiếu tên tài khoản ngân hàng ví DN. */
+    public record BusinessProfileInfo(String businessType, String businessName, String representativeName,
+                                      String status) {
+        public boolean isHousehold() {
+            return "HOUSEHOLD".equalsIgnoreCase(businessType);
+        }
+    }
+
+    /**
+     * Lấy hồ sơ doanh nghiệp của user từ auth-service ({@code /internal/users/{userId}/business-profile}).
+     * Trả null nếu user chưa có hồ sơ hoặc không gọi được — caller quyết định fail-open/closed.
+     */
+    public BusinessProfileInfo getBusinessProfile(String userId) {
+        try {
+            HttpHeaders headers = new HttpHeaders();
+            headers.set("X-Internal-Secret", appProperties.getInternal().getSecret());
+
+            ResponseEntity<JsonNode> resp = restTemplate.exchange(
+                    appProperties.getAuth().getServiceUrl() + "/internal/users/" + userId + "/business-profile",
+                    HttpMethod.GET,
+                    new HttpEntity<>(headers),
+                    JsonNode.class);
+
+            JsonNode body = resp.getBody();
+            if (body == null || body.isNull()) return null;
+            return new BusinessProfileInfo(
+                    text(body, "businessType"),
+                    text(body, "businessName"),
+                    text(body, "representativeName"),
+                    text(body, "status"));
+        } catch (Exception e) {
+            log.warn("Failed to fetch business profile userId={}: {}", userId, e.getMessage());
+            return null;
+        }
+    }
+
+    private static String text(JsonNode node, String field) {
+        JsonNode value = node.path(field);
+        return value.isNull() || value.isMissingNode() ? null : value.asText();
+    }
+
     private JsonNode fetchUser(String userId) {
         try {
             HttpHeaders headers = new HttpHeaders();

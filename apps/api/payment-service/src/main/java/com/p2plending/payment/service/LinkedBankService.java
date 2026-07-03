@@ -7,6 +7,8 @@ import com.p2plending.payment.domain.repository.LinkedBankRepository;
 import com.p2plending.payment.dto.request.AddBankRequest;
 import com.p2plending.payment.dto.response.BankCatalogItem;
 import com.p2plending.payment.dto.response.LinkedBankResponse;
+import com.p2plending.payment.service.AuthServiceClient.BusinessProfileInfo;
+import com.p2plending.payment.util.BusinessNameMatcher;
 import com.p2plending.payment.util.TextNormalizer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -67,8 +69,7 @@ public class LinkedBankService {
             if (ownerType == WalletOwnerType.PERSONAL) {
                 validateAccountNameMatchesKyc(userId, accountName, req.getBankAccountNo());
             } else {
-                log.info("userId={} BUSINESS bank verified accountName='{}' stk={}",
-                        userId, accountName, req.getBankAccountNo());
+                validateBusinessAccountName(userId, accountName, req.getBankAccountNo());
             }
         }
 
@@ -148,6 +149,49 @@ public class LinkedBankService {
                     "Tên chủ tài khoản (" + tikluyName + ") không khớp với thông tin định danh của bạn. "
                     + "Vui lòng liên kết tài khoản ngân hàng đứng tên chính chủ.");
         }
+    }
+
+    /**
+     * Đối chiếu tên chủ tài khoản ngân hàng với hồ sơ doanh nghiệp cho ví DN.
+     * <ul>
+     *   <li><b>Công ty (ENTERPRISE)</b>: chỉ chấp nhận tài khoản đứng tên công ty (khớp mềm tên ĐKKD).</li>
+     *   <li><b>Hộ kinh doanh (BUSINESS)</b>: chấp nhận tài khoản đứng tên hộ KD, hoặc chính chủ hộ
+     *       (khớp eKYC cá nhân / người đại diện) — vì hộ KD thực tế hay dùng tài khoản cá nhân.</li>
+     * </ul>
+     * Không lấy được hồ sơ (transient/không có) → fail-open kèm cảnh báo, giống luồng cá nhân;
+     * chốt chặn cuối vẫn là admin đã duyệt hồ sơ + OTP khi rút.
+     */
+    private void validateBusinessAccountName(String userId, String tikluyName, String bankAccountNo) {
+        BusinessProfileInfo profile = authServiceClient.getBusinessProfile(userId);
+        if (profile == null || profile.businessName() == null || profile.businessName().isBlank()) {
+            log.warn("userId={} không lấy được hồ sơ DN, bỏ qua đối chiếu tên TK ngân hàng ví DN stk={}",
+                    userId, bankAccountNo);
+            return;
+        }
+
+        if (BusinessNameMatcher.matches(profile.businessName(), tikluyName)) {
+            return;
+        }
+
+        boolean household = profile.isHousehold();
+        if (household) {
+            String personalName = authServiceClient.getUserFullName(userId);
+            if (personalName != null && BusinessNameMatcher.matches(personalName, tikluyName)) {
+                return;
+            }
+            if (profile.representativeName() != null
+                    && BusinessNameMatcher.matches(profile.representativeName(), tikluyName)) {
+                return;
+            }
+        }
+
+        log.warn("userId={} tên TK ví DN không khớp: tikluy='{}' business='{}' type={} stk={}",
+                userId, tikluyName, profile.businessName(), profile.businessType(), bankAccountNo);
+        throw new IllegalArgumentException(household
+                ? "Tên chủ tài khoản (" + tikluyName + ") không khớp tên hộ kinh doanh hoặc chủ hộ. "
+                  + "Vui lòng dùng tài khoản đứng tên hộ kinh doanh hoặc chính chủ hộ."
+                : "Tên chủ tài khoản (" + tikluyName + ") không khớp tên doanh nghiệp trên giấy đăng ký kinh doanh. "
+                  + "Ví doanh nghiệp chỉ được rút về tài khoản đứng tên công ty.");
     }
 
     private void resetDefaults(String userId, WalletOwnerType ownerType) {
