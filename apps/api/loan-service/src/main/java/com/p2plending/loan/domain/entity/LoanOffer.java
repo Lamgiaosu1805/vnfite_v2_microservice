@@ -35,6 +35,11 @@ public class LoanOffer {
     @Column(nullable = false)
     private String investorId;
 
+    /** Tư cách đầu tư: PERSONAL | BUSINESS — quyết định ví bị khóa/trừ/hoàn cho lệnh này. */
+    @Column(name = "owner_type", nullable = false, length = 20)
+    @Builder.Default
+    private String ownerType = "PERSONAL";
+
     @Column(nullable = false, precision = 15, scale = 2)
     private BigDecimal amount;
 

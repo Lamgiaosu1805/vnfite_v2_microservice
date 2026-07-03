@@ -53,6 +53,23 @@ public class LoanContract {
     @Column(nullable = false, length = 36)
     private String partyId;
 
+    // ── Snapshot định danh Bên A tại thời điểm phát hành (khoản DN ký với tư cách pháp nhân) ──
+    /** Tư cách bên ký: PERSONAL | BUSINESS. NULL = cá nhân (tương thích hợp đồng cũ). */
+    @Column(length = 20)
+    private String partyType;
+
+    /** Tên pháp nhân (tên doanh nghiệp) hoặc tên cá nhân, snapshot tại thời điểm phát hành. */
+    @Column(length = 200)
+    private String partyName;
+
+    /** Số ĐKKD/MST với khoản DN; NULL với cá nhân. */
+    @Column(length = 50)
+    private String partyIdentityNo;
+
+    /** Người đại diện pháp luật của DN (nếu Bên A là pháp nhân). */
+    @Column(length = 150)
+    private String partyRepresentative;
+
     /** Offer tương ứng — chỉ có với hợp đồng đầu tư. */
     @Column(length = 36)
     private String offerId;

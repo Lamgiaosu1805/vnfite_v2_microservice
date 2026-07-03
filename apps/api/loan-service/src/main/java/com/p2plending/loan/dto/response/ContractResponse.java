@@ -21,6 +21,14 @@ public class ContractResponse {
     private LoanStatus loanStatus;
     private ContractType contractType;
     private String partyId;
+    /** Tư cách Bên ký: PERSONAL | BUSINESS (null = cá nhân, tương thích hợp đồng cũ). */
+    private String partyType;
+    /** Tên pháp nhân (khoản DN); null với cá nhân. */
+    private String partyName;
+    /** Số ĐKKD/MST với khoản DN. */
+    private String partyIdentityNo;
+    /** Người đại diện pháp luật của DN. */
+    private String partyRepresentative;
     private String offerId;
     private String contractNo;
     private BigDecimal amount;

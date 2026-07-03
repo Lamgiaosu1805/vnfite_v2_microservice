@@ -46,6 +46,11 @@ public class PendingInvestorCredit {
     @Column(nullable = false, length = 36)
     private String offerId;
 
+    /** Tư cách đầu tư của lệnh gốc — để retry cộng đúng ví (PERSONAL | BUSINESS). */
+    @Column(name = "owner_type", nullable = false, length = 20)
+    @Builder.Default
+    private String ownerType = "PERSONAL";
+
     @Column(nullable = false, precision = 15, scale = 2)
     private BigDecimal amount;
 

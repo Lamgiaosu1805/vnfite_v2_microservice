@@ -14,4 +14,7 @@ public class LoanOfferCreateRequest {
     @DecimalMin(value = "500000", message = "Số tiền đầu tư tối thiểu là 500,000 VNĐ")
     @Digits(integer = 13, fraction = 2)
     private BigDecimal amount;
+
+    /** Tư cách đầu tư: "PERSONAL" (mặc định) hoặc "BUSINESS" (đầu tư bằng ví doanh nghiệp). */
+    private String ownerType;
 }

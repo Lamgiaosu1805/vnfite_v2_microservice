@@ -1008,16 +1008,22 @@ public class RepaymentService {
             BigDecimal share = principalShare.add(interestShare).add(penaltyShare);
             if (share.signum() <= 0) continue;
 
-            // Thuế TNCN khấu trừ tại nguồn trên (lãi + phí phạt); gốc không chịu thuế.
-            // Tiền thuế VNFITE giữ lại để nộp thay nhà đầu tư — hạch toán theo investor_distribution_log.
-            BigDecimal taxAmount = money(interestShare.add(penaltyShare).multiply(effectiveTaxRate));
+            // Nhà đầu tư pháp nhân (đầu tư tư cách DN) TỰ quyết toán thuế TNDN → VNFITE KHÔNG khấu trừ
+            // tại nguồn, cộng đủ gốc+lãi+phí vào ví DN. Nhà đầu tư cá nhân: khấu trừ TNCN trên
+            // (lãi + phí phạt); gốc không chịu thuế; tiền thuế VNFITE giữ lại nộp thay, hạch toán ở log.
+            boolean businessInvestor = "BUSINESS".equals(offer.getOwnerType());
+            BigDecimal offerTaxRate = businessInvestor ? BigDecimal.ZERO : effectiveTaxRate;
+            BigDecimal taxAmount = money(interestShare.add(penaltyShare).multiply(offerTaxRate));
             BigDecimal netAmount = share.subtract(taxAmount);
+            String creditDesc = businessInvestor
+                    ? "Nhận lợi nhuận khoản %s".formatted(loan.getLoanCode())
+                    : "Nhận lợi nhuận khoản %s (sau thuế TNCN)".formatted(loan.getLoanCode());
 
             String creditRef = creditRefBase + "-" + offer.getId();
 
             try {
-                paymentServiceClient.creditRepayment(offer.getInvestorId(), netAmount,
-                        "Nhận lợi nhuận khoản %s (sau thuế TNCN)".formatted(loan.getLoanCode()), creditRef);
+                paymentServiceClient.creditRepayment(offer.getInvestorId(), offer.getOwnerType(), netAmount,
+                        creditDesc, creditRef);
                 payouts.add(LoanRepaidEvent.InvestorPayout.builder()
                         .investorId(offer.getInvestorId())
                         .amount(netAmount)
@@ -1031,9 +1037,10 @@ public class RepaymentService {
                             .loanCode(loan.getLoanCode())
                             .investorId(offer.getInvestorId())
                             .offerId(offer.getId())
+                            .ownerType(offer.getOwnerType())
                             .amount(netAmount)
                             .referenceId(creditRef)
-                            .description("Nhận lợi nhuận khoản %s (sau thuế TNCN)".formatted(loan.getLoanCode()))
+                            .description(creditDesc)
                             .build());
                 }
             }
@@ -1051,7 +1058,7 @@ public class RepaymentService {
                         .principalAmount(principalShare)
                         .interestAmount(interestShare)
                         .lateFeeAmount(penaltyShare)
-                        .taxRate(effectiveTaxRate)
+                        .taxRate(offerTaxRate)
                         .taxAmount(taxAmount)
                         .netAmount(netAmount)
                         .creditRef(creditRef)
@@ -1211,7 +1218,7 @@ public class RepaymentService {
 
         pc.setAttempts(pc.getAttempts() + 1);
         try {
-            paymentServiceClient.creditRepayment(pc.getInvestorId(), pc.getAmount(),
+            paymentServiceClient.creditRepayment(pc.getInvestorId(), pc.getOwnerType(), pc.getAmount(),
                     pc.getDescription(), pc.getReferenceId());
             pc.setStatus(PendingCreditStatus.COMPLETED);
             pc.setLastError(null);

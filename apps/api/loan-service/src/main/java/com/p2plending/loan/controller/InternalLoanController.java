@@ -152,14 +152,16 @@ public class InternalLoanController {
                 request.getAppraisalFeeRate(), request.getNote(), request.getProposedBy()));
     }
 
-    /** Cấp 2 — ban lãnh đạo duyệt (có thể sửa lãi suất trước khi duyệt). */
+    /** Cấp 2 — ban lãnh đạo duyệt (có thể sửa số tiền, lãi suất và kỳ hạn trước khi duyệt). */
     @PutMapping("/{loanId}/approve")
     public ResponseEntity<LoanResponse> approveLoan(
             @RequestHeader(INTERNAL_SECRET_HEADER) String secret,
             @PathVariable String loanId,
             @Valid @RequestBody InternalLoanReviewRequest request) {
         requireInternalSecret(secret);
-        return ResponseEntity.ok(loanService.reviewLoan(loanId, "APPROVE", request.getInterestRate(), null, request.getReviewedBy()));
+        return ResponseEntity.ok(loanService.reviewLoan(loanId, "APPROVE",
+                request.getApprovedAmount(), request.getInterestRate(), request.getTermMonths(),
+                null, request.getReviewedBy()));
     }
 
     @PutMapping("/{loanId}/reject")
@@ -168,7 +170,17 @@ public class InternalLoanController {
             @PathVariable String loanId,
             @Valid @RequestBody InternalLoanReviewRequest request) {
         requireInternalSecret(secret);
-        return ResponseEntity.ok(loanService.reviewLoan(loanId, "REJECT", null, request.getReason(), request.getReviewedBy()));
+        return ResponseEntity.ok(loanService.reviewLoan(loanId, "REJECT",
+                null, null, null, request.getReason(), request.getReviewedBy()));
+    }
+
+    @PutMapping("/{loanId}/cancel")
+    public ResponseEntity<LoanResponse> cancelLoan(
+            @RequestHeader(INTERNAL_SECRET_HEADER) String secret,
+            @PathVariable String loanId,
+            @Valid @RequestBody InternalLoanReviewRequest request) {
+        requireInternalSecret(secret);
+        return ResponseEntity.ok(loanService.cancelLoanByCms(loanId, request.getReason(), request.getReviewedBy()));
     }
 
     // ─── Repayment schedule & DPD ───────────────────────────────────────────────

@@ -18,7 +18,11 @@ public class LoanReviewedEvent {
     /** "APPROVE" or "REJECT" */
     private String action;
     /** Present when action = APPROVE */
+    private BigDecimal approvedAmount;
+    /** Present when action = APPROVE */
     private BigDecimal interestRate;
+    /** Present when action = APPROVE */
+    private Integer termMonths;
     /** Present when action = REJECT */
     private String rejectionReason;
     private String reviewedBy;

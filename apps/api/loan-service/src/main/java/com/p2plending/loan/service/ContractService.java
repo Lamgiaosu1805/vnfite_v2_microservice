@@ -6,11 +6,13 @@ import com.p2plending.loan.config.CacheConfig;
 import com.p2plending.loan.config.RedisNamespaceProperties;
 import com.p2plending.loan.domain.entity.LoanContract;
 import com.p2plending.loan.domain.entity.LoanOffer;
+import com.p2plending.loan.domain.entity.LoanProduct;
 import com.p2plending.loan.domain.entity.LoanRequest;
 import com.p2plending.loan.domain.enums.ContractStatus;
 import com.p2plending.loan.domain.enums.ContractType;
 import com.p2plending.loan.domain.enums.LoanStatus;
 import com.p2plending.loan.domain.enums.OfferStatus;
+import com.p2plending.loan.domain.enums.ProductCategory;
 import com.p2plending.loan.domain.repository.LoanContractRepository;
 import com.p2plending.loan.domain.repository.LoanOfferRepository;
 import com.p2plending.loan.domain.repository.LoanRequestRepository;
@@ -72,6 +74,7 @@ public class ContractService {
     private final PaymentServiceClient     paymentServiceClient;
     private final AuthServiceClient        authServiceClient;
     private final VnfOtpSenderService      vnfOtpSenderService;
+    private final LoanProductService       loanProductService;
 
     @Value("${app.otp.mock:true}")
     private boolean mockOtp;
@@ -130,6 +133,7 @@ public class ContractService {
                 .status(ContractStatus.PENDING_SIGNATURE)
                 .issuedAt(LocalDateTime.now(TZ))
                 .build();
+        applyBorrowerPartyIdentity(contract, loan);
         contract = contractRepository.save(contract);
 
         ContractSignatureProvider.IssueResult issued = signatureProvider.issue(contract);
@@ -237,9 +241,9 @@ public class ContractService {
         offer.setStatus(OfferStatus.ACCEPTED);
         loanOfferRepository.save(offer);
 
-        // Khóa tiền trong ví nhà đầu tư — cam kết vốn tại thời điểm ký hợp đồng. lockAmount
-        // re-validate số dư khả dụng; nếu không đủ sẽ ném lỗi → toàn bộ giao dịch ký rollback.
-        paymentServiceClient.lock(offer.getInvestorId(), offer.getAmount(),
+        // Khóa tiền trong ví nhà đầu tư (đúng tư cách của lệnh) — cam kết vốn tại thời điểm ký hợp đồng.
+        // lockAmount re-validate số dư khả dụng; nếu không đủ sẽ ném lỗi → toàn bộ giao dịch ký rollback.
+        paymentServiceClient.lock(offer.getInvestorId(), offer.getOwnerType(), offer.getAmount(),
                 "Đầu tư khoản gọi vốn " + loan.getLoanCode(),
                 "LOCK-" + offer.getId());
 
@@ -275,7 +279,7 @@ public class ContractService {
 
         List<InvestmentRefundedEvent.Refund> refunds = new ArrayList<>();
         for (LoanOffer offer : accepted) {
-            paymentServiceClient.unlock(offer.getInvestorId(), offer.getAmount(),
+            paymentServiceClient.unlock(offer.getInvestorId(), offer.getOwnerType(), offer.getAmount(),
                     reason + " " + loan.getLoanCode(),
                     "REFUND-" + offer.getId());
             offer.setStatus(OfferStatus.CANCELLED);
@@ -286,9 +290,9 @@ public class ContractService {
                     .build());
         }
 
-        // Void hợp đồng còn chờ ký (PENDING_SIGNATURE): HĐ đầu tư chưa ký và/hoặc khế ước người gọi vốn.
+        // Trước giải ngân: nếu khoản bị hủy/hết hạn, mọi hợp đồng chưa giải ngân đều không còn hiệu lực.
         contractRepository.findByLoanIdAndIsDeletedFalseOrderByCreatedAtDesc(loan.getId()).stream()
-                .filter(c -> c.getStatus() == ContractStatus.PENDING_SIGNATURE)
+                .filter(c -> c.getStatus() != ContractStatus.VOIDED)
                 .forEach(c -> {
                     c.setStatus(ContractStatus.VOIDED);
                     contractRepository.save(c);
@@ -357,6 +361,45 @@ public class ContractService {
         return contract;
     }
 
+    /**
+     * Snapshot định danh Bên A vào khế ước. Khoản sản phẩm doanh nghiệp (BUSINESS/ENTERPRISE):
+     * người gọi vốn ký với tư cách PHÁP NHÂN → ghi tên DN + số ĐKKD/MST + người đại diện. Khoản cá
+     * nhân, hoặc không lấy được hồ sơ DN đã duyệt → giữ tư cách cá nhân (an toàn, không chặn phát hành).
+     */
+    private void applyBorrowerPartyIdentity(LoanContract contract, LoanRequest loan) {
+        if (!isBusinessCategory(loan)) {
+            contract.setPartyType("PERSONAL");
+            return;
+        }
+        var profile = authServiceClient.getBusinessProfile(loan.getBorrowerId())
+                .filter(AuthServiceClient.BusinessProfileInfo::isApproved)
+                .filter(p -> p.businessName() != null && !p.businessName().isBlank());
+        if (profile.isEmpty()) {
+            contract.setPartyType("PERSONAL");
+            log.warn("Loan {} thuộc sản phẩm DN nhưng không lấy được hồ sơ DN đã duyệt của borrower {} — "
+                    + "khế ước để tư cách cá nhân", loan.getId(), loan.getBorrowerId());
+            return;
+        }
+        AuthServiceClient.BusinessProfileInfo p = profile.get();
+        contract.setPartyType("BUSINESS");
+        contract.setPartyName(p.businessName());
+        contract.setPartyIdentityNo(p.taxCode() != null && !p.taxCode().isBlank()
+                ? p.taxCode() : p.registrationNumber());
+        contract.setPartyRepresentative(p.representativeName());
+        log.info("Loan {} khế ước ký tư cách pháp nhân: {} (ĐKKD/MST {})",
+                loan.getId(), p.businessName(), contract.getPartyIdentityNo());
+    }
+
+    private boolean isBusinessCategory(LoanRequest loan) {
+        if (loan.getProductId() == null || loan.getProductId().isBlank()) {
+            return false;
+        }
+        return loanProductService.findProductById(loan.getProductId())
+                .map(LoanProduct::getCategory)
+                .map(category -> category == ProductCategory.BUSINESS || category == ProductCategory.ENTERPRISE)
+                .orElse(false);
+    }
+
     private String buildContractNo(LoanRequest loan, ContractType type, String contractId) {
         String base = loan.getLoanCode() != null ? loan.getLoanCode() : "VNF";
         String suffix = type == ContractType.LOAN_AGREEMENT ? "LOAN" : "INV";
@@ -378,6 +421,10 @@ public class ContractService {
                 .loanStatus(loan != null ? loan.getStatus() : null)
                 .contractType(c.getContractType())
                 .partyId(c.getPartyId())
+                .partyType(c.getPartyType())
+                .partyName(c.getPartyName())
+                .partyIdentityNo(c.getPartyIdentityNo())
+                .partyRepresentative(c.getPartyRepresentative())
                 .offerId(c.getOfferId())
                 .contractNo(c.getContractNo())
                 .amount(c.getAmount())

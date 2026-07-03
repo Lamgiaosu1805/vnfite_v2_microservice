@@ -50,6 +50,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.EnumSet;
@@ -62,6 +63,14 @@ import java.util.Set;
 public class LoanService {
 
     private static final Set<LoanStatus> OFFERABLE_STATUSES = EnumSet.of(LoanStatus.ACTIVE);
+    private static final Set<LoanStatus> PRE_DISBURSEMENT_CANCELLABLE_STATUSES = EnumSet.of(
+            LoanStatus.PENDING_REVIEW,
+            LoanStatus.PENDING_APPROVAL,
+            LoanStatus.AWAITING_BORROWER_APPROVAL,
+            LoanStatus.ACTIVE,
+            LoanStatus.FUNDED,
+            LoanStatus.AWAITING_DISBURSEMENT
+    );
     private static final BigDecimal MIN_OFFER   = new BigDecimal("500000");
     private static final BigDecimal OFFER_UNIT  = new BigDecimal("500000");
 
@@ -258,10 +267,20 @@ public class LoanService {
                         : "Hãy đầu tư toàn bộ %,.0f VNĐ còn lại.".formatted(remaining)));
         }
 
-        // Kiểm tra số dư ví nhà đầu tư (server-side, không tin client). Tiền chỉ thực sự
-        // bị khóa khi ký hợp đồng (ContractService.applyInvestmentSigned); đây là fail-fast
+        // Tư cách đầu tư: cá nhân (mặc định) hoặc doanh nghiệp. Đầu tư tư cách DN → dùng ví DN
+        // cho toàn bộ vòng đời lệnh (khóa/trừ/hoàn/nhận hoàn trả).
+        String ownerType = normalizeOfferOwnerType(request.getOwnerType());
+        if ("BUSINESS".equals(ownerType)
+                && authServiceClient.getBusinessProfile(investorId)
+                        .filter(AuthServiceClient.BusinessProfileInfo::isApproved).isEmpty()) {
+            throw new InvalidLoanStateException(
+                    "Cần có hồ sơ doanh nghiệp đã được duyệt để đầu tư dưới tư cách doanh nghiệp.");
+        }
+
+        // Kiểm tra số dư ví nhà đầu tư (server-side, không tin client) theo đúng tư cách. Tiền chỉ
+        // thực sự bị khóa khi ký hợp đồng (ContractService.applyInvestmentSigned); đây là fail-fast
         // để không phát hành hợp đồng cho lệnh không đủ tiền.
-        BigDecimal available = paymentServiceClient.getAvailableBalance(investorId);
+        BigDecimal available = paymentServiceClient.getAvailableBalance(investorId, ownerType);
         if (available.compareTo(request.getAmount()) < 0) {
             throw new InvalidLoanStateException(
                     "Số dư ví không đủ để đầu tư. Khả dụng: %,.0f VNĐ, cần: %,.0f VNĐ"
@@ -280,6 +299,7 @@ public class LoanService {
         LoanOffer offer = LoanOffer.builder()
                 .loanRequestId(loanId)
                 .investorId(investorId)
+                .ownerType(ownerType)
                 .amount(request.getAmount())
                 .status(OfferStatus.PENDING)
                 .build();
@@ -360,7 +380,7 @@ public class LoanService {
         // payment-service idempotent — retry giải ngân không debit trùng.
         BigDecimal totalDisbursed = BigDecimal.ZERO;
         for (LoanOffer offer : acceptedOffers) {
-            paymentServiceClient.debit(offer.getInvestorId(), offer.getAmount(),
+            paymentServiceClient.debit(offer.getInvestorId(), offer.getOwnerType(), offer.getAmount(),
                     "Giải ngân khoản gọi vốn " + loan.getLoanCode(),
                     "DISBURSE-" + offer.getId());
             totalDisbursed = totalDisbursed.add(offer.getAmount());
@@ -410,6 +430,15 @@ public class LoanService {
 
         log.info("Loan {} disbursed by {} — schedule generated, loan.disbursed published", loanId, disbursedBy);
         return buildResponse(loan, false);
+    }
+
+    /** Chuẩn hóa tư cách đầu tư về PERSONAL | BUSINESS (ví DN dùng chung cho hộ KD lẫn công ty). */
+    private String normalizeOfferOwnerType(String ownerType) {
+        if (ownerType == null || ownerType.isBlank()) {
+            return "PERSONAL";
+        }
+        String v = ownerType.trim().toUpperCase();
+        return ("BUSINESS".equals(v) || "ENTERPRISE".equals(v)) ? "BUSINESS" : "PERSONAL";
     }
 
     private String borrowerWalletOwnerType(LoanRequest loan) {
@@ -489,11 +518,15 @@ public class LoanService {
         @CacheEvict(value = CacheConfig.CACHE_LOANS,      allEntries = true),
         @CacheEvict(value = CacheConfig.CACHE_LOAN_BY_ID, key = "#loanId")
     })
-    public LoanResponse reviewLoan(String loanId, String action, BigDecimal interestRate, String rejectionReason, String reviewedBy) {
+    public LoanResponse reviewLoan(String loanId, String action, BigDecimal approvedAmount,
+                                   BigDecimal interestRate, Integer termMonths,
+                                   String rejectionReason, String reviewedBy) {
         LoanReviewedEvent event = LoanReviewedEvent.builder()
                 .loanId(loanId)
                 .action(action)
+                .approvedAmount(approvedAmount)
                 .interestRate(interestRate)
+                .termMonths(termMonths)
                 .rejectionReason(rejectionReason)
                 .reviewedBy(reviewedBy)
                 .reviewedAt(LocalDateTime.now(ZoneId.of("Asia/Ho_Chi_Minh")))
@@ -525,13 +558,25 @@ public class LoanService {
             loan.setReviewedBy(event.getReviewedBy());
 
             if (isApprove) {
-                // Số tiền cuối = proposedAmount (thẩm định viên đã xác nhận, phí đã tính theo đó).
-                loan.setAmount(loan.getProposedAmount());
-                // Lãi suất cuối: ban lãnh đạo có thể override khi duyệt, fallback lãi đề xuất.
+                BigDecimal finalAmount = event.getApprovedAmount() != null
+                        ? event.getApprovedAmount()
+                        : loan.getProposedAmount();
                 BigDecimal finalRate = event.getInterestRate() != null
                         ? event.getInterestRate()
                         : loan.getProposedInterestRate();
+                Integer finalTermMonths = event.getTermMonths() != null
+                        ? event.getTermMonths()
+                        : loan.getTermMonths();
+
+                validateApprovedTerms(loan, finalAmount, finalRate, finalTermMonths);
+                finalAmount = finalAmount.setScale(0, RoundingMode.HALF_UP);
+
+                loan.setAmount(finalAmount);
+                loan.setProposedAmount(finalAmount);
                 loan.setInterestRate(finalRate);
+                loan.setProposedInterestRate(finalRate);
+                loan.setTermMonths(finalTermMonths);
+                recalculateFeeSnapshot(loan, finalAmount);
                 loan.setStatus(LoanStatus.AWAITING_BORROWER_APPROVAL);
                 loanRequestRepository.save(loan);
                 kafkaProducerService.publishLoanApprovedAwaitingBorrower(loan);
@@ -605,6 +650,51 @@ public class LoanService {
         return buildResponse(loan, false);
     }
 
+    private void validateApprovedTerms(LoanRequest loan, BigDecimal approvedAmount,
+                                       BigDecimal interestRate, Integer termMonths) {
+        if (approvedAmount == null || approvedAmount.signum() <= 0) {
+            throw new InvalidLoanStateException("Số tiền duyệt phải lớn hơn 0");
+        }
+        if (interestRate == null || interestRate.signum() <= 0) {
+            throw new InvalidLoanStateException("Lãi suất duyệt phải lớn hơn 0");
+        }
+        if (termMonths == null || termMonths <= 0) {
+            throw new InvalidLoanStateException("Kỳ hạn duyệt phải lớn hơn 0");
+        }
+        loanProductService.findProductById(loan.getProductId()).ifPresent(product -> {
+            if (!product.isAmountInRange(approvedAmount)) {
+                throw new InvalidLoanStateException(
+                        "Số tiền duyệt cho sản phẩm '%s' phải từ %,.0f đến %,.0f VNĐ"
+                                .formatted(product.getName(),
+                                        product.getMinAmount().doubleValue(),
+                                        product.getMaxAmount().doubleValue()));
+            }
+            if (!product.isTermAllowed(termMonths)) {
+                throw new InvalidLoanStateException(
+                        "Kỳ hạn %d tháng không hợp lệ cho sản phẩm '%s'. Kỳ hạn cho phép: %s"
+                                .formatted(termMonths, product.getName(), product.getAvailableTerms()));
+            }
+        });
+    }
+
+    private void recalculateFeeSnapshot(LoanRequest loan, BigDecimal finalAmount) {
+        BigDecimal feeRate = loan.getAppraisalFeeRate() != null ? loan.getAppraisalFeeRate() : BigDecimal.ZERO;
+        BigDecimal appraisalFee = finalAmount.multiply(feeRate)
+                .divide(new BigDecimal("100"), 0, RoundingMode.HALF_UP);
+        BigDecimal vatAmount = appraisalFee.multiply(new BigDecimal("0.10"))
+                .setScale(0, RoundingMode.HALF_UP);
+        BigDecimal totalFee = appraisalFee.add(vatAmount);
+        if (totalFee.compareTo(finalAmount) >= 0) {
+            throw new InvalidLoanStateException(
+                    "Tổng phí thẩm định (%,.0f VNĐ) không được lớn hơn hoặc bằng số tiền duyệt (%,.0f VNĐ)"
+                            .formatted(totalFee, finalAmount));
+        }
+        loan.setAppraisalFee(appraisalFee);
+        loan.setVatAmount(vatAmount);
+        loan.setTotalFee(totalFee);
+        loan.setNetDisbursement(finalAmount.subtract(totalFee));
+    }
+
     // ── Borrower confirmation ─────────────────────────────────────
 
     /**
@@ -640,8 +730,7 @@ public class LoanService {
     }
 
     /**
-     * Borrower cancels/declines the application.
-     * Valid from PENDING_REVIEW or AWAITING_BORROWER_APPROVAL.
+     * Borrower cancels/declines the application before funds are released.
      */
     @Transactional
     @Caching(evict = {
@@ -655,20 +744,46 @@ public class LoanService {
             throw new InvalidLoanStateException("Bạn không có quyền hủy khoản gọi vốn này");
         }
 
-        Set<LoanStatus> cancellableStatuses = EnumSet.of(
-                LoanStatus.PENDING_REVIEW, LoanStatus.AWAITING_BORROWER_APPROVAL);
-        if (!cancellableStatuses.contains(loan.getStatus())) {
-            throw new InvalidLoanStateException(
-                    "Không thể hủy khoản gọi vốn %s ở trạng thái hiện tại (%s)"
-                    .formatted(loan.getLoanCode(), loan.getStatus()));
-        }
-
-        loan.setStatus(LoanStatus.CANCELLED);
-        loan.setBorrowerCancelledReason(reason);
-        loanRequestRepository.save(loan);
+        cancelPreDisbursementLoan(loan, reason, null, "borrower " + borrowerId);
 
         log.info("Loan {} cancelled by borrower {}: {}", loanId, borrowerId, reason);
         return buildResponse(loan, false);
+    }
+
+    @Transactional
+    @Caching(evict = {
+        @CacheEvict(value = CacheConfig.CACHE_LOANS,      allEntries = true),
+        @CacheEvict(value = CacheConfig.CACHE_LOAN_BY_ID, key = "#loanId")
+    })
+    public LoanResponse cancelLoanByCms(String loanId, String reason, String cancelledBy) {
+        LoanRequest loan = findLoanOrThrow(loanId);
+        cancelPreDisbursementLoan(loan, reason, cancelledBy, "CMS " + (cancelledBy != null ? cancelledBy : "unknown"));
+        log.info("Loan {} cancelled by CMS {}: {}", loanId, cancelledBy, reason);
+        return buildResponse(loan, false);
+    }
+
+    private void cancelPreDisbursementLoan(LoanRequest loan, String reason, String reviewedBy, String actor) {
+        if (!PRE_DISBURSEMENT_CANCELLABLE_STATUSES.contains(loan.getStatus())) {
+            throw new InvalidLoanStateException(
+                    "Không thể hủy khoản gọi vốn %s ở trạng thái hiện tại (%s)"
+                            .formatted(loan.getLoanCode(), loan.getStatus()));
+        }
+
+        String finalReason = reason != null && !reason.isBlank() ? reason.trim() : "Hủy trước khi giải ngân";
+        if (loan.getStatus() == LoanStatus.ACTIVE
+                || loan.getStatus() == LoanStatus.FUNDED
+                || loan.getStatus() == LoanStatus.AWAITING_DISBURSEMENT) {
+            contractService.refundInvestorsAndVoid(loan, finalReason);
+        }
+
+        loan.setStatus(LoanStatus.CANCELLED);
+        loan.setBorrowerCancelledReason(finalReason);
+        if (reviewedBy != null && !reviewedBy.isBlank()) {
+            loan.setReviewedBy(reviewedBy);
+            loan.setReviewedAt(LocalDateTime.now(ZoneId.of("Asia/Ho_Chi_Minh")));
+        }
+        loanRequestRepository.save(loan);
+        log.info("Loan {} cancelled before disbursement by {}", loan.getId(), actor);
     }
 
     /**

@@ -1,5 +1,6 @@
 package com.p2plending.loan.client;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.p2plending.loan.dto.response.InternalUserResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -42,5 +43,47 @@ public class AuthServiceClient {
             log.warn("Could not fetch user info from auth-service for userId={}: {}", userId, e.getMessage());
             return Optional.empty();
         }
+    }
+
+    /** Định danh pháp nhân để snapshot vào khế ước khoản DN. */
+    public record BusinessProfileInfo(String businessType, String businessName, String registrationNumber,
+                                      String taxCode, String representativeName, String status) {
+        public boolean isApproved() {
+            return "APPROVED".equalsIgnoreCase(status);
+        }
+    }
+
+    /**
+     * Lấy hồ sơ doanh nghiệp của người gọi vốn từ auth-service
+     * ({@code /internal/users/{userId}/business-profile}). Trả empty nếu chưa có/không gọi được.
+     */
+    public Optional<BusinessProfileInfo> getBusinessProfile(String userId) {
+        try {
+            HttpHeaders headers = new HttpHeaders();
+            headers.set("X-Internal-Secret", internalSecret);
+            ResponseEntity<JsonNode> resp = restTemplate.exchange(
+                    authServiceBaseUrl + "/internal/users/" + userId + "/business-profile",
+                    HttpMethod.GET,
+                    new HttpEntity<>(headers),
+                    JsonNode.class
+            );
+            JsonNode b = resp.getBody();
+            if (b == null || b.isNull()) return Optional.empty();
+            return Optional.of(new BusinessProfileInfo(
+                    text(b, "businessType"),
+                    text(b, "businessName"),
+                    text(b, "registrationNumber"),
+                    text(b, "taxCode"),
+                    text(b, "representativeName"),
+                    text(b, "status")));
+        } catch (Exception e) {
+            log.warn("Could not fetch business profile from auth-service for userId={}: {}", userId, e.getMessage());
+            return Optional.empty();
+        }
+    }
+
+    private static String text(JsonNode node, String field) {
+        JsonNode value = node.path(field);
+        return value.isNull() || value.isMissingNode() ? null : value.asText();
     }
 }

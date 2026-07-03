@@ -82,6 +82,10 @@ public class PaymentServiceClient {
         post(userId, "lock", amount, description, referenceId, "Không thể khóa tiền đầu tư.");
     }
 
+    public void lock(String userId, String ownerType, BigDecimal amount, String description, String referenceId) {
+        post(userId, "lock", ownerType, amount, description, referenceId, "Không thể khóa tiền đầu tư.");
+    }
+
     /**
      * Mở khóa tiền khi lệnh đầu tư bị hủy/hết hạn (hoàn về số dư khả dụng).
      * referenceId (vd "REFUND-{offerId}") để payment-service idempotent, chống hoàn trùng.
@@ -90,12 +94,20 @@ public class PaymentServiceClient {
         post(userId, "unlock", amount, description, referenceId, "Không thể hoàn tiền đầu tư.");
     }
 
+    public void unlock(String userId, String ownerType, BigDecimal amount, String description, String referenceId) {
+        post(userId, "unlock", ownerType, amount, description, referenceId, "Không thể hoàn tiền đầu tư.");
+    }
+
     /**
      * Trừ tiền đã khóa khi khoản gọi vốn được giải ngân (locked → debit thật).
      * referenceId (vd "DISBURSE-{offerId}") để payment-service idempotent, chống debit trùng khi retry.
      */
     public void debit(String userId, BigDecimal amount, String description, String referenceId) {
         post(userId, "debit", amount, description, referenceId, "Không thể trừ tiền giải ngân.");
+    }
+
+    public void debit(String userId, String ownerType, BigDecimal amount, String description, String referenceId) {
+        post(userId, "debit", ownerType, amount, description, referenceId, "Không thể trừ tiền giải ngân.");
     }
 
     /**
@@ -119,6 +131,10 @@ public class PaymentServiceClient {
      */
     public void creditRepayment(String userId, BigDecimal amount, String description, String referenceId) {
         post(userId, "credit", amount, description, referenceId, "Không thể cộng tiền hoàn trả vào ví.");
+    }
+
+    public void creditRepayment(String userId, String ownerType, BigDecimal amount, String description, String referenceId) {
+        post(userId, "credit", ownerType, amount, description, referenceId, "Không thể cộng tiền hoàn trả vào ví.");
     }
 
     /**
