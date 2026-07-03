@@ -61,6 +61,13 @@ public class BusinessProfileService {
             throw new InvalidIdentityException(
                     "Cần hoàn tất xác minh danh tính cá nhân (eKYC) trước khi đăng ký hồ sơ doanh nghiệp");
         }
+        // Công ty ở VN luôn có MST — bắt buộc để tạo tài khoản ví DN đúng định danh trên TIKLUY/MB.
+        // Hộ kinh doanh có thể chưa có MST → cho phép trống, hệ thống dùng số ĐKKD thay thế.
+        if (request.getBusinessType() == BusinessType.COMPANY
+                && (request.getTaxCode() == null || request.getTaxCode().isBlank())) {
+            throw new InvalidIdentityException(
+                    "Công ty bắt buộc có mã số thuế (MST). Vui lòng nhập MST trên giấy chứng nhận đăng ký doanh nghiệp.");
+        }
         if (businessProfileRepository.existsByUserIdAndStatusInAndIsDeletedFalse(
                 userId, EnumSet.of(KycStatus.PENDING, KycStatus.APPROVED))) {
             throw new BusinessProfileConflictException(
