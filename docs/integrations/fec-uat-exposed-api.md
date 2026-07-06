@@ -130,6 +130,20 @@ Response:
 
 ## 5. Public Callback API - FEC gọi VNFITE
 
+Tên API theo tài liệu FEC/FEOL:
+
+```text
+Update Lead Status Callback API
+```
+
+Chiều gọi:
+
+```text
+FEC/FEOL -> VNFITE
+```
+
+Mục đích: FEC/FEOL đẩy cập nhật trạng thái lead/application về VNFITE trong hành trình UAT.
+
 Endpoint VNFITE expose cho FEC:
 
 ```http
