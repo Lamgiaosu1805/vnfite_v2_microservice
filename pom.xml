@@ -18,6 +18,7 @@
         <module>apps/api/notification-service</module>
         <module>apps/api/payment-service</module>
         <module>apps/api/credit-service</module>
+        <module>apps/api/fec-integration-service</module>
     </modules>
 
     <properties>

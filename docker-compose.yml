@@ -254,6 +254,32 @@ services:
       - p2p-network
     restart: on-failure
 
+  fec-integration-service:
+    image: ${GHCR_REGISTRY:-ghcr.io/lamgiaosu1805/vnfite_v2_microservice}/fec-integration-service:${IMAGE_TAG:-latest}
+    build:
+      context: ./apps/api/fec-integration-service
+      dockerfile: Dockerfile
+    container_name: p2p-fec-integration-service
+    environment:
+      TZ: Asia/Ho_Chi_Minh
+      JAVA_TOOL_OPTIONS: -Duser.timezone=Asia/Ho_Chi_Minh
+      INTERNAL_API_SECRET: ${INTERNAL_API_SECRET:?INTERNAL_API_SECRET is required}
+      APP_FEC_ENABLED: ${APP_FEC_ENABLED:-true}
+      APP_FEC_RECEIVE_LEAD_URL: ${APP_FEC_RECEIVE_LEAD_URL:-https://uat-whitelist-gw.ubank.vn/wl/fe2/api/v2/feol/receive-leads}
+      APP_FEC_PARTNER_CODE: ${APP_FEC_PARTNER_CODE:-VNFITE}
+      APP_FEC_LEAD_SOURCE: ${APP_FEC_LEAD_SOURCE:-VNFITE}
+      APP_FEC_BEARER_TOKEN: ${APP_FEC_BEARER_TOKEN:-}
+      APP_FEC_PARTNER_PRIVATE_KEY: ${APP_FEC_PARTNER_PRIVATE_KEY:-}
+      APP_FEC_PARTNER_PUBLIC_KEY: ${APP_FEC_PARTNER_PUBLIC_KEY:-}
+      APP_FEC_PUBLIC_KEY: ${APP_FEC_PUBLIC_KEY:-}
+      APP_FEC_CALLBACK_API_KEY: ${APP_FEC_CALLBACK_API_KEY:-}
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - p2p-network
+    restart: on-failure
+
   notification-service:
     image: ${GHCR_REGISTRY:-ghcr.io/lamgiaosu1805/vnfite_v2_microservice}/notification-service:${IMAGE_TAG:-latest}
     build:
@@ -405,6 +431,7 @@ services:
       - loan-service
       - matching-service
       - cms-service
+      - fec-integration-service
       - notification-service
       - payment-service
     networks:
