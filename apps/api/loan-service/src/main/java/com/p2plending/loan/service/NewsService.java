@@ -38,7 +38,7 @@ public class NewsService {
 
     private static final ZoneId VIETNAM_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
     private static final Set<String> ALLOWED_IMAGE_EXTENSIONS = Set.of("jpg", "jpeg", "png", "webp", "gif");
-    private static final long MAX_IMAGE_BYTES = 10L * 1024L * 1024L;
+    private static final long MAX_IMAGE_BYTES = 30L * 1024L * 1024L;
 
     private final NewsRepository newsRepository;
 
@@ -140,7 +140,7 @@ public class NewsService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Vui lòng chọn ảnh");
         }
         if (file.getSize() > MAX_IMAGE_BYTES) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Ảnh tin tức tối đa 10MB");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Ảnh tin tức tối đa 30MB");
         }
 
         String extension = imageExtension(file.getOriginalFilename());
