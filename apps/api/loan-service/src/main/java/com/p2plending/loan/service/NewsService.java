@@ -68,13 +68,13 @@ public class NewsService {
             if (!duplicate) unique.add(candidate);
             if (unique.size() >= normalizedLimit) break;
         }
-        return unique.stream().map(NewsResponse::summaryFromEntity).toList();
+        return unique.stream().map(news -> NewsResponse.summaryFromEntity(news, newsPublicBase)).toList();
     }
 
     @Transactional(readOnly = true)
     public NewsResponse getNewsDetail(String id) {
         return newsRepository.findByIdAndIsDeletedFalse(id)
-                .map(NewsResponse::fromEntity)
+                .map(news -> NewsResponse.fromEntity(news, newsPublicBase))
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Tin tức không tồn tại"));
     }
 
@@ -86,7 +86,7 @@ public class NewsService {
         Page<NewsResponse> result = (normalizedType == null
                 ? newsRepository.findByIsDeletedFalseOrderByPublishedAtDesc(PageRequest.of(normalizedPage, normalizedSize))
                 : newsRepository.findByNewsTypeAndIsDeletedFalseOrderByPublishedAtDesc(normalizedType, PageRequest.of(normalizedPage, normalizedSize)))
-                .map(NewsResponse::fromEntity);
+                .map(news -> NewsResponse.fromEntity(news, newsPublicBase));
         return PagedResponse.from(result);
     }
 
@@ -109,7 +109,7 @@ public class NewsService {
                         : LocalDateTime.now(VIETNAM_ZONE))
                 .isDeleted(false)
                 .build();
-        return NewsResponse.fromEntity(newsRepository.save(news));
+        return NewsResponse.fromEntity(newsRepository.save(news), newsPublicBase);
     }
 
     @Transactional
@@ -124,7 +124,7 @@ public class NewsService {
         news.setPublishedAt(request.getPublishedAt() != null
                 ? request.getPublishedAt()
                 : LocalDateTime.now(VIETNAM_ZONE));
-        return NewsResponse.fromEntity(newsRepository.save(news));
+        return NewsResponse.fromEntity(newsRepository.save(news), newsPublicBase);
     }
 
     @Transactional

@@ -31,6 +31,7 @@ class NewsServiceTest {
 
     @Test
     void removesLegacyCampaignDuplicatesButKeepsDifferentNews() {
+        ReflectionTestUtils.setField(newsService, "newsPublicBase", "http://localhost:7080");
         LocalDateTime publishedAt = LocalDateTime.of(2026, 6, 23, 16, 50);
         News editorial = news("1",
                 "VNFITE ký kết hợp tác với Trường Đại học Phenikaa, thúc đẩy phát triển nguồn nhân lực công nghệ tài chính",
@@ -46,10 +47,12 @@ class NewsServiceTest {
         List<NewsResponse> result = newsService.getLatestNews(6);
 
         assertThat(result).extracting(NewsResponse::getId).containsExactly("1", "3");
+        assertThat(result.get(0).getImageUrl()).isEqualTo("http://localhost:7080/images/news/phenikaa-1.jpg");
     }
 
     @Test
     void filtersPublicNewsByType() {
+        ReflectionTestUtils.setField(newsService, "newsPublicBase", "http://localhost:7080");
         LocalDateTime publishedAt = LocalDateTime.of(2026, 7, 6, 9, 0);
         News featured = news("f1", "Tin nổi bật", "/images/news/f1.jpg", publishedAt);
         featured.setNewsType("FEATURED");
@@ -60,6 +63,7 @@ class NewsServiceTest {
 
         assertThat(result).hasSize(1);
         assertThat(result.get(0).getNewsType()).isEqualTo("FEATURED");
+        assertThat(result.get(0).getImageUrl()).isEqualTo("http://localhost:7080/images/news/f1.jpg");
     }
 
     @Test
