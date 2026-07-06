@@ -60,6 +60,7 @@ jobs:
             echo "credit=true"       >> $GITHUB_OUTPUT
             echo "payment=true"      >> $GITHUB_OUTPUT
             echo "notification=true" >> $GITHUB_OUTPUT
+            echo "fec=true"          >> $GITHUB_OUTPUT
             echo "nginx=true"        >> $GITHUB_OUTPUT
           else
             CHANGED=$(git diff --name-only HEAD~1 HEAD 2>/dev/null || echo "")
@@ -72,6 +73,7 @@ jobs:
             echo "credit=$(echo "$CHANGED"        | grep -q 'apps/api/credit-service/'       && echo true || echo false)" >> $GITHUB_OUTPUT
             echo "payment=$(echo "$CHANGED"       | grep -q 'apps/api/payment-service/'      && echo true || echo false)" >> $GITHUB_OUTPUT
             echo "notification=$(echo "$CHANGED" | grep -q 'apps/api/notification-service/' && echo true || echo false)" >> $GITHUB_OUTPUT
+            echo "fec=$(echo "$CHANGED"          | grep -q 'apps/api/fec-integration-service/' && echo true || echo false)" >> $GITHUB_OUTPUT
             echo "nginx=$(echo "$CHANGED"        | grep -q 'nginx/'                         && echo true || echo false)" >> $GITHUB_OUTPUT
           fi
 
@@ -135,14 +137,20 @@ jobs:
           ssh -i ~/.ssh/deploy_key ${{ env.SERVER }} \
             'set -e; cd /root/p2p-lending; git fetch origin main; git reset --hard origin/main; docker compose build notification-service; docker compose up -d notification-service; docker image prune -f'
 
+      - name: Deploy fec-integration-service
+        if: steps.changes.outputs.fec == 'true'
+        run: |
+          ssh -i ~/.ssh/deploy_key ${{ env.SERVER }} \
+            'set -e; cd /root/p2p-lending; git fetch origin main; git reset --hard origin/main; docker compose build fec-integration-service; docker compose up -d fec-integration-service; docker image prune -f'
+
       - name: Reload nginx
         if: steps.changes.outputs.nginx == 'true'
         run: |
           ssh -i ~/.ssh/deploy_key ${{ env.SERVER }} \
-            'set -e; cd /root/p2p-lending; git fetch origin main; git reset --hard origin/main; docker compose up -d nginx'
+            'set -e; cd /root/p2p-lending; git fetch origin main; git reset --hard origin/main; docker compose up -d --force-recreate nginx'
 
       - name: Reset Redis cache
-        if: steps.changes.outputs.auth == 'true' || steps.changes.outputs.loan == 'true' || steps.changes.outputs.matching == 'true' || steps.changes.outputs.cms == 'true' || steps.changes.outputs.credit == 'true' || steps.changes.outputs.payment == 'true' || steps.changes.outputs.notification == 'true' || steps.changes.outputs.nginx == 'true'
+        if: steps.changes.outputs.auth == 'true' || steps.changes.outputs.loan == 'true' || steps.changes.outputs.matching == 'true' || steps.changes.outputs.cms == 'true' || steps.changes.outputs.credit == 'true' || steps.changes.outputs.payment == 'true' || steps.changes.outputs.notification == 'true' || steps.changes.outputs.fec == 'true' || steps.changes.outputs.nginx == 'true'
         continue-on-error: true
         run: |
           ssh -i ~/.ssh/deploy_key -o ConnectTimeout=10 -o ServerAliveInterval=15 -o ServerAliveCountMax=3 ${{ env.SERVER }} \
