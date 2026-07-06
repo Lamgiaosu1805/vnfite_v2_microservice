@@ -20,11 +20,16 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
+import org.springframework.core.io.ByteArrayResource;
+import org.springframework.util.LinkedMultiValueMap;
+import org.springframework.util.MultiValueMap;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.util.UriComponentsBuilder;
 
+import java.io.IOException;
 import java.math.BigDecimal;
 import java.net.URI;
 import java.time.LocalDate;
@@ -216,6 +221,79 @@ public class SourceServiceClient {
             log.warn("Không lưu được kết quả AI GPKD cho user {}: {}", userId, e.getMessage());
         }
         return result;
+    }
+
+    // ─── Tin tức ────────────────────────────────────────────────────────────
+
+    public JsonNode listNews(int page, int size, String type) {
+        URI uri = UriComponentsBuilder.fromHttpUrl(loanServiceUrl)
+                .path("/internal/news")
+                .queryParam("page", page)
+                .queryParam("size", size)
+                .queryParamIfPresent("type", Optional.ofNullable(type).filter(value -> !value.isBlank()))
+                .build()
+                .encode()
+                .toUri();
+        return exchangeForJson(uri, HttpMethod.GET, null);
+    }
+
+    public JsonNode getNews(String id) {
+        String url = UriComponentsBuilder.fromHttpUrl(loanServiceUrl)
+                .path("/internal/news/{id}")
+                .buildAndExpand(id)
+                .toUriString();
+        return exchangeForJson(url, HttpMethod.GET, null);
+    }
+
+    public JsonNode createNews(Map<String, Object> body) {
+        String url = UriComponentsBuilder.fromHttpUrl(loanServiceUrl)
+                .path("/internal/news")
+                .toUriString();
+        return exchangeForJson(url, HttpMethod.POST, body);
+    }
+
+    public JsonNode updateNews(String id, Map<String, Object> body) {
+        String url = UriComponentsBuilder.fromHttpUrl(loanServiceUrl)
+                .path("/internal/news/{id}")
+                .buildAndExpand(id)
+                .toUriString();
+        return exchangeForJson(url, HttpMethod.PUT, body);
+    }
+
+    public void deleteNews(String id) {
+        String url = UriComponentsBuilder.fromHttpUrl(loanServiceUrl)
+                .path("/internal/news/{id}")
+                .buildAndExpand(id)
+                .toUriString();
+        exchangeForVoid(url, HttpMethod.DELETE);
+    }
+
+    public JsonNode uploadNewsImage(MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            throw new SourceServiceException(HttpStatus.BAD_REQUEST, "Vui lòng chọn ảnh");
+        }
+        String url = UriComponentsBuilder.fromHttpUrl(loanServiceUrl)
+                .path("/internal/news/images")
+                .toUriString();
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.set(INTERNAL_SECRET_HEADER, internalSecret);
+        headers.setContentType(MediaType.MULTIPART_FORM_DATA);
+
+        MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
+        try {
+            body.add("file", new ByteArrayResource(file.getBytes()) {
+                @Override
+                public String getFilename() {
+                    return file.getOriginalFilename();
+                }
+            });
+        } catch (IOException ex) {
+            throw new SourceServiceException(HttpStatus.BAD_REQUEST, "Không thể đọc file ảnh");
+        }
+
+        HttpEntity<MultiValueMap<String, Object>> entity = new HttpEntity<>(body, headers);
+        return exchangeAndParse(url, () -> restTemplate.exchange(url, HttpMethod.POST, entity, String.class));
     }
 
     public ResetCustomerPasswordResponse resetCustomerPassword(String userId) {
@@ -1113,6 +1191,25 @@ public class SourceServiceClient {
         HttpEntity<Object> entity = new HttpEntity<>(body, headers);
 
         return exchangeAndParse(uri.toString(), () -> restTemplate.exchange(uri, method, entity, String.class));
+    }
+
+    private void exchangeForVoid(String url, HttpMethod method) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.set(INTERNAL_SECRET_HEADER, internalSecret);
+        HttpEntity<Object> entity = new HttpEntity<>(null, headers);
+
+        try {
+            restTemplate.exchange(url, method, entity, Void.class);
+        } catch (RestClientResponseException ex) {
+            String message = sourceErrorMessage(ex);
+            log.warn("Source service HTTP error from {}: status={}, message={}", url, ex.getStatusCode(), message);
+            throw new SourceServiceException(ex.getStatusCode(), message);
+        } catch (Exception ex) {
+            log.error("Cannot connect to source service {}: {} — {}", url, ex.getClass().getSimpleName(), ex.getMessage());
+            throw new SourceServiceException(
+                    org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE,
+                    "Không thể kết nối với máy chủ. Vui lòng thử lại.");
+        }
     }
 
     private JsonNode exchangeAndParse(String source, java.util.function.Supplier<ResponseEntity<String>> request) {

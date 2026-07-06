@@ -164,8 +164,12 @@ services:
       VNF_OTP_LOAN_FUNCTION_TYPE: ${VNF_OTP_LOAN_FUNCTION_TYPE:-7}
       VNF_OTP_CONTRACT_FUNCTION_TYPE: ${VNF_OTP_CONTRACT_FUNCTION_TYPE:-2}
       INTERNAL_API_SECRET: ${INTERNAL_API_SECRET:?INTERNAL_API_SECRET is required}
+      APP_NEWS_IMAGE_DIR: ${APP_NEWS_IMAGE_DIR:-/var/www/html/images/news}
+      APP_NEWS_PUBLIC_BASE: ${APP_NEWS_PUBLIC_BASE:-http://localhost:7080}
       DEMO_EXCLUDED_USER_IDS: ${DEMO_EXCLUDED_USER_IDS:-}
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
+    volumes:
+      - /var/www/html/images:/var/www/html/images
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:

@@ -17,8 +17,9 @@ public class NewsController {
 
     @GetMapping
     public ResponseEntity<List<NewsResponse>> getLatestNews(
+            @RequestParam(required = false) String type,
             @RequestParam(defaultValue = "10") int limit) {
-        return ResponseEntity.ok(newsService.getLatestNews(Math.min(limit, 50)));
+        return ResponseEntity.ok(newsService.getLatestByType(type, Math.min(limit, 50)));
     }
 
     @GetMapping("/{id}")
