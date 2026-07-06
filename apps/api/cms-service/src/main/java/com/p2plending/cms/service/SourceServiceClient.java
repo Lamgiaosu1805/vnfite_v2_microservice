@@ -268,6 +268,17 @@ public class SourceServiceClient {
         exchangeForVoid(url, HttpMethod.DELETE);
     }
 
+    /** Xóa ảnh tin tức mồ côi (upload xong nhưng bài viết bị hủy trước khi lưu). Best-effort. */
+    public void deleteNewsImage(String imageUrl) {
+        URI uri = UriComponentsBuilder.fromHttpUrl(loanServiceUrl)
+                .path("/internal/news/images")
+                .queryParam("url", imageUrl)
+                .build()
+                .encode()
+                .toUri();
+        exchangeForVoid(uri, HttpMethod.DELETE);
+    }
+
     public JsonNode uploadNewsImage(MultipartFile file) {
         if (file == null || file.isEmpty()) {
             throw new SourceServiceException(HttpStatus.BAD_REQUEST, "Vui lòng chọn ảnh");
@@ -1206,6 +1217,25 @@ public class SourceServiceClient {
             throw new SourceServiceException(ex.getStatusCode(), message);
         } catch (Exception ex) {
             log.error("Cannot connect to source service {}: {} — {}", url, ex.getClass().getSimpleName(), ex.getMessage());
+            throw new SourceServiceException(
+                    org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE,
+                    "Không thể kết nối với máy chủ. Vui lòng thử lại.");
+        }
+    }
+
+    private void exchangeForVoid(URI uri, HttpMethod method) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.set(INTERNAL_SECRET_HEADER, internalSecret);
+        HttpEntity<Object> entity = new HttpEntity<>(null, headers);
+
+        try {
+            restTemplate.exchange(uri, method, entity, Void.class);
+        } catch (RestClientResponseException ex) {
+            String message = sourceErrorMessage(ex);
+            log.warn("Source service HTTP error from {}: status={}, message={}", uri, ex.getStatusCode(), message);
+            throw new SourceServiceException(ex.getStatusCode(), message);
+        } catch (Exception ex) {
+            log.error("Cannot connect to source service {}: {} — {}", uri, ex.getClass().getSimpleName(), ex.getMessage());
             throw new SourceServiceException(
                     org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE,
                     "Không thể kết nối với máy chủ. Vui lòng thử lại.");

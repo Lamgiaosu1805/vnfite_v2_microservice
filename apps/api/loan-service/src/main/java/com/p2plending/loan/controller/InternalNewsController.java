@@ -88,6 +88,15 @@ public class InternalNewsController {
         return ResponseEntity.ok(newsService.uploadNewsImage(file));
     }
 
+    @DeleteMapping("/images")
+    public ResponseEntity<Void> deleteImage(
+            @RequestHeader(INTERNAL_SECRET_HEADER) String secret,
+            @RequestParam String url) {
+        requireInternalSecret(secret);
+        newsService.deleteNewsImage(url);
+        return ResponseEntity.noContent().build();
+    }
+
     private void requireInternalSecret(String secret) {
         if (!internalSecret.equals(secret)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Invalid internal secret");

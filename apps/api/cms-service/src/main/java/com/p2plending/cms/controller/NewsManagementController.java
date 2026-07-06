@@ -62,4 +62,10 @@ public class NewsManagementController {
     public ResponseEntity<JsonNode> uploadNewsImage(@RequestPart("file") MultipartFile file) {
         return ResponseEntity.ok(sourceServiceClient.uploadNewsImage(file));
     }
+
+    @DeleteMapping("/images")
+    public ResponseEntity<Void> deleteNewsImage(@RequestParam String url) {
+        sourceServiceClient.deleteNewsImage(url);
+        return ResponseEntity.noContent().build();
+    }
 }

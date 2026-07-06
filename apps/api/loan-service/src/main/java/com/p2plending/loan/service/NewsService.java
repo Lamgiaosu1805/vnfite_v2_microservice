@@ -7,6 +7,7 @@ import com.p2plending.loan.dto.response.NewsImageUploadResponse;
 import com.p2plending.loan.dto.response.PagedResponse;
 import com.p2plending.loan.dto.response.NewsResponse;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -32,6 +33,7 @@ import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class NewsService {
 
     private static final ZoneId VIETNAM_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
@@ -160,6 +162,27 @@ public class NewsService {
                     .build();
         } catch (IOException ex) {
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Không thể lưu ảnh tin tức");
+        }
+    }
+
+    /**
+     * Xóa ảnh tin tức mồ côi (đã upload nhưng bài viết bị hủy trước khi lưu).
+     * Idempotent — không tồn tại hoặc URL không trỏ vào thư mục ảnh tin tức thì bỏ qua, không lỗi.
+     */
+    public void deleteNewsImage(String url) {
+        if (url == null || url.isBlank()) return;
+        String fileName = url.substring(url.lastIndexOf('/') + 1);
+        String extension = imageExtension(fileName);
+        if (!ALLOWED_IMAGE_EXTENSIONS.contains(extension) || !fileName.matches("^[a-fA-F0-9-]+\\.[a-zA-Z0-9]+$")) {
+            return;
+        }
+        try {
+            Path directory = Path.of(newsImageDir).toAbsolutePath().normalize();
+            Path target = directory.resolve(fileName).normalize();
+            if (!target.startsWith(directory)) return;
+            Files.deleteIfExists(target);
+        } catch (IOException ex) {
+            log.warn("Không thể xóa ảnh tin tức mồ côi {}: {}", fileName, ex.getMessage());
         }
     }
 
