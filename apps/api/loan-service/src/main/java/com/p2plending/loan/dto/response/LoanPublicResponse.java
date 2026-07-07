@@ -24,6 +24,8 @@ public class LoanPublicResponse {
     private Integer termMonths;
     private String purpose;
     private String occupation;
+    private String workplace;
+    private String workplaceAddress;
     private String province;
     private LoanStatus status;
     private BigDecimal fundedAmount;
@@ -32,6 +34,9 @@ public class LoanPublicResponse {
     private BigDecimal vatAmount;
     private BigDecimal totalFee;
     private BigDecimal netDisbursement;
+    private LocalDateTime reviewedAt;
+    private LocalDateTime activatedAt;
+    private LocalDateTime listedAt;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
