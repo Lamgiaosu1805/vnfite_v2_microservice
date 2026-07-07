@@ -24,19 +24,31 @@ public class SecurityConfig {
 
     private final JwtFilter jwtFilter;
 
-    /** Cho phép website (domain khác) đọc tin tức công khai qua trình duyệt — chỉ áp dụng cho /api/news, chỉ GET. */
+    /**
+     * Cho phép website (domain khác) đọc tin tức/tuyển dụng công khai qua trình duyệt.
+     * /api/news chỉ GET; /api/jobs cần thêm POST vì candidate nộp hồ sơ ứng tuyển qua browser cross-origin.
+     */
     @Bean
     public CorsConfigurationSource newsCorsConfigurationSource() {
-        CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(List.of(
+        List<String> allowedOrigins = List.of(
                 "https://vnfite.com.vn",
                 "https://www.vnfite.com.vn",
                 "http://localhost:3000"
-        ));
-        configuration.setAllowedMethods(List.of("GET"));
-        configuration.setAllowedHeaders(List.of("*"));
+        );
+
+        CorsConfiguration newsConfig = new CorsConfiguration();
+        newsConfig.setAllowedOrigins(allowedOrigins);
+        newsConfig.setAllowedMethods(List.of("GET"));
+        newsConfig.setAllowedHeaders(List.of("*"));
+
+        CorsConfiguration jobsConfig = new CorsConfiguration();
+        jobsConfig.setAllowedOrigins(allowedOrigins);
+        jobsConfig.setAllowedMethods(List.of("GET", "POST"));
+        jobsConfig.setAllowedHeaders(List.of("*"));
+
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        source.registerCorsConfiguration("/api/news/**", configuration);
+        source.registerCorsConfiguration("/api/news/**", newsConfig);
+        source.registerCorsConfiguration("/api/jobs/**", jobsConfig);
         return source;
     }
 
@@ -53,6 +65,8 @@ public class SecurityConfig {
                         // Public endpoints
                         .requestMatchers("/api/loans/products").permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/news", "/api/news/**").permitAll()
+                        .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/jobs", "/api/jobs/**").permitAll()
+                        .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/jobs/*/applications").permitAll()
                         // Everything else requires authentication
                         .anyRequest().authenticated()
                 )

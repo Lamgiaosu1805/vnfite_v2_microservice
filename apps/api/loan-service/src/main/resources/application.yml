@@ -103,6 +103,10 @@ app:
   news:
     image-dir: ${APP_NEWS_IMAGE_DIR:/var/www/html/images/news}
     public-base: ${APP_NEWS_PUBLIC_BASE:http://localhost:7080}
+  job:
+    image-dir: ${APP_JOB_IMAGE_DIR:/var/www/html/images/jobs}
+    public-base: ${APP_JOB_PUBLIC_BASE:http://localhost:7080}
+    cv-dir: ${APP_JOB_CV_DIR:/var/data/job-applications/cv}
   antivirus:
     enabled: ${APP_AV_ENABLED:false}
     host: ${APP_CLAMAV_HOST:clamav}

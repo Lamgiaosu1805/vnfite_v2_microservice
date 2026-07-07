@@ -166,10 +166,14 @@ services:
       INTERNAL_API_SECRET: ${INTERNAL_API_SECRET:?INTERNAL_API_SECRET is required}
       APP_NEWS_IMAGE_DIR: ${APP_NEWS_IMAGE_DIR:-/var/www/html/images/news}
       APP_NEWS_PUBLIC_BASE: ${APP_NEWS_PUBLIC_BASE:-http://localhost:7080}
+      APP_JOB_IMAGE_DIR: ${APP_JOB_IMAGE_DIR:-/var/www/html/images/jobs}
+      APP_JOB_PUBLIC_BASE: ${APP_JOB_PUBLIC_BASE:-http://localhost:7080}
+      APP_JOB_CV_DIR: ${APP_JOB_CV_DIR:-/var/data/job-applications/cv}
       DEMO_EXCLUDED_USER_IDS: ${DEMO_EXCLUDED_USER_IDS:-}
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
     volumes:
       - /var/www/html/images:/var/www/html/images
+      - job_cv_data:/var/data/job-applications/cv
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
@@ -444,6 +448,7 @@ volumes:
   kafka_data:
   zookeeper_data:
   zookeeper_log:
+  job_cv_data:
 
 networks:
   p2p-network:

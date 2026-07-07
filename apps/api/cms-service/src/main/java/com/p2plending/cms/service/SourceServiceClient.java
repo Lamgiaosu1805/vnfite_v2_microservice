@@ -307,6 +307,130 @@ public class SourceServiceClient {
         return exchangeAndParse(url, () -> restTemplate.exchange(url, HttpMethod.POST, entity, String.class));
     }
 
+    // ─── Tuyển dụng ─────────────────────────────────────────────────────────
+
+    public JsonNode listJobPostings(int page, int size, String status) {
+        URI uri = UriComponentsBuilder.fromHttpUrl(loanServiceUrl)
+                .path("/internal/job-postings")
+                .queryParam("page", page)
+                .queryParam("size", size)
+                .queryParamIfPresent("status", Optional.ofNullable(status).filter(value -> !value.isBlank()))
+                .build()
+                .encode()
+                .toUri();
+        return exchangeForJson(uri, HttpMethod.GET, null);
+    }
+
+    public JsonNode getJobPosting(String id) {
+        String url = UriComponentsBuilder.fromHttpUrl(loanServiceUrl)
+                .path("/internal/job-postings/{id}")
+                .buildAndExpand(id)
+                .toUriString();
+        return exchangeForJson(url, HttpMethod.GET, null);
+    }
+
+    public JsonNode createJobPosting(Map<String, Object> body) {
+        String url = UriComponentsBuilder.fromHttpUrl(loanServiceUrl)
+                .path("/internal/job-postings")
+                .toUriString();
+        return exchangeForJson(url, HttpMethod.POST, body);
+    }
+
+    public JsonNode updateJobPosting(String id, Map<String, Object> body) {
+        String url = UriComponentsBuilder.fromHttpUrl(loanServiceUrl)
+                .path("/internal/job-postings/{id}")
+                .buildAndExpand(id)
+                .toUriString();
+        return exchangeForJson(url, HttpMethod.PUT, body);
+    }
+
+    public void deleteJobPosting(String id) {
+        String url = UriComponentsBuilder.fromHttpUrl(loanServiceUrl)
+                .path("/internal/job-postings/{id}")
+                .buildAndExpand(id)
+                .toUriString();
+        exchangeForVoid(url, HttpMethod.DELETE);
+    }
+
+    /** Xóa ảnh tin tuyển dụng mồ côi (upload xong nhưng bài viết bị hủy trước khi lưu). Best-effort. */
+    public void deleteJobImage(String imageUrl) {
+        URI uri = UriComponentsBuilder.fromHttpUrl(loanServiceUrl)
+                .path("/internal/job-postings/images")
+                .queryParam("url", imageUrl)
+                .build()
+                .encode()
+                .toUri();
+        exchangeForVoid(uri, HttpMethod.DELETE);
+    }
+
+    public JsonNode uploadJobImage(MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            throw new SourceServiceException(HttpStatus.BAD_REQUEST, "Vui lòng chọn ảnh");
+        }
+        String url = UriComponentsBuilder.fromHttpUrl(loanServiceUrl)
+                .path("/internal/job-postings/images")
+                .toUriString();
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.set(INTERNAL_SECRET_HEADER, internalSecret);
+        headers.setContentType(MediaType.MULTIPART_FORM_DATA);
+
+        MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
+        try {
+            body.add("file", new ByteArrayResource(file.getBytes()) {
+                @Override
+                public String getFilename() {
+                    return file.getOriginalFilename();
+                }
+            });
+        } catch (IOException ex) {
+            throw new SourceServiceException(HttpStatus.BAD_REQUEST, "Không thể đọc file ảnh");
+        }
+
+        HttpEntity<MultiValueMap<String, Object>> entity = new HttpEntity<>(body, headers);
+        return exchangeAndParse(url, () -> restTemplate.exchange(url, HttpMethod.POST, entity, String.class));
+    }
+
+    public JsonNode listJobApplications(String jobPostingId, int page, int size) {
+        URI uri = UriComponentsBuilder.fromHttpUrl(loanServiceUrl)
+                .path("/internal/job-applications")
+                .queryParamIfPresent("jobPostingId", Optional.ofNullable(jobPostingId).filter(value -> !value.isBlank()))
+                .queryParam("page", page)
+                .queryParam("size", size)
+                .build()
+                .encode()
+                .toUri();
+        return exchangeForJson(uri, HttpMethod.GET, null);
+    }
+
+    public void deleteJobApplication(String id) {
+        String url = UriComponentsBuilder.fromHttpUrl(loanServiceUrl)
+                .path("/internal/job-applications/{id}")
+                .buildAndExpand(id)
+                .toUriString();
+        exchangeForVoid(url, HttpMethod.DELETE);
+    }
+
+    /** Tải CV ứng viên — trả nguyên response (bytes + header) từ loan-service để controller stream lại cho CMS. */
+    public ResponseEntity<byte[]> downloadJobApplicationCv(String id) {
+        String url = UriComponentsBuilder.fromHttpUrl(loanServiceUrl)
+                .path("/internal/job-applications/{id}/cv")
+                .buildAndExpand(id)
+                .toUriString();
+        HttpHeaders headers = new HttpHeaders();
+        headers.set(INTERNAL_SECRET_HEADER, internalSecret);
+        HttpEntity<Void> entity = new HttpEntity<>(null, headers);
+        try {
+            return restTemplate.exchange(url, HttpMethod.GET, entity, byte[].class);
+        } catch (RestClientResponseException ex) {
+            throw new SourceServiceException(ex.getStatusCode(), sourceErrorMessage(ex));
+        } catch (Exception ex) {
+            log.error("Cannot connect to loan-service {}: {} — {}", url, ex.getClass().getSimpleName(), ex.getMessage());
+            throw new SourceServiceException(
+                    HttpStatus.SERVICE_UNAVAILABLE, "Không thể kết nối với máy chủ. Vui lòng thử lại.");
+        }
+    }
+
     public ResetCustomerPasswordResponse resetCustomerPassword(String userId) {
         String url = UriComponentsBuilder.fromHttpUrl(authServiceUrl)
                 .path("/internal/users/{userId}/reset-password")
