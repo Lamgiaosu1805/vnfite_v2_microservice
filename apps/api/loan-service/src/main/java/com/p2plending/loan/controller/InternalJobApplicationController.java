@@ -11,11 +11,13 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
 
 @RestController
 @RequestMapping("/internal/job-applications")
@@ -33,10 +35,13 @@ public class InternalJobApplicationController {
     public ResponseEntity<PagedResponse<JobApplicationResponse>> listApplications(
             @RequestHeader(INTERNAL_SECRET_HEADER) String secret,
             @RequestParam(required = false) String jobPostingId,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
         requireInternalSecret(secret);
-        return ResponseEntity.ok(jobApplicationService.listApplications(jobPostingId, page, size));
+        return ResponseEntity.ok(jobApplicationService.listApplications(jobPostingId, keyword, fromDate, toDate, page, size));
     }
 
     @GetMapping("/{id}/cv")

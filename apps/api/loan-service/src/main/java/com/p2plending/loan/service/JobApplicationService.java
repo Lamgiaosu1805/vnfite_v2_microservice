@@ -7,12 +7,15 @@ import com.p2plending.loan.domain.repository.JobPostingRepository;
 import com.p2plending.loan.dto.response.JobApplicationCvResource;
 import com.p2plending.loan.dto.response.JobApplicationResponse;
 import com.p2plending.loan.dto.response.PagedResponse;
+import com.p2plending.loan.specification.JobApplicationSpecification;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -96,12 +99,14 @@ public class JobApplicationService {
     }
 
     @Transactional(readOnly = true)
-    public PagedResponse<JobApplicationResponse> listApplications(String jobPostingId, int page, int size) {
+    public PagedResponse<JobApplicationResponse> listApplications(
+            String jobPostingId, String keyword, java.time.LocalDate fromDate, java.time.LocalDate toDate,
+            int page, int size) {
         int normalizedPage = Math.max(page, 0);
         int normalizedSize = Math.max(1, Math.min(size, 100));
-        Page<JobApplication> result = (jobPostingId == null || jobPostingId.isBlank())
-                ? jobApplicationRepository.findByIsDeletedFalseOrderByCreatedAtDesc(PageRequest.of(normalizedPage, normalizedSize))
-                : jobApplicationRepository.findByJobPostingIdAndIsDeletedFalseOrderByCreatedAtDesc(jobPostingId, PageRequest.of(normalizedPage, normalizedSize));
+        Pageable pageable = PageRequest.of(normalizedPage, normalizedSize, Sort.by(Sort.Direction.DESC, "createdAt"));
+        Page<JobApplication> result = jobApplicationRepository.findAll(
+                JobApplicationSpecification.withFilters(jobPostingId, keyword, fromDate, toDate), pageable);
         Page<JobApplicationResponse> mapped = result.map(application -> JobApplicationResponse.fromEntity(
                 application,
                 jobPostingRepository.findByIdAndIsDeletedFalse(application.getJobPostingId())

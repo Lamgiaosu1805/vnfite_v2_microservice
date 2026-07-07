@@ -23,9 +23,12 @@ public class JobApplicationManagementController {
     @GetMapping
     public ResponseEntity<JsonNode> listApplications(
             @RequestParam(required = false) String jobPostingId,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) String fromDate,
+            @RequestParam(required = false) String toDate,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        return ResponseEntity.ok(sourceServiceClient.listJobApplications(jobPostingId, page, size));
+        return ResponseEntity.ok(sourceServiceClient.listJobApplications(jobPostingId, keyword, fromDate, toDate, page, size));
     }
 
     @GetMapping("/{id}/cv")

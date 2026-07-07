@@ -391,10 +391,13 @@ public class SourceServiceClient {
         return exchangeAndParse(url, () -> restTemplate.exchange(url, HttpMethod.POST, entity, String.class));
     }
 
-    public JsonNode listJobApplications(String jobPostingId, int page, int size) {
+    public JsonNode listJobApplications(String jobPostingId, String keyword, String fromDate, String toDate, int page, int size) {
         URI uri = UriComponentsBuilder.fromHttpUrl(loanServiceUrl)
                 .path("/internal/job-applications")
                 .queryParamIfPresent("jobPostingId", Optional.ofNullable(jobPostingId).filter(value -> !value.isBlank()))
+                .queryParamIfPresent("keyword", Optional.ofNullable(keyword).filter(value -> !value.isBlank()))
+                .queryParamIfPresent("fromDate", Optional.ofNullable(fromDate).filter(value -> !value.isBlank()))
+                .queryParamIfPresent("toDate", Optional.ofNullable(toDate).filter(value -> !value.isBlank()))
                 .queryParam("page", page)
                 .queryParam("size", size)
                 .build()
