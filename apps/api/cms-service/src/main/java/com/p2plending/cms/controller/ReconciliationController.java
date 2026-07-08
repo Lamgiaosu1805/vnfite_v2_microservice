@@ -22,6 +22,7 @@ public class ReconciliationController {
     private final SourceServiceClient sourceServiceClient;
 
     @PostMapping("/run")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'OPS', 'FINANCE') or hasAuthority('finance.reconcile')")
     public ResponseEntity<JsonNode> run(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
             @RequestParam(defaultValue = "false") boolean autoFixDeposits,
@@ -48,6 +49,7 @@ public class ReconciliationController {
     }
 
     @PutMapping("/items/{itemId}/resolve")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'OPS', 'FINANCE') or hasAuthority('finance.reconcile')")
     public ResponseEntity<Void> resolve(
             @PathVariable String itemId,
             @RequestBody Map<String, String> body,
@@ -58,6 +60,7 @@ public class ReconciliationController {
     }
 
     @PutMapping("/items/{itemId}/investigate")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'OPS', 'FINANCE') or hasAuthority('finance.reconcile')")
     public ResponseEntity<Void> investigate(
             @PathVariable String itemId,
             @AuthenticationPrincipal CmsPrincipal principal) {
@@ -67,6 +70,7 @@ public class ReconciliationController {
     }
 
     @PostMapping("/items/{itemId}/backfill-deposit")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'OPS', 'FINANCE') or hasAuthority('finance.reconcile')")
     public ResponseEntity<Void> backfillDeposit(
             @PathVariable String itemId,
             @AuthenticationPrincipal CmsPrincipal principal) {

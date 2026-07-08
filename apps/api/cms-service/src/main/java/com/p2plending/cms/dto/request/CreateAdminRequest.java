@@ -19,4 +19,7 @@ public class CreateAdminRequest {
     /** Danh sách vai trò gán cho tài khoản — kiểm tra hợp lệ ở tầng service. */
     @NotEmpty(message = "Phải chọn ít nhất một vai trò")
     private List<String> roles;
+
+    /** Quyền lẻ cấp thêm ngoài vai trò — không bắt buộc, mặc định rỗng. */
+    private List<String> permissions;
 }

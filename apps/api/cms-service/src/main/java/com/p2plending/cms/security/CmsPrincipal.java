@@ -9,11 +9,12 @@ import java.util.Set;
  * @param username Tên đăng nhập
  * @param fullName Họ tên đầy đủ (từ JWT claim fullName)
  * @param email    Email admin
- * @param role     Vai trò chính / nhãn hiển thị (roles[0] cũ, bỏ tiền tố ROLE_) — giữ để tương thích
- * @param roles    Toàn bộ vai trò (đã bỏ tiền tố ROLE_) — nguồn quyết định phân quyền
+ * @param role        Vai trò chính / nhãn hiển thị (roles[0] cũ, bỏ tiền tố ROLE_) — giữ để tương thích
+ * @param roles       Toàn bộ vai trò (đã bỏ tiền tố ROLE_) — nguồn quyết định phân quyền
+ * @param permissions Quyền lẻ theo tính năng được cấp thêm ngoài vai trò (xem {@link CmsPermissions})
  */
 public record CmsPrincipal(String userId, String username, String fullName, String email,
-                           String role, Set<String> roles) {
+                           String role, Set<String> roles, Set<String> permissions) {
 
     /** Tên hiển thị: ưu tiên fullName, fallback về username nếu chưa có. */
     public String displayName() {
@@ -30,6 +31,10 @@ public record CmsPrincipal(String userId, String username, String fullName, Stri
             if (roles.contains(r)) return true;
         }
         return false;
+    }
+
+    public boolean hasPermission(String p) {
+        return permissions != null && permissions.contains(p);
     }
 
     /** Ban lãnh đạo / có quyền phê duyệt (SUPER_ADMIN, nhãn gộp ADMIN cũ, hoặc APPROVER). */

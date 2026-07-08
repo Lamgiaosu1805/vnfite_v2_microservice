@@ -46,8 +46,16 @@ public class JwtFilter extends OncePerRequestFilter {
                 @SuppressWarnings("unchecked")
                 List<String> roles = claims.get("roles", List.class);
                 List<String> safeRoles = roles == null ? List.<String>of() : roles;
-                List<SimpleGrantedAuthority> authorities =
-                        safeRoles.stream().map(SimpleGrantedAuthority::new).toList();
+                @SuppressWarnings("unchecked")
+                List<String> permissions = claims.get("permissions", List.class);
+                List<String> safePermissions = permissions == null ? List.<String>of() : permissions;
+                // Quyền lẻ dùng authority thô (không tiền tố ROLE_) cho hasAuthority(...)
+                java.util.Set<String> permissionSet = safePermissions.stream()
+                        .filter(p -> p != null && !p.isBlank())
+                        .collect(java.util.stream.Collectors.toCollection(java.util.LinkedHashSet::new));
+                List<SimpleGrantedAuthority> authorities = java.util.stream.Stream.concat(
+                                safeRoles.stream(), permissionSet.stream())
+                        .map(SimpleGrantedAuthority::new).toList();
                 // Tập vai trò đã bỏ tiền tố ROLE_ để phân quyền trong CmsPrincipal
                 java.util.Set<String> roleSet = safeRoles.stream()
                         .map(r -> r.replaceFirst("^ROLE_", ""))
@@ -57,7 +65,7 @@ public class JwtFilter extends OncePerRequestFilter {
                 var auth = new UsernamePasswordAuthenticationToken(
                         new CmsPrincipal(adminUserId, claims.getSubject(),
                                 claims.get("fullName", String.class),
-                                claims.get("email", String.class), roleValue, roleSet), null, authorities);
+                                claims.get("email", String.class), roleValue, roleSet, permissionSet), null, authorities);
                 auth.setDetails(new WebAuthenticationDetailsSource().buildDetails(req));
                 SecurityContextHolder.getContext().setAuthentication(auth);
             } catch (ExpiredJwtException e) {

@@ -61,7 +61,7 @@ public class UserManagementController {
     }
 
     @PutMapping("/{userId}/kyc")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'CUSTOMER_SUPPORT')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'CUSTOMER_SUPPORT') or hasAuthority('kyc.decide')")
     public ResponseEntity<UserSummaryResponse> decideKyc(
             @PathVariable String userId,
             @Valid @RequestBody KycDecisionRequest req) {
@@ -87,7 +87,7 @@ public class UserManagementController {
 
     /** POST /cms/users/{userId}/business-profile/decision — duyệt/từ chối hồ sơ DN. */
     @PostMapping("/{userId}/business-profile/decision")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'CUSTOMER_SUPPORT')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'CUSTOMER_SUPPORT') or hasAuthority('business.decide')")
     public ResponseEntity<Map<String, String>> decideBusinessProfile(
             @PathVariable String userId,
             @RequestBody Map<String, Object> body,

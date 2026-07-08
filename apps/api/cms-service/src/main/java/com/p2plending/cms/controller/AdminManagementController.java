@@ -3,6 +3,7 @@ package com.p2plending.cms.controller;
 import com.p2plending.cms.dto.request.ChangePasswordRequest;
 import com.p2plending.cms.dto.request.CreateAdminRequest;
 import com.p2plending.cms.dto.request.SetupRequest;
+import com.p2plending.cms.dto.request.UpdateAdminPermissionsRequest;
 import com.p2plending.cms.dto.request.UpdateAdminRoleRequest;
 import com.p2plending.cms.dto.response.AdminListResponse;
 import com.p2plending.cms.dto.response.CreateAdminResponse;
@@ -83,6 +84,15 @@ public class AdminManagementController {
             @AuthenticationPrincipal CmsPrincipal principal,
             @Valid @RequestBody UpdateAdminRoleRequest request) {
         return ResponseEntity.ok(service.updateRole(id, request.getRoles(), principal.userId()));
+    }
+
+    @PutMapping("/admins/{id}/permissions")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    public ResponseEntity<AdminListResponse> updatePermissions(
+            @PathVariable String id,
+            @AuthenticationPrincipal CmsPrincipal principal,
+            @Valid @RequestBody UpdateAdminPermissionsRequest request) {
+        return ResponseEntity.ok(service.updatePermissions(id, request.getPermissions(), principal.userId()));
     }
 
     @PostMapping("/admins/{id}/reset-password")

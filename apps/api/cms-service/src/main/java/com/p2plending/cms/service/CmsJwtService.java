@@ -63,12 +63,18 @@ public class CmsJwtService {
                     .filter(r -> r != null && !r.isBlank())
                     .forEach(r -> authorities.add("ROLE_" + r));
         }
+        // Quyền lẻ theo tính năng — authority thô (không tiền tố ROLE_) cho hasAuthority(...).
+        Set<String> permissions = admin.getPermissions() == null
+                ? Set.of()
+                : admin.getPermissions().stream().filter(p -> p != null && !p.isBlank())
+                        .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
         return Jwts.builder()
                 .subject(admin.getUsername())
                 .claim("adminUserId", admin.getId())
                 .claim("fullName", admin.getFullName())
                 .claim("email", admin.getEmail())
                 .claim("roles", new ArrayList<>(authorities))
+                .claim("permissions", new ArrayList<>(permissions))
                 .issuedAt(Date.from(now))
                 .expiration(Date.from(now.plusSeconds(accessTokenExpiry)))
                 .signWith(key)

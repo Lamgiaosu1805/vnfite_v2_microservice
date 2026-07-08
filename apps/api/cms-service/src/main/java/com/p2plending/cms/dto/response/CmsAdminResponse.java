@@ -17,4 +17,6 @@ public class CmsAdminResponse {
     private String role;
     /** Toàn bộ vai trò của tài khoản. */
     private List<String> roles;
+    /** Quyền lẻ cấp thêm ngoài vai trò. */
+    private List<String> permissions;
 }

@@ -32,7 +32,7 @@ public class LoanManagementController {
     }
 
     @PutMapping("/products/{id}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'APPRAISER', 'APPROVER')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'APPRAISER', 'APPROVER') or hasAuthority('loan.product.edit')")
     public ResponseEntity<JsonNode> updateLoanProduct(
             @PathVariable String id,
             @RequestBody java.util.Map<String, Object> body) {
@@ -223,7 +223,7 @@ public class LoanManagementController {
      * Sinh lịch trả nợ từ ngày giải ngân + bắn loan.disbursed.
      */
     @PostMapping("/{loanId}/disburse")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'APPRAISER', 'APPROVER')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'APPRAISER', 'APPROVER') or hasAuthority('loan.disburse')")
     public ResponseEntity<LoanSummaryResponse> disburse(
             @PathVariable String loanId,
             @AuthenticationPrincipal CmsPrincipal operator) {
@@ -250,6 +250,7 @@ public class LoanManagementController {
      * PENDING_REVIEW → PENDING_APPROVAL.
      */
     @PutMapping("/{loanId}/propose")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'APPRAISER', 'APPROVER') or hasAuthority('loan.propose')")
     public ResponseEntity<LoanSummaryResponse> propose(
             @PathVariable String loanId,
             @Valid @RequestBody LoanProposeRequest req,
@@ -264,7 +265,7 @@ public class LoanManagementController {
      * Borrower must accept the approved terms before the loan becomes ACTIVE on the marketplace.
      */
     @PutMapping("/{loanId}/approve")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'APPRAISER', 'APPROVER')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'APPRAISER', 'APPROVER') or hasAuthority('loan.approve')")
     public ResponseEntity<LoanSummaryResponse> approve(
             @PathVariable String loanId,
             @Valid @RequestBody LoanActionRequest req,

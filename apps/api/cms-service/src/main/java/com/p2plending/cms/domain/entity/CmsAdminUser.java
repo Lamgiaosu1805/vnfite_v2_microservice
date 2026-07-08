@@ -76,6 +76,19 @@ public class CmsAdminUser {
     @Builder.Default
     private Set<String> roles = new HashSet<>();
 
+    /**
+     * Quyền lẻ theo tính năng — cấp thêm 1 tính năng cụ thể ngoài vai trò phòng ban
+     * (vd: kế toán được cấp thêm {@code loan.approve} mà không cần vai trò APPROVER).
+     */
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(
+        name = "cms_admin_user_permissions",
+        joinColumns = @JoinColumn(name = "user_id")
+    )
+    @Column(name = "permission", nullable = false, length = 50)
+    @Builder.Default
+    private Set<String> permissions = new HashSet<>();
+
     @Column(nullable = false)
     @Builder.Default
     private boolean active = true;

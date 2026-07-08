@@ -15,6 +15,8 @@ public class CreateAdminResponse {
     private String fullName;
     private String role;
     private List<String> roles;
+    /** Quyền lẻ cấp thêm ngoài vai trò. */
+    private List<String> permissions;
     /** Mật khẩu tự sinh — chỉ trả về 1 lần duy nhất khi tạo */
     private String generatedPassword;
 }
