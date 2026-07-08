@@ -1,9 +1,11 @@
 package com.p2plending.cms.controller;
 
 import com.p2plending.cms.dto.request.CicLookupRequest;
+import com.p2plending.cms.dto.request.BusinessAppraisalChecklistRequest;
 import com.p2plending.cms.dto.request.LoanActionRequest;
 import com.p2plending.cms.dto.request.LoanProposeRequest;
 import com.p2plending.cms.dto.request.RecordRepaymentRequest;
+import com.p2plending.cms.dto.response.BusinessAppraisalChecklistResponse;
 import com.p2plending.cms.dto.response.CicLookupResponse;
 import com.p2plending.cms.dto.response.LoanSummaryResponse;
 import com.p2plending.cms.dto.response.PagedResponse;
@@ -16,6 +18,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 
 @RestController
@@ -118,6 +122,24 @@ public class LoanManagementController {
             @PathVariable String loanId,
             @PathVariable String documentId) {
         return ResponseEntity.ok(loanService.analyzeDocument(loanId, documentId));
+    }
+
+    /** GET /cms/loans/{loanId}/business-appraisal — checklist thẩm định riêng HKD/DN đã lưu. */
+    @GetMapping("/{loanId}/business-appraisal")
+    public ResponseEntity<List<BusinessAppraisalChecklistResponse>> getBusinessAppraisalChecklist(
+            @PathVariable String loanId) {
+        return ResponseEntity.ok(loanService.getBusinessAppraisalChecklist(loanId));
+    }
+
+    /** PUT /cms/loans/{loanId}/business-appraisal/{code} — lưu kết quả checklist HKD/DN. */
+    @PutMapping("/{loanId}/business-appraisal/{code}")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'APPRAISER', 'APPROVER') or hasAuthority('loan.propose') or hasAuthority('loan.approve')")
+    public ResponseEntity<BusinessAppraisalChecklistResponse> saveBusinessAppraisalChecklist(
+            @PathVariable String loanId,
+            @PathVariable String code,
+            @Valid @RequestBody BusinessAppraisalChecklistRequest req,
+            @AuthenticationPrincipal CmsPrincipal operator) {
+        return ResponseEntity.ok(loanService.saveBusinessAppraisalChecklist(loanId, code, req, operator));
     }
 
     /**

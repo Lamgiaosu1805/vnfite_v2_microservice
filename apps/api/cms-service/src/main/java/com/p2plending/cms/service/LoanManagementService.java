@@ -1,13 +1,17 @@
 package com.p2plending.cms.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.p2plending.cms.domain.entity.BusinessAppraisalChecklist;
 import com.p2plending.cms.domain.entity.CicManualLookup;
+import com.p2plending.cms.domain.repository.BusinessAppraisalChecklistRepository;
 import com.p2plending.cms.domain.repository.CicManualLookupRepository;
+import com.p2plending.cms.dto.request.BusinessAppraisalChecklistRequest;
 import com.p2plending.cms.dto.request.CicLookupRequest;
 import com.p2plending.cms.dto.request.LoanActionRequest;
 import com.p2plending.cms.dto.request.LoanProposeRequest;
 import com.p2plending.cms.dto.request.RecordRepaymentRequest;
 import com.p2plending.cms.dto.response.AuditLogResponse;
+import com.p2plending.cms.dto.response.BusinessAppraisalChecklistResponse;
 import com.p2plending.cms.dto.response.CicLookupResponse;
 import com.p2plending.cms.dto.response.LoanSummaryResponse;
 import com.p2plending.cms.dto.response.PagedResponse;
@@ -27,6 +31,7 @@ public class LoanManagementService {
     private final SourceServiceClient sourceServiceClient;
     private final LoanDecisionAuditLogService auditService;
     private final CicManualLookupRepository cicRepository;
+    private final BusinessAppraisalChecklistRepository businessAppraisalRepository;
 
     public JsonNode getLoanProducts() {
         return sourceServiceClient.getLoanProducts();
@@ -70,6 +75,73 @@ public class LoanManagementService {
 
     public JsonNode analyzeDocument(String loanId, String documentId) {
         return sourceServiceClient.analyzeLoanDocument(loanId, documentId);
+    }
+
+    // ─── Checklist thẩm định HKD/DN ───────────────────────────────────────────────
+
+    @Transactional(readOnly = true)
+    public java.util.List<BusinessAppraisalChecklistResponse> getBusinessAppraisalChecklist(String loanId) {
+        return businessAppraisalRepository.findByLoanIdAndIsDeletedFalseOrderByCreatedAtAsc(loanId)
+                .stream()
+                .map(this::toBusinessAppraisalResponse)
+                .toList();
+    }
+
+    @Transactional
+    public BusinessAppraisalChecklistResponse saveBusinessAppraisalChecklist(
+            String loanId, String checklistCode, BusinessAppraisalChecklistRequest req, CmsPrincipal operator) {
+        String normalizedStatus = normalizeBusinessAppraisalStatus(req.getStatus());
+        BusinessAppraisalChecklist item = businessAppraisalRepository
+                .findByLoanIdAndChecklistCodeAndIsDeletedFalse(loanId, checklistCode)
+                .orElseGet(() -> BusinessAppraisalChecklist.builder()
+                        .loanId(loanId)
+                        .checklistCode(checklistCode)
+                        .build());
+
+        item.setCategory(req.getCategory());
+        item.setTitle(req.getTitle());
+        item.setInstruction(req.getInstruction());
+        item.setRequired(req.isRequired());
+        item.setStatus(normalizedStatus);
+        item.setNote(blankToNull(req.getNote()));
+        item.setEvidenceRefs(blankToNull(req.getEvidenceRefs()));
+        item.setUpdatedBy(operator != null ? operator.displayName() : "cms");
+
+        BusinessAppraisalChecklist saved = businessAppraisalRepository.save(item);
+        log.info("Business appraisal checklist saved: loanId={} code={} status={} by={}",
+                loanId, checklistCode, saved.getStatus(), saved.getUpdatedBy());
+        return toBusinessAppraisalResponse(saved);
+    }
+
+    private String normalizeBusinessAppraisalStatus(String status) {
+        String value = status == null ? "PENDING" : status.trim().toUpperCase();
+        return switch (value) {
+            case "PASS", "FAIL", "NEEDS_INFO", "NA", "PENDING" -> value;
+            default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Trạng thái checklist không hợp lệ: " + status);
+        };
+    }
+
+    private String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
+    }
+
+    private BusinessAppraisalChecklistResponse toBusinessAppraisalResponse(BusinessAppraisalChecklist item) {
+        return BusinessAppraisalChecklistResponse.builder()
+                .id(item.getId())
+                .loanId(item.getLoanId())
+                .checklistCode(item.getChecklistCode())
+                .category(item.getCategory())
+                .title(item.getTitle())
+                .instruction(item.getInstruction())
+                .required(item.isRequired())
+                .status(item.getStatus())
+                .note(item.getNote())
+                .evidenceRefs(item.getEvidenceRefs())
+                .updatedBy(item.getUpdatedBy())
+                .createdAt(item.getCreatedAt())
+                .updatedAt(item.getUpdatedAt())
+                .build();
     }
 
     // ─── CIC nhập tay (chờ API CIC sandbox NĐ94) ────────────────────────────────────
