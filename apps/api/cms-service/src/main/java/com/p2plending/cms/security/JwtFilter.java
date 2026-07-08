@@ -45,17 +45,19 @@ public class JwtFilter extends OncePerRequestFilter {
                 String adminUserId = claims.get("adminUserId", String.class);
                 @SuppressWarnings("unchecked")
                 List<String> roles = claims.get("roles", List.class);
+                List<String> safeRoles = roles == null ? List.<String>of() : roles;
                 List<SimpleGrantedAuthority> authorities =
-                        (roles == null ? List.<String>of() : roles)
-                                .stream().map(SimpleGrantedAuthority::new).toList();
-                // Lấy role đầu tiên, bỏ tiền tố ROLE_ để lưu vào CmsPrincipal
-                String roleValue = (roles != null && !roles.isEmpty())
-                        ? roles.get(0).replaceFirst("^ROLE_", "")
-                        : null;
+                        safeRoles.stream().map(SimpleGrantedAuthority::new).toList();
+                // Tập vai trò đã bỏ tiền tố ROLE_ để phân quyền trong CmsPrincipal
+                java.util.Set<String> roleSet = safeRoles.stream()
+                        .map(r -> r.replaceFirst("^ROLE_", ""))
+                        .collect(java.util.stream.Collectors.toCollection(java.util.LinkedHashSet::new));
+                // Vai trò chính = phần tử đầu (giữ để tương thích)
+                String roleValue = roleSet.isEmpty() ? null : roleSet.iterator().next();
                 var auth = new UsernamePasswordAuthenticationToken(
                         new CmsPrincipal(adminUserId, claims.getSubject(),
                                 claims.get("fullName", String.class),
-                                claims.get("email", String.class), roleValue), null, authorities);
+                                claims.get("email", String.class), roleValue, roleSet), null, authorities);
                 auth.setDetails(new WebAuthenticationDetailsSource().buildDetails(req));
                 SecurityContextHolder.getContext().setAuthentication(auth);
             } catch (ExpiredJwtException e) {

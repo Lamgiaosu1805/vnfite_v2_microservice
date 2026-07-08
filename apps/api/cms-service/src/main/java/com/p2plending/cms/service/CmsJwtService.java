@@ -11,8 +11,10 @@ import org.springframework.util.StringUtils;
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Date;
-import java.util.List;
+import java.util.LinkedHashSet;
+import java.util.Set;
 
 @Service
 public class CmsJwtService {
@@ -50,12 +52,23 @@ public class CmsJwtService {
 
     public String generateAccessToken(CmsAdminUser admin) {
         Instant now = Instant.now();
+        // Hợp nhất vai trò chính (nhãn cũ) + tập vai trò phòng ban → mọi @PreAuthorize
+        // cũ lẫn mới đều khớp trong giai đoạn chuyển tiếp.
+        Set<String> authorities = new LinkedHashSet<>();
+        if (admin.getRole() != null && !admin.getRole().isBlank()) {
+            authorities.add("ROLE_" + admin.getRole());
+        }
+        if (admin.getRoles() != null) {
+            admin.getRoles().stream()
+                    .filter(r -> r != null && !r.isBlank())
+                    .forEach(r -> authorities.add("ROLE_" + r));
+        }
         return Jwts.builder()
                 .subject(admin.getUsername())
                 .claim("adminUserId", admin.getId())
                 .claim("fullName", admin.getFullName())
                 .claim("email", admin.getEmail())
-                .claim("roles", List.of("ROLE_" + admin.getRole()))
+                .claim("roles", new ArrayList<>(authorities))
                 .issuedAt(Date.from(now))
                 .expiration(Date.from(now.plusSeconds(accessTokenExpiry)))
                 .signWith(key)

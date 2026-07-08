@@ -16,7 +16,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/cms/withdrawals")
 @RequiredArgsConstructor
-@PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'OPS')")
+@PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'OPS', 'FINANCE')")
 public class WithdrawalManagementController {
 
     private final WithdrawalManagementService withdrawalManagementService;

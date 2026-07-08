@@ -117,6 +117,7 @@ public class CmsAuthService {
                 .email(admin.getEmail())
                 .fullName(admin.getFullName())
                 .role(admin.getRole())
+                .roles(admin.getRoles() == null ? java.util.List.of() : new java.util.ArrayList<>(admin.getRoles()))
                 .build();
     }
 }

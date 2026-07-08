@@ -21,7 +21,7 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/cms/loans")
 @RequiredArgsConstructor
-@PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'OPS')")
+@PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'OPS', 'APPRAISER', 'APPROVER', 'FINANCE')")
 public class LoanManagementController {
 
     private final LoanManagementService loanService;
@@ -32,7 +32,7 @@ public class LoanManagementController {
     }
 
     @PutMapping("/products/{id}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'APPRAISER', 'APPROVER')")
     public ResponseEntity<JsonNode> updateLoanProduct(
             @PathVariable String id,
             @RequestBody java.util.Map<String, Object> body) {
@@ -126,7 +126,7 @@ public class LoanManagementController {
      * hoàn tiền nhà đầu tư + chuyển khoản sang CANCELLED. Dùng cho vận hành/test thay vì chờ cron.
      */
     @PostMapping("/expire-sweep")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'APPRAISER', 'APPROVER')")
     public ResponseEntity<JsonNode> expireSweep() {
         return ResponseEntity.ok(loanService.expireSweep());
     }
@@ -136,7 +136,7 @@ public class LoanManagementController {
      * Chạy ngay job thu nợ tự động từ ví người gọi vốn. Dùng khi khách vừa nạp tiền sau lượt cron.
      */
     @PostMapping("/repayments/auto-debit-sweep")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'APPRAISER', 'APPROVER')")
     public ResponseEntity<JsonNode> autoDebitSweep(@AuthenticationPrincipal CmsPrincipal operator) {
         return ResponseEntity.ok(loanService.autoDebitSweep(operator));
     }
@@ -223,7 +223,7 @@ public class LoanManagementController {
      * Sinh lịch trả nợ từ ngày giải ngân + bắn loan.disbursed.
      */
     @PostMapping("/{loanId}/disburse")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'APPRAISER', 'APPROVER')")
     public ResponseEntity<LoanSummaryResponse> disburse(
             @PathVariable String loanId,
             @AuthenticationPrincipal CmsPrincipal operator) {
@@ -236,7 +236,7 @@ public class LoanManagementController {
      * Tiền áp vào kỳ sớm nhất chưa trả (gốc+lãi trước, dư trả phí phạt). Trả về lịch trả nợ mới.
      */
     @PostMapping("/{loanId}/repayments")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'APPRAISER', 'APPROVER')")
     public ResponseEntity<JsonNode> recordRepayment(
             @PathVariable String loanId,
             @Valid @RequestBody RecordRepaymentRequest req,
@@ -264,7 +264,7 @@ public class LoanManagementController {
      * Borrower must accept the approved terms before the loan becomes ACTIVE on the marketplace.
      */
     @PutMapping("/{loanId}/approve")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'APPRAISER', 'APPROVER')")
     public ResponseEntity<LoanSummaryResponse> approve(
             @PathVariable String loanId,
             @Valid @RequestBody LoanActionRequest req,
@@ -278,7 +278,7 @@ public class LoanManagementController {
      * Publishes loan.reviewed (REJECT) → loan-service sets REJECTED.
      */
     @PutMapping("/{loanId}/reject")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'APPRAISER', 'APPROVER')")
     public ResponseEntity<LoanSummaryResponse> reject(
             @PathVariable String loanId,
             @Valid @RequestBody LoanActionRequest req,
@@ -291,7 +291,7 @@ public class LoanManagementController {
      * CMS hủy khoản gọi vốn trước khi giải ngân. Nếu đã có nhà đầu tư, loan-service hoàn tiền/void hợp đồng.
      */
     @PutMapping("/{loanId}/cancel")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'APPRAISER', 'APPROVER')")
     public ResponseEntity<LoanSummaryResponse> cancel(
             @PathVariable String loanId,
             @Valid @RequestBody LoanActionRequest req,

@@ -1,12 +1,13 @@
 package com.p2plending.cms.dto.request;
 
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.NotEmpty;
 import lombok.Data;
+
+import java.util.List;
 
 @Data
 public class UpdateAdminRoleRequest {
-    @NotBlank
-    @Pattern(regexp = "ADMIN|OPS", message = "Role phải là ADMIN hoặc OPS")
-    private String role;
+    /** Danh sách vai trò mới — kiểm tra hợp lệ ở tầng service. */
+    @NotEmpty(message = "Phải chọn ít nhất một vai trò")
+    private List<String> roles;
 }

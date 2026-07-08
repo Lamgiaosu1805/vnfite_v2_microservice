@@ -22,7 +22,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/cms/job-postings")
 @RequiredArgsConstructor
-@PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN')")
+@PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'HR')")
 public class JobPostingManagementController {
 
     private final SourceServiceClient sourceServiceClient;

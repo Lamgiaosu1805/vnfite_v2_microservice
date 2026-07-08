@@ -23,7 +23,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/cms/users")
 @RequiredArgsConstructor
-@PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'OPS')")
+@PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'OPS', 'CUSTOMER_SUPPORT')")
 public class UserManagementController {
 
     private final UserManagementService userService;
@@ -61,7 +61,7 @@ public class UserManagementController {
     }
 
     @PutMapping("/{userId}/kyc")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'CUSTOMER_SUPPORT')")
     public ResponseEntity<UserSummaryResponse> decideKyc(
             @PathVariable String userId,
             @Valid @RequestBody KycDecisionRequest req) {
@@ -87,7 +87,7 @@ public class UserManagementController {
 
     /** POST /cms/users/{userId}/business-profile/decision — duyệt/từ chối hồ sơ DN. */
     @PostMapping("/{userId}/business-profile/decision")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'CUSTOMER_SUPPORT')")
     public ResponseEntity<Map<String, String>> decideBusinessProfile(
             @PathVariable String userId,
             @RequestBody Map<String, Object> body,
@@ -102,13 +102,13 @@ public class UserManagementController {
 
     /** POST /cms/users/{userId}/business-profile/analyze — AI đọc GPKD (chỉ tham khảo). */
     @PostMapping("/{userId}/business-profile/analyze")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'CUSTOMER_SUPPORT')")
     public ResponseEntity<JsonNode> analyzeBusinessLicense(@PathVariable String userId) {
         return ResponseEntity.ok(userService.analyzeBusinessLicense(userId));
     }
 
     @PutMapping("/{userId}/status")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'CUSTOMER_SUPPORT')")
     public ResponseEntity<UserSummaryResponse> updateStatus(
             @PathVariable String userId,
             @Valid @RequestBody UserStatusRequest req) {
@@ -116,20 +116,20 @@ public class UserManagementController {
     }
 
     @PostMapping("/{userId}/reset-password")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'CUSTOMER_SUPPORT')")
     public ResponseEntity<ResetCustomerPasswordResponse> resetPassword(@PathVariable String userId) {
         return ResponseEntity.ok(userService.resetPassword(userId));
     }
 
     @PostMapping("/{userId}/reset-device")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'CUSTOMER_SUPPORT')")
     public ResponseEntity<Void> resetDevice(@PathVariable String userId) {
         userService.resetDevice(userId);
         return ResponseEntity.noContent().build();
     }
 
     @PostMapping("/{userId}/blacklist")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'CUSTOMER_SUPPORT')")
     public ResponseEntity<UserSummaryResponse> setBlacklist(
             @PathVariable String userId,
             @Valid @RequestBody UserBlacklistRequest request) {

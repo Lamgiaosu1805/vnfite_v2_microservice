@@ -27,7 +27,7 @@ public class NotificationController {
      * Dùng để hiện thị "X thiết bị đang đăng ký" trên CMS trước khi bắn test.
      */
     @GetMapping("/fcm-devices")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'CONTENT')")
     public ResponseEntity<Map<String, Object>> getFcmDeviceCount() {
         int count = pushBroadcastService.getAllFcmTokens().size();
         return ResponseEntity.ok(Map.of("count", count));
@@ -41,7 +41,7 @@ public class NotificationController {
      * Response: { "sentTo": N, "pushResponse": "..." }
      */
     @PostMapping("/test-push")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'CONTENT')")
     public ResponseEntity<Map<String, Object>> sendTestPush(
             @RequestBody Map<String, String> request,
             Authentication auth) {

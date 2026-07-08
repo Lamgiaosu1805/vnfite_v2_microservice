@@ -13,7 +13,7 @@ import org.springframework.web.client.RestTemplate;
 @RestController
 @RequestMapping("/cms/files")
 @RequiredArgsConstructor
-@PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'OPS')")
+@PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'OPS', 'CUSTOMER_SUPPORT', 'APPRAISER', 'APPROVER')")
 public class FileProxyController {
 
     private final RestTemplate restTemplate;

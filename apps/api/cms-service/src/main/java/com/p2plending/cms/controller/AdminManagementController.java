@@ -82,7 +82,7 @@ public class AdminManagementController {
             @PathVariable String id,
             @AuthenticationPrincipal CmsPrincipal principal,
             @Valid @RequestBody UpdateAdminRoleRequest request) {
-        return ResponseEntity.ok(service.updateRole(id, request.getRole(), principal.userId()));
+        return ResponseEntity.ok(service.updateRole(id, request.getRoles(), principal.userId()));
     }
 
     @PostMapping("/admins/{id}/reset-password")

@@ -16,7 +16,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/cms/reconciliation")
 @RequiredArgsConstructor
-@PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'OPS')")
+@PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'OPS', 'FINANCE')")
 public class ReconciliationController {
 
     private final SourceServiceClient sourceServiceClient;

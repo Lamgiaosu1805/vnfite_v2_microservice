@@ -9,13 +9,17 @@ import com.p2plending.cms.dto.response.AdminListResponse;
 import com.p2plending.cms.dto.response.CreateAdminResponse;
 import com.p2plending.cms.dto.response.ResetAdminPasswordResponse;
 import com.p2plending.cms.exception.InvalidCredentialsException;
+import com.p2plending.cms.security.CmsRoles;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.security.SecureRandom;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -26,7 +30,10 @@ public class AdminManagementService {
     private final UsernameGeneratorService usernameGenerator;
 
     private static final String SUPER_ADMIN = "SUPER_ADMIN";
-    private static final List<String> EDITABLE_ROLES = List.of("ADMIN", "OPS");
+    /** Thứ tự ưu tiên chọn nhãn hiển thị khi tài khoản mang nhiều vai trò. */
+    private static final List<String> LABEL_PRIORITY = List.of(
+            CmsRoles.ADMIN, CmsRoles.APPROVER, CmsRoles.APPRAISER, CmsRoles.FINANCE,
+            CmsRoles.CUSTOMER_SUPPORT, CmsRoles.CONTENT, CmsRoles.HR, CmsRoles.OPS);
     private static final String PASSWORD_CHARS =
             "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
     private static final SecureRandom RANDOM = new SecureRandom();
@@ -49,6 +56,7 @@ public class AdminManagementService {
                 .fullName(request.getFullName())
                 .password(passwordEncoder.encode(request.getPassword()))
                 .role(SUPER_ADMIN)
+                .roles(new LinkedHashSet<>(Set.of(SUPER_ADMIN)))
                 .mustChangePassword(false)
                 .build());
     }
@@ -64,12 +72,15 @@ public class AdminManagementService {
             throw new IllegalArgumentException("Email đã được sử dụng");
         }
 
+        Set<String> roles = sanitizeRoles(request.getRoles());
+
         CmsAdminUser admin = adminRepo.save(CmsAdminUser.builder()
                 .username(username)
                 .email(request.getEmail())
                 .fullName(request.getFullName())
                 .password(passwordEncoder.encode(rawPassword))
-                .role(request.getRole())
+                .role(primaryLabel(roles))
+                .roles(roles)
                 .mustChangePassword(true)   // bắt đổi MK lần đầu
                 .createdBy(createdById)
                 .build());
@@ -80,6 +91,7 @@ public class AdminManagementService {
                 .email(admin.getEmail())
                 .fullName(admin.getFullName())
                 .role(admin.getRole())
+                .roles(new ArrayList<>(admin.getRoles()))
                 .generatedPassword(rawPassword)  // trả về 1 lần duy nhất
                 .build();
     }
@@ -111,13 +123,11 @@ public class AdminManagementService {
     }
 
     @Transactional
-    public AdminListResponse updateRole(String adminId, String newRole, String requesterId) {
+    public AdminListResponse updateRole(String adminId, List<String> newRoles, String requesterId) {
         if (adminId.equals(requesterId)) {
             throw new IllegalArgumentException("Không thể tự thay đổi quyền của mình");
         }
-        if (!EDITABLE_ROLES.contains(newRole)) {
-            throw new IllegalArgumentException("Role phải là ADMIN hoặc OPS");
-        }
+        Set<String> roles = sanitizeRoles(newRoles);
 
         CmsAdminUser admin = adminRepo.findByIdAndIsDeletedFalse(adminId)
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy admin"));
@@ -125,7 +135,8 @@ public class AdminManagementService {
             throw new IllegalArgumentException("Không thể thay đổi quyền tài khoản Super Admin");
         }
 
-        admin.setRole(newRole);
+        admin.setRoles(roles);
+        admin.setRole(primaryLabel(roles));
         return toListResponse(adminRepo.save(admin));
     }
 
@@ -187,6 +198,30 @@ public class AdminManagementService {
         return sb.toString();
     }
 
+    /** Chuẩn hoá & kiểm tra danh sách vai trò gán được (loại trùng, giữ thứ tự, chặn rỗng/không hợp lệ). */
+    private Set<String> sanitizeRoles(List<String> input) {
+        if (input == null || input.isEmpty()) {
+            throw new IllegalArgumentException("Phải chọn ít nhất một vai trò");
+        }
+        Set<String> roles = new LinkedHashSet<>();
+        for (String r : input) {
+            String role = r == null ? null : r.trim().toUpperCase();
+            if (!CmsRoles.isValidAssignable(role)) {
+                throw new IllegalArgumentException("Vai trò không hợp lệ: " + r);
+            }
+            roles.add(role);
+        }
+        return roles;
+    }
+
+    /** Nhãn hiển thị đại diện khi tài khoản mang nhiều vai trò. */
+    private String primaryLabel(Set<String> roles) {
+        for (String candidate : LABEL_PRIORITY) {
+            if (roles.contains(candidate)) return candidate;
+        }
+        return roles.iterator().next();
+    }
+
     private AdminListResponse toListResponse(CmsAdminUser admin) {
         return AdminListResponse.builder()
                 .id(admin.getId())
@@ -194,6 +229,7 @@ public class AdminManagementService {
                 .email(admin.getEmail())
                 .fullName(admin.getFullName())
                 .role(admin.getRole())
+                .roles(admin.getRoles() == null ? List.of() : new ArrayList<>(admin.getRoles()))
                 .active(admin.isActive())
                 .mustChangePassword(admin.isMustChangePassword())
                 .totpEnabled(admin.isTotpEnabled())

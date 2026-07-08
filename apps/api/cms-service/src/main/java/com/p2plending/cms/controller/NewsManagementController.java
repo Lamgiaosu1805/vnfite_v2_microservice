@@ -22,7 +22,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/cms/news")
 @RequiredArgsConstructor
-@PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN')")
+@PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'CONTENT')")
 public class NewsManagementController {
 
     private final SourceServiceClient sourceServiceClient;
