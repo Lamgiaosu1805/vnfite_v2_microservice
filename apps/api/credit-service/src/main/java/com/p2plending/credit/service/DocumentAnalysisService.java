@@ -14,6 +14,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.LinkedHashMap;
@@ -26,6 +29,8 @@ import java.util.Set;
 @Slf4j
 public class DocumentAnalysisService {
 
+    private static final ZoneId VIETNAM_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
+    private static final DateTimeFormatter VIETNAM_DATE = DateTimeFormatter.ofPattern("dd/MM/yyyy");
     private static final Set<String> IMAGE_MIME_TYPES =
             Set.of("image/jpeg", "image/png", "image/webp", "image/gif");
     private static final long MAX_IMAGE_BYTES = 5L * 1024 * 1024;   // giới hạn ảnh của Claude API
@@ -120,9 +125,15 @@ public class DocumentAnalysisService {
     }
 
     private String buildBusinessLicenseContext(AnalyzeBusinessLicenseRequest req) {
+        LocalDate today = LocalDate.now(VIETNAM_ZONE);
         StringBuilder sb = new StringBuilder();
         sb.append("Chứng từ đính kèm là GIẤY CHỨNG NHẬN ĐĂNG KÝ KINH DOANH (hoặc GCN đăng ký hộ kinh doanh) ")
                 .append("của Việt Nam. Nhiệm vụ: trích xuất và đối chiếu.\n\n");
+        sb.append("MỐC THỜI GIAN KIỂM TRA: ngày hiện tại theo múi giờ Việt Nam là ")
+                .append(today.format(VIETNAM_DATE))
+                .append(". Chỉ coi một ngày trên chứng từ là ngày tương lai/chưa đến nếu ngày đó SAU mốc này. ")
+                .append("Ngày cấp, ngày đăng ký thay đổi hoặc ngày cấp thay đổi lần thứ N nằm từ quá khứ đến hôm nay ")
+                .append("là hợp lệ về mặt thời gian; không được đánh SUSPICIOUS chỉ vì ngày thay đổi sau ngày đăng ký lần đầu.\n\n");
         sb.append("TRÍCH XUẤT từ chứng từ: tên doanh nghiệp/hộ kinh doanh (ghi vào organizationName), ")
                 .append("tên người đại diện pháp luật/chủ hộ (ghi vào ownerName), số GCN đăng ký, mã số thuế, ")
                 .append("ngày cấp, nơi cấp, địa chỉ trụ sở, loại hình (liệt kê trong findings).\n\n");
@@ -135,6 +146,9 @@ public class DocumentAnalysisService {
         sb.append("- CCCD người đại diện (đã eKYC): ").append(orUnknown(req.getExpectedRepresentativeCccd())).append("\n\n");
         sb.append("QUAN TRỌNG: người đại diện trên GPKD phải trùng người đã eKYC. ")
                 .append("Nếu tên người đại diện trên chứng từ khác tên khai báo → verdict SUSPICIOUS trở lên. ")
+                .append("Chỉ đưa vấn đề ngày tháng vào consistencyIssues khi có mâu thuẫn thật sự: ngày nằm sau ")
+                .append(today.format(VIETNAM_DATE))
+                .append(", ngày không tồn tại, hoặc thứ tự ngày tự mâu thuẫn trên cùng chứng từ. ")
                 .append("Kiểm tra thêm dấu hiệu chỉnh sửa: font không đồng nhất, con dấu mờ/bất thường, căn lề lệch.");
         return sb.toString();
     }
