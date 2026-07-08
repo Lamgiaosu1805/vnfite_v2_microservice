@@ -28,6 +28,14 @@ Nền tảng cho vay ngang hàng (P2P Lending) dạng microservices, xây dựng
 
 **CMS account model:** User đăng nhập CMS là `cms_admin_users` riêng trong `cms_db`, tách biệt hoàn toàn với customer/user trong `auth_db.users`. Không dùng tài khoản customer để đăng nhập CMS.
 
+**CMS RBAC — vai trò đa dạng + quyền-lẻ (cms-service):** Một tài khoản CMS mang nhiều vai trò cùng lúc qua `cms_admin_user_roles` (hằng số ở `security/CmsRoles.java`), cộng thêm quyền-lẻ theo tính năng qua `cms_admin_user_permissions` (hằng số ở `security/CmsPermissions.java`). JWT (`CmsJwtService`) gói cả 2 claim `roles` (đã có tiền tố `ROLE_`) và `permissions` (authority thô, không tiền tố). `JwtFilter` build `GrantedAuthority` từ cả 2 claim, gán vào `CmsPrincipal` (có `hasAnyRole()`/`hasPermission()`). Endpoint gate bằng `@PreAuthorize`, quyền-lẻ dùng cú pháp `hasAnyRole(...) or hasAuthority('x')` để CỘNG THÊM đường cấp lẻ chứ không thay thế role.
+
+⚠️ `security/SecurityConfig.java` KHÔNG được đặt rule `.requestMatchers("/cms/**").hasAnyRole(...)` ở tầng URL — rule này chạy TRƯỚC `@PreAuthorize` và sẽ chặn cứng mọi vai trò/quyền-lẻ không nằm trong danh sách đó trước khi tới được controller (đã từng gây bug 403 toàn bộ cho vai trò phòng ban mới, xem commit `dd5b39f`). Chỉ dùng `.requestMatchers("/cms/admins/**").hasRole("SUPER_ADMIN")` (quản lý admin) ở tầng URL; còn lại để `.authenticated()` và phân quyền chi tiết ở `@PreAuthorize` từng controller.
+
+Vai trò (8): `SUPER_ADMIN`, `ADMIN` (nhãn gộp cũ), `OPS`, `CUSTOMER_SUPPORT`, `APPRAISER`, `APPROVER`, `FINANCE`, `CONTENT`, `HR`. Quyền-lẻ (7): `loan.approve`, `loan.disburse`, `loan.propose`, `loan.product.edit`, `kyc.decide`, `business.decide`, `finance.reconcile`. Bảng chi tiết "vai trò → tính năng" và "quyền-lẻ → endpoint" xem ở CLAUDE.md gốc (`VNFITE P2P Lending/CLAUDE.md`, mục "Phân quyền CMS Admin").
+
+**Thêm endpoint nhạy cảm mới:** chọn vai trò phù hợp cho `@PreAuthorize` trước; nếu tính năng có khả năng cần cấp chéo phòng ban, thêm hằng số quyền mới vào `CmsPermissions.java` rồi dùng `hasAnyRole(...) or hasAuthority('...')`. Cập nhật đồng bộ 3 CLAUDE.md (gốc, `p2p-lending`, `VnFiteCMS`) khi đổi.
+
 **Thuật ngữ UI:** Dùng **"người gọi vốn"** và **"nhà đầu tư"** — không dùng "người vay" hay "cho vay". Áp dụng cho mọi label, tiêu đề, nội dung trên cả CMS web và mobile app.
 
 **Số tiền đã nhận đầu tư:** Luôn dùng **"đã được đầu tư"** — không dùng "đã huy động", "đã gọi được", hay bất kỳ cách diễn đạt khác. Áp dụng cho mọi label hiển thị `raisedAmount` trên mobile app và CMS web.
