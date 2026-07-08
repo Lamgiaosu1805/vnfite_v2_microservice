@@ -116,8 +116,8 @@ services:
       # Ảnh KYC: live đặt file-manager để upload thật & lấy fileId
       APP_IMAGE_STORAGE_PROVIDER: ${APP_IMAGE_STORAGE_PROVIDER:-mock}
       FILE_MANAGER_URL: ${FILE_MANAGER_URL:-https://service.vnfite.com.vn/file-manager/v2}
-      APP_MIN_VERSION_IOS: ${APP_MIN_VERSION_IOS:-1.0.0}
-      APP_MIN_VERSION_ANDROID: ${APP_MIN_VERSION_ANDROID:-1.0.0}
+      APP_MIN_VERSION_IOS: ${APP_MIN_VERSION_IOS:-1.5.7}
+      APP_MIN_VERSION_ANDROID: ${APP_MIN_VERSION_ANDROID:-1.5.7}
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
     extra_hosts:
       - "host.docker.internal:host-gateway"
