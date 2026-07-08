@@ -19,7 +19,7 @@ public class LoanCreateRequest {
 
     @NotNull(message = "Amount is required")
     @DecimalMin(value = "1000.00", message = "Minimum loan amount is 1,000")
-    @DecimalMax(value = "500000000.00", message = "Maximum loan amount is 500,000,000")
+    @DecimalMax(value = "2000000000.00", message = "Maximum funding amount is 2,000,000,000")
     @Digits(integer = 13, fraction = 2)
     private BigDecimal amount;
 

@@ -122,6 +122,7 @@ public class LoanService {
             throw new InvalidLoanStateException(
                     "Sản phẩm gọi vốn '%s' hiện không còn hoạt động".formatted(product.getName()));
         }
+        requireBusinessProfileIfNeeded(product, borrowerId);
 
         // 2. Validate số tiền theo giới hạn sản phẩm
         if (!product.isAmountInRange(request.getAmount())) {
@@ -166,6 +167,27 @@ public class LoanService {
                 saved.getId(), saved.getLoanCode(), borrowerId, saved.getAmount(),
                 request.getDocuments() != null ? request.getDocuments().size() : 0);
         return buildResponse(saved, false);
+    }
+
+    private void requireBusinessProfileIfNeeded(LoanProduct product, String borrowerId) {
+        if (product.getCategory() == ProductCategory.INDIVIDUAL) {
+            return;
+        }
+
+        AuthServiceClient.BusinessProfileInfo profile = authServiceClient.getBusinessProfile(borrowerId)
+                .filter(AuthServiceClient.BusinessProfileInfo::isApproved)
+                .orElseThrow(() -> new InvalidLoanStateException(
+                        "Cần có hồ sơ doanh nghiệp/hộ kinh doanh đã được duyệt để đăng ký sản phẩm này."));
+
+        boolean typeMatches = switch (product.getCategory()) {
+            case BUSINESS -> "HOUSEHOLD".equalsIgnoreCase(profile.businessType());
+            case ENTERPRISE -> "COMPANY".equalsIgnoreCase(profile.businessType());
+            case INDIVIDUAL -> true;
+        };
+        if (!typeMatches) {
+            throw new InvalidLoanStateException(
+                    "Hồ sơ pháp nhân đã duyệt không phù hợp với nhóm sản phẩm '%s'.".formatted(product.getName()));
+        }
     }
 
     // ── Read ──────────────────────────────────────────────────────

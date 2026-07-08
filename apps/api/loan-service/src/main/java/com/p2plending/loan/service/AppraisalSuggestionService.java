@@ -4,6 +4,7 @@ import com.p2plending.loan.domain.entity.LoanProduct;
 import com.p2plending.loan.domain.entity.LoanRequest;
 import com.p2plending.loan.domain.entity.RepaymentSchedule;
 import com.p2plending.loan.domain.enums.CreditBand;
+import com.p2plending.loan.domain.enums.ProductCategory;
 import com.p2plending.loan.domain.enums.RepaymentMethod;
 import com.p2plending.loan.domain.repository.LoanRequestRepository;
 import com.p2plending.loan.dto.response.AppraisalSuggestionResponse;
@@ -344,10 +345,50 @@ public class AppraisalSuggestionService {
                         + "mở file gốc soát dấu hiệu chỉnh sửa/giả mạo trước khi kết luận, đặc biệt các file AI đánh dấu cần kiểm tra.",
                 true));
 
+        if (product != null && (product.getCategory() == ProductCategory.BUSINESS
+                || product.getCategory() == ProductCategory.ENTERPRISE)) {
+            items.addAll(buildBusinessChecklist(product));
+        }
+
         items.add(item("FRAUD_CHECK", "FRAUD", "Rà soát dấu hiệu gian lận",
                 "Câu chuyện có nhất quán? Hồ sơ có dấu hiệu được mớm? Đối chiếu kết quả kiểm tra trùng CCCD/blacklist.",
                 true));
 
+        return items;
+    }
+
+    private List<ChecklistItem> buildBusinessChecklist(LoanProduct product) {
+        List<ChecklistItem> items = new ArrayList<>();
+        boolean onlineShop = "BUSINESS_ONLINE_SHOP".equalsIgnoreCase(product.getCode());
+        boolean enterprise = product.getCategory() == ProductCategory.ENTERPRISE;
+
+        items.add(item("VERIFY_BUSINESS_PROFILE", "BUSINESS_PROFILE", "Đối chiếu hồ sơ pháp nhân đã duyệt",
+                enterprise
+                        ? "Kiểm tra GCN đăng ký doanh nghiệp, MST, người đại diện, thời gian hoạt động tối thiểu 12 tháng và trạng thái còn hoạt động trên cổng đăng ký doanh nghiệp/thuế."
+                        : "Kiểm tra GCN đăng ký hộ kinh doanh/đăng ký hoạt động, MST nếu có, ngành nghề kinh doanh, địa điểm kinh doanh và người đại diện trùng hồ sơ đã duyệt.",
+                true));
+
+        items.add(item("VERIFY_BUSINESS_CASHFLOW", "BUSINESS_CASHFLOW", "Thẩm định dòng tiền kinh doanh",
+                onlineShop
+                        ? "Đối chiếu sao kê ví/sàn TMĐT tối thiểu 03 tháng, báo cáo doanh thu nền tảng, đơn hàng, tỷ lệ hoàn/hủy, chi phí sàn và marketing online."
+                        : "Đối chiếu sao kê ngân hàng, sổ bán hàng, sổ mua hàng, hóa đơn, biên lai thuế, tồn kho, khoản phải thu/phải trả và chi phí vận hành.",
+                true));
+
+        items.add(item("ASSESS_BUSINESS_PURPOSE", "BUSINESS_PURPOSE", "Đánh giá phương án sử dụng vốn",
+                "Xác minh nhu cầu vốn thực tế, tỷ lệ vốn đối ứng, chu kỳ quay vòng vốn, nhà cung cấp, khách hàng đầu ra và tính hợp pháp của hàng hóa/dịch vụ.",
+                true));
+
+        items.add(item("VERIFY_BUSINESS_SITE", "BUSINESS_SITE", "Kiểm tra hoạt động kinh doanh thực tế",
+                onlineShop
+                        ? "Kiểm tra gian hàng/kênh bán hàng online, lịch sử đánh giá, sản phẩm đang bán, kho/hàng hóa và phương án marketing."
+                        : "Kiểm tra cửa hàng/kho/xưởng, hàng tồn, biển hiệu, điều kiện ngành nghề đặc thù, PCCC/VSATTP/chứng chỉ hành nghề nếu có.",
+                true));
+
+        if (enterprise) {
+            items.add(item("VERIFY_ENTERPRISE_CREDIT_HISTORY", "CREDIT_HISTORY", "Kiểm tra lịch sử tín dụng DN",
+                    "Tra CIC/nguồn dữ liệu liên quan cho doanh nghiệp, người quản lý, người đại diện pháp luật và cổ đông/thành viên góp vốn từ 30% vốn điều lệ: không có nợ quá hạn, nợ nhóm 2 trong 12 tháng gần nhất hoặc nợ nhóm 3 trở lên trong 24 tháng gần nhất.",
+                    true));
+        }
         return items;
     }
 
