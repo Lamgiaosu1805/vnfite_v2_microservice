@@ -39,7 +39,9 @@ public class SecurityConfig {
                         .requestMatchers("/cms/auth/totp/**").permitAll()
                         .requestMatchers("/cms/auth/change-password").authenticated()
                         .requestMatchers("/cms/admins/**").hasRole("SUPER_ADMIN")
-                        .requestMatchers("/cms/**").hasAnyRole("SUPER_ADMIN", "ADMIN", "OPS")
+                        // Phân quyền chi tiết theo tính năng do @PreAuthorize từng controller đảm nhiệm
+                        // (đa vai trò phòng ban: FINANCE, CUSTOMER_SUPPORT, APPRAISER, APPROVER, CONTENT, HR...).
+                        .requestMatchers("/cms/**").authenticated()
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)
