@@ -3,6 +3,8 @@ package com.p2plending.credit.dto.request;
 import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
 
+import java.util.List;
+
 /**
  * Phân tích Giấy chứng nhận đăng ký kinh doanh (GPKD) của hồ sơ doanh nghiệp —
  * trích xuất thông tin + đối chiếu với thông tin người dùng khai báo và eKYC.
@@ -16,6 +18,9 @@ public class AnalyzeBusinessLicenseRequest {
 
     @NotBlank(message = "fileId là bắt buộc")
     private String fileId;
+
+    /** Tất cả trang ảnh GPKD nếu hồ sơ có nhiều ảnh; fileId vẫn giữ để tương thích ngược. */
+    private List<String> fileIds;
 
     // ── Thông tin khai báo để AI đối chiếu ──
     private String expectedBusinessName;

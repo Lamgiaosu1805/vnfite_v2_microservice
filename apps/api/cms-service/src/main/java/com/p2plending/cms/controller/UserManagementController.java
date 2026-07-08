@@ -85,6 +85,12 @@ public class UserManagementController {
         return ResponseEntity.ok(userService.getBusinessProfile(userId));
     }
 
+    /** GET /cms/users/{userId}/business-profile/tax-lookup — đối chiếu MST qua VietQR. */
+    @GetMapping("/{userId}/business-profile/tax-lookup")
+    public ResponseEntity<JsonNode> lookupBusinessTax(@PathVariable String userId) {
+        return ResponseEntity.ok(userService.lookupBusinessTax(userId));
+    }
+
     /** POST /cms/users/{userId}/business-profile/decision — duyệt/từ chối hồ sơ DN. */
     @PostMapping("/{userId}/business-profile/decision")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'CUSTOMER_SUPPORT') or hasAuthority('business.decide')")

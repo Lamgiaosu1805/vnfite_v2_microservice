@@ -68,6 +68,10 @@ file:
   manager:
     base-url: ${FILE_MANAGER_URL:https://service.vnfite.com.vn/file-manager/v2/file}
 
+external:
+  vietqr:
+    tax-lookup-url: ${VIETQR_TAX_LOOKUP_URL:https://api.vietqr.io/v2/business}
+
 app:
   redis:
     namespace: ${APP_REDIS_NAMESPACE:${SPRING_PROFILES_ACTIVE:dev}}:cms-service

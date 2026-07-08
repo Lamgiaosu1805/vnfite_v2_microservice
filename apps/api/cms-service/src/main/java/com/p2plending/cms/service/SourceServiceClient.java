@@ -32,8 +32,10 @@ import org.springframework.web.util.UriComponentsBuilder;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.net.URI;
+import java.text.Normalizer;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeFormatterBuilder;
 import java.time.temporal.ChronoField;
@@ -44,6 +46,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 @Service
 @Slf4j
@@ -88,6 +91,9 @@ public class SourceServiceClient {
 
     @Value("${cms.sources.internal-secret}")
     private String internalSecret;
+
+    @Value("${external.vietqr.tax-lookup-url:https://api.vietqr.io/v2/business}")
+    private String vietQrTaxLookupUrl;
 
     public PagedResponse<UserSummaryResponse> getUsers(
             String kycStatus, Boolean blacklisted, String role, UserAccountStatus status, String search, int page, int size) {
@@ -172,6 +178,79 @@ public class SourceServiceClient {
         return exchangeForJson(url, HttpMethod.GET, null);
     }
 
+    /** Đối chiếu dữ liệu MST cơ bản qua VietQR. Kết quả chỉ hỗ trợ thẩm định, không tự quyết định duyệt/từ chối. */
+    public JsonNode lookupBusinessTax(String userId) {
+        JsonNode profile = getBusinessProfile(userId);
+        String expectedTaxCode = firstNonBlank(text(profile, "taxCode"), text(profile, "registrationNumber"));
+        var result = objectMapper.createObjectNode();
+        result.put("source", "VIETQR");
+        result.put("lookupCode", expectedTaxCode);
+        result.put("found", false);
+        result.put("checkedAt", LocalDateTime.now(ZoneId.of("Asia/Ho_Chi_Minh")).toString());
+        var warnings = objectMapper.createArrayNode();
+
+        if (expectedTaxCode == null) {
+            warnings.add("Hồ sơ chưa có mã số thuế hoặc số GCN đăng ký để tra cứu VietQR.");
+            result.set("warnings", warnings);
+            return result;
+        }
+
+        try {
+            String url = UriComponentsBuilder.fromHttpUrl(vietQrTaxLookupUrl)
+                    .pathSegment(expectedTaxCode)
+                    .build()
+                    .encode()
+                    .toUriString();
+            JsonNode root = externalGetForJson(url);
+            String code = text(root, "code");
+            String desc = text(root, "desc");
+            JsonNode data = root.path("data");
+            result.put("code", code);
+            result.put("desc", desc);
+
+            if (data.isObject() && data.hasNonNull("id")) {
+                String taxId = text(data, "id");
+                String name = text(data, "name");
+                String internationalName = text(data, "internationalName");
+                String shortName = text(data, "shortName");
+                String address = text(data, "address");
+                String status = text(data, "status");
+                result.put("found", true);
+                result.put("taxId", taxId);
+                result.put("name", name);
+                result.put("internationalName", internationalName);
+                result.put("shortName", shortName);
+                result.put("address", address);
+                result.put("status", status);
+                result.put("taxCodeMatched", sameDigits(taxId, expectedTaxCode));
+                result.put("nameMatched", softMatch(name, text(profile, "businessName"))
+                        || softMatch(shortName, text(profile, "businessName")));
+                result.put("addressMatched", softMatch(address, text(profile, "headOfficeAddress")));
+                JsonNode metadata = root.path("metadata");
+                if (metadata.isObject()) {
+                    result.put("dataSource", text(metadata, "source"));
+                    result.put("dataUpdatedAt", text(metadata, "updatedAt"));
+                    result.put("disclaimer", text(metadata, "disclaimer"));
+                }
+                warnings.add("VietQR chỉ trả dữ liệu cơ bản theo MST/tên/địa chỉ/trạng thái thuế, không có người đại diện, ngày cấp hoặc ngành nghề.");
+            } else {
+                warnings.add(desc != null && !desc.isBlank()
+                        ? desc
+                        : "VietQR không trả về dữ liệu cho mã tra cứu này.");
+            }
+        } catch (RestClientResponseException ex) {
+            String message = sourceErrorMessage(ex);
+            result.put("code", String.valueOf(ex.getStatusCode().value()));
+            result.put("desc", message);
+            warnings.add("Không tra cứu được VietQR: " + message);
+        } catch (Exception ex) {
+            log.warn("Cannot lookup VietQR business tax for user {}: {}", userId, ex.getMessage());
+            warnings.add("Không thể kết nối VietQR. Vui lòng thử lại sau.");
+        }
+        result.set("warnings", warnings);
+        return result;
+    }
+
     /** Duyệt/từ chối hồ sơ doanh nghiệp. Body: {approved, reason, reviewedBy}. */
     public void decideBusinessProfile(String userId, boolean approved, String reason, String reviewedBy) {
         String url = UriComponentsBuilder.fromHttpUrl(authServiceUrl)
@@ -195,6 +274,13 @@ public class SourceServiceClient {
         var body = new java.util.LinkedHashMap<String, Object>();
         body.put("userId", userId);
         body.put("fileId", text(profile, "licenseImageId"));
+        body.put("fileIds", java.util.stream.Stream.of(
+                        text(profile, "licenseImageId"),
+                        text(profile, "licenseExtra1ImageId"),
+                        text(profile, "licenseExtra2ImageId"))
+                .filter(v -> v != null && !v.isBlank())
+                .distinct()
+                .toList());
         body.put("expectedBusinessName", text(profile, "businessName"));
         body.put("expectedRegistrationNumber", text(profile, "registrationNumber"));
         body.put("expectedTaxCode", text(profile, "taxCode"));
@@ -1701,6 +1787,55 @@ public class SourceServiceClient {
         var body = new java.util.LinkedHashMap<String, String>();
         body.put("resolvedBy", resolvedBy);
         exchangeForJson(uri, HttpMethod.POST, body);
+    }
+
+    private JsonNode externalGetForJson(String url) {
+        ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.GET, HttpEntity.EMPTY, String.class);
+        String body = response.getBody();
+        if (body == null || body.isBlank()) {
+            throw new SourceServiceException(HttpStatus.BAD_GATEWAY, "VietQR trả về nội dung trống");
+        }
+        try {
+            return objectMapper.readTree(body);
+        } catch (Exception ex) {
+            log.warn("Cannot parse VietQR response from {}: {}", url, ex.getMessage());
+            throw new SourceServiceException(HttpStatus.BAD_GATEWAY, "Phản hồi VietQR không hợp lệ");
+        }
+    }
+
+    private String firstNonBlank(String... values) {
+        if (values == null) return null;
+        for (String value : values) {
+            if (value != null && !value.isBlank()) return value.trim();
+        }
+        return null;
+    }
+
+    private boolean sameDigits(String left, String right) {
+        String a = digitsOnly(left);
+        String b = digitsOnly(right);
+        return !a.isBlank() && a.equals(b);
+    }
+
+    private String digitsOnly(String value) {
+        return value == null ? "" : value.replaceAll("\\D", "");
+    }
+
+    private boolean softMatch(String left, String right) {
+        String a = normalizeForMatch(left);
+        String b = normalizeForMatch(right);
+        if (a.isBlank() || b.isBlank()) return false;
+        return a.equals(b) || a.contains(b) || b.contains(a);
+    }
+
+    private String normalizeForMatch(String value) {
+        if (value == null) return "";
+        String normalized = Normalizer.normalize(value, Normalizer.Form.NFD)
+                .replaceAll("\\p{M}", "")
+                .replace('đ', 'd')
+                .replace('Đ', 'D')
+                .toLowerCase(Locale.ROOT);
+        return Pattern.compile("[^a-z0-9]+").matcher(normalized).replaceAll(" ").trim();
     }
 
     private UserAccountStatus parseAccountStatus(String value) {

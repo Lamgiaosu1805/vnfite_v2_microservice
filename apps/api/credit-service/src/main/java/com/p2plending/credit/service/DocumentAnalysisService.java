@@ -19,10 +19,13 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.LinkedHashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Service
 @RequiredArgsConstructor
@@ -31,6 +34,8 @@ public class DocumentAnalysisService {
 
     private static final ZoneId VIETNAM_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
     private static final DateTimeFormatter VIETNAM_DATE = DateTimeFormatter.ofPattern("dd/MM/yyyy");
+    private static final Pattern VIETNAM_DATE_PATTERN =
+            Pattern.compile("\\b(\\d{1,2})/(\\d{1,2})/(\\d{4})\\b");
     private static final Set<String> IMAGE_MIME_TYPES =
             Set.of("image/jpeg", "image/png", "image/webp", "image/gif");
     private static final long MAX_IMAGE_BYTES = 5L * 1024 * 1024;   // giới hạn ảnh của Claude API
@@ -96,17 +101,25 @@ public class DocumentAnalysisService {
      */
     @Transactional
     public DocumentAnalysis analyzeBusinessLicense(AnalyzeBusinessLicenseRequest req) {
-        FileManagerClient.FetchedFile file = fileManagerClient.fetch(req.getFileId());
-        String mimeType = file.mimeType();
-        String fileBase64 = Base64.getEncoder().encodeToString(file.bytes());
-        validateFile(mimeType, fileBase64);
+        List<String> fileIds = businessLicenseFileIds(req);
+        List<AiDocumentAnalyzer.DocumentCheckResult> pageResults = new ArrayList<>();
+        String context = buildBusinessLicenseContext(req);
+        for (String fileId : fileIds) {
+            FileManagerClient.FetchedFile file = fileManagerClient.fetch(fileId);
+            String mimeType = file.mimeType();
+            String fileBase64 = Base64.getEncoder().encodeToString(file.bytes());
+            validateFile(mimeType, fileBase64);
 
-        AiDocumentAnalyzer.DocumentCheckResult result =
-                documentAnalyzer.analyze(mimeType, fileBase64, buildBusinessLicenseContext(req));
-        if (result == null) {
-            throw new IllegalStateException(
-                    "AI phân tích chứng từ chưa được bật — cần APP_AI_ENABLED=true và API key tương ứng");
+            AiDocumentAnalyzer.DocumentCheckResult pageResult =
+                    documentAnalyzer.analyze(mimeType, fileBase64, context + "\n\nĐây là một trang/ảnh trong bộ GPKD nhiều trang. Nếu trang này không có một trường nào đó, không kết luận thiếu nếu trang khác có thể chứa trường đó.");
+            if (pageResult == null) {
+                throw new IllegalStateException(
+                        "AI phân tích chứng từ chưa được bật — cần APP_AI_ENABLED=true và API key tương ứng");
+            }
+            pageResults.add(pageResult);
         }
+        AiDocumentAnalyzer.DocumentCheckResult result =
+                normalizeBusinessLicenseResult(mergeBusinessLicenseResults(pageResults), req);
 
         DocumentAnalysis entity = DocumentAnalysis.builder()
                 .userId(req.getUserId())
@@ -119,9 +132,58 @@ public class DocumentAnalysisService {
                 .build();
         entity = analysisRepository.save(entity);
 
-        log.info("Phân tích GPKD xong: userId={} fileId={} verdict={} trustScore={}",
-                req.getUserId(), req.getFileId(), entity.getVerdict(), entity.getTrustScore());
+        log.info("Phân tích GPKD xong: userId={} fileIds={} verdict={} trustScore={}",
+                req.getUserId(), fileIds, entity.getVerdict(), entity.getTrustScore());
         return entity;
+    }
+
+    private List<String> businessLicenseFileIds(AnalyzeBusinessLicenseRequest req) {
+        LinkedHashSet<String> ids = new LinkedHashSet<>();
+        if (req.getFileId() != null && !req.getFileId().isBlank()) {
+            ids.add(req.getFileId());
+        }
+        if (req.getFileIds() != null) {
+            req.getFileIds().stream()
+                    .filter(v -> v != null && !v.isBlank())
+                    .forEach(ids::add);
+        }
+        if (ids.isEmpty()) {
+            throw new IllegalArgumentException("Cần truyền ít nhất một fileId GPKD");
+        }
+        return List.copyOf(ids);
+    }
+
+    private AiDocumentAnalyzer.DocumentCheckResult mergeBusinessLicenseResults(
+            List<AiDocumentAnalyzer.DocumentCheckResult> results) {
+        if (results == null || results.isEmpty()) {
+            return new AiDocumentAnalyzer.DocumentCheckResult(
+                    null, "UNREADABLE", 0, null, null, null, List.of(), List.of(),
+                    "Không có trang GPKD nào để phân tích.");
+        }
+
+        List<String> findings = distinctStrings(results.stream()
+                .flatMap(r -> safeList(r.findings()).stream())
+                .toList());
+        List<String> issues = distinctStrings(results.stream()
+                .flatMap(r -> safeList(r.consistencyIssues()).stream())
+                .toList());
+        int trustScore = (int) Math.round(results.stream()
+                .filter(r -> r.trustScore() != null)
+                .mapToInt(AiDocumentAnalyzer.DocumentCheckResult::trustScore)
+                .average()
+                .orElse(50));
+
+        return new AiDocumentAnalyzer.DocumentCheckResult(
+                firstNonBlank(results.stream().map(AiDocumentAnalyzer.DocumentCheckResult::docTypeDetected).toList()),
+                strongestVerdict(results),
+                trustScore,
+                firstNonBlank(results.stream().map(AiDocumentAnalyzer.DocumentCheckResult::ownerName).toList()),
+                firstNonBlank(results.stream().map(AiDocumentAnalyzer.DocumentCheckResult::organizationName).toList()),
+                firstNonBlank(results.stream().map(AiDocumentAnalyzer.DocumentCheckResult::extractedMonthlyIncome).toList()),
+                findings,
+                issues,
+                mergeSummary(results)
+        );
     }
 
     private String buildBusinessLicenseContext(AnalyzeBusinessLicenseRequest req) {
@@ -134,6 +196,10 @@ public class DocumentAnalysisService {
                 .append(". Chỉ coi một ngày trên chứng từ là ngày tương lai/chưa đến nếu ngày đó SAU mốc này. ")
                 .append("Ngày cấp, ngày đăng ký thay đổi hoặc ngày cấp thay đổi lần thứ N nằm từ quá khứ đến hôm nay ")
                 .append("là hợp lệ về mặt thời gian; không được đánh SUSPICIOUS chỉ vì ngày thay đổi sau ngày đăng ký lần đầu.\n\n");
+        sb.append("CƠ QUAN CẤP HIỆN HÀNH: từ 01/07/2025, Cơ quan đăng ký kinh doanh cấp tỉnh thuộc Sở Tài chính. ")
+                .append("Vì vậy các cách ghi như 'Sở Tài chính', 'Phòng Đăng ký kinh doanh thuộc Sở Tài chính' ")
+                .append("hoặc 'Phòng Quản lý doanh nghiệp - Sở Tài chính' là hợp lệ; không được đánh SUSPICIOUS ")
+                .append("chỉ vì không ghi 'Sở Kế hoạch và Đầu tư'.\n\n");
         sb.append("TRÍCH XUẤT từ chứng từ: tên doanh nghiệp/hộ kinh doanh (ghi vào organizationName), ")
                 .append("tên người đại diện pháp luật/chủ hộ (ghi vào ownerName), số GCN đăng ký, mã số thuế, ")
                 .append("ngày cấp, nơi cấp, địa chỉ trụ sở, loại hình (liệt kê trong findings).\n\n");
@@ -149,8 +215,197 @@ public class DocumentAnalysisService {
                 .append("Chỉ đưa vấn đề ngày tháng vào consistencyIssues khi có mâu thuẫn thật sự: ngày nằm sau ")
                 .append(today.format(VIETNAM_DATE))
                 .append(", ngày không tồn tại, hoặc thứ tự ngày tự mâu thuẫn trên cùng chứng từ. ")
+                .append("Không đưa 'Sở Tài chính không có thẩm quyền' vào issues/findings. ")
                 .append("Kiểm tra thêm dấu hiệu chỉnh sửa: font không đồng nhất, con dấu mờ/bất thường, căn lề lệch.");
         return sb.toString();
+    }
+
+    private AiDocumentAnalyzer.DocumentCheckResult normalizeBusinessLicenseResult(
+            AiDocumentAnalyzer.DocumentCheckResult result,
+            AnalyzeBusinessLicenseRequest req) {
+        LocalDate today = LocalDate.now(VIETNAM_ZONE);
+        boolean representativeFound = representativeMatchesExpected(result.ownerName(), req.getExpectedRepresentativeName());
+        List<String> issues = filterBusinessLicenseFalsePositives(result.consistencyIssues(), today, representativeFound);
+        List<String> findings = filterBusinessLicenseFalsePositives(result.findings(), today, representativeFound);
+
+        boolean changed = !sameList(result.consistencyIssues(), issues) || !sameList(result.findings(), findings);
+        if (!changed) {
+            return result;
+        }
+
+        String verdict = result.verdict();
+        String summary = result.summary();
+        if ((issues == null || issues.isEmpty())
+                && containsBusinessLicenseFalsePositive(summary, today, representativeFound)) {
+            summary = findings != null && findings.stream().anyMatch(this::looksLikeDocumentTamperingFinding)
+                    ? "Thông tin đối chiếu khớp khai báo. Một số ghi chú về định dạng/chất lượng ảnh chỉ để thẩm định viên tham khảo thủ công."
+                    : "Thông tin cơ bản khớp khai báo; không phát hiện điểm không khớp trọng yếu sau khi loại trừ cảnh báo sai về ngày/cơ quan cấp.";
+        }
+        if (issues == null || issues.isEmpty()) {
+            verdict = "CONSISTENT";
+        }
+
+        return new AiDocumentAnalyzer.DocumentCheckResult(
+                result.docTypeDetected(),
+                verdict,
+                result.trustScore(),
+                result.ownerName(),
+                result.organizationName(),
+                result.extractedMonthlyIncome(),
+                findings,
+                issues,
+                summary
+        );
+    }
+
+    private List<String> filterBusinessLicenseFalsePositives(
+            List<String> items,
+            LocalDate today,
+            boolean representativeFound) {
+        if (items == null || items.isEmpty()) return items;
+        return items.stream()
+                .filter(item -> !isIssuerAuthorityFalsePositive(item))
+                .filter(item -> !isFutureDateFalsePositive(item, today))
+                .filter(item -> !isMissingRepresentativeFalsePositive(item, representativeFound))
+                .toList();
+    }
+
+    private boolean isIssuerAuthorityFalsePositive(String item) {
+        String normalized = normalizeVietnamese(item);
+        return normalized.contains("so tai chinh")
+                && (normalized.contains("khong co tham quyen")
+                || normalized.contains("khong dung")
+                || normalized.contains("phai la so ke hoach")
+                || normalized.contains("so ke hoach va dau tu"));
+    }
+
+    private boolean isFutureDateFalsePositive(String item, LocalDate today) {
+        String normalized = normalizeVietnamese(item);
+        if (!normalized.contains("tuong lai") && !normalized.contains("chua den")) {
+            return false;
+        }
+
+        Matcher matcher = VIETNAM_DATE_PATTERN.matcher(item);
+        boolean foundDate = false;
+        while (matcher.find()) {
+            foundDate = true;
+            try {
+                int day = Integer.parseInt(matcher.group(1));
+                int month = Integer.parseInt(matcher.group(2));
+                int year = Integer.parseInt(matcher.group(3));
+                if (LocalDate.of(year, month, day).isAfter(today)) {
+                    return false;
+                }
+            } catch (Exception ignored) {
+                return false;
+            }
+        }
+        return foundDate;
+    }
+
+    private boolean isMissingRepresentativeFalsePositive(String item, boolean representativeFound) {
+        if (!representativeFound) return false;
+        String normalized = normalizeVietnamese(item);
+        boolean mentionsRepresentative = normalized.contains("nguoi dai dien")
+                || normalized.contains("dai dien phap luat")
+                || normalized.contains("chu tich")
+                || normalized.contains("chu so huu");
+        boolean saysMissing = normalized.contains("khong xuat hien")
+                || normalized.contains("khong hien thi")
+                || normalized.contains("khong duoc the hien")
+                || normalized.contains("thieu thong tin")
+                || normalized.contains("khong the doi chieu");
+        return mentionsRepresentative && saysMissing;
+    }
+
+    private boolean representativeMatchesExpected(String extractedName, String expectedName) {
+        if (extractedName == null || extractedName.isBlank()
+                || expectedName == null || expectedName.isBlank()) {
+            return false;
+        }
+        String extracted = normalizeVietnamese(extractedName);
+        String expected = normalizeVietnamese(expectedName);
+        return extracted.equals(expected) || extracted.contains(expected) || expected.contains(extracted);
+    }
+
+    private boolean containsBusinessLicenseFalsePositive(
+            String summary,
+            LocalDate today,
+            boolean representativeFound) {
+        return summary != null && (isIssuerAuthorityFalsePositive(summary)
+                || isFutureDateFalsePositive(summary, today)
+                || isMissingRepresentativeFalsePositive(summary, representativeFound));
+    }
+
+    private boolean looksLikeDocumentTamperingFinding(String item) {
+        String normalized = normalizeVietnamese(item);
+        return normalized.contains("font")
+                || normalized.contains("con dau")
+                || normalized.contains("chu ky")
+                || normalized.contains("can le")
+                || normalized.contains("dinh dang")
+                || normalized.contains("chinh sua")
+                || normalized.contains("bat thuong");
+    }
+
+    private boolean sameList(List<String> a, List<String> b) {
+        if (a == null || a.isEmpty()) return b == null || b.isEmpty();
+        return a.equals(b);
+    }
+
+    private List<String> safeList(List<String> items) {
+        return items != null ? items : List.of();
+    }
+
+    private List<String> distinctStrings(List<String> items) {
+        LinkedHashSet<String> values = new LinkedHashSet<>();
+        if (items != null) {
+            items.stream()
+                    .filter(v -> v != null && !v.isBlank())
+                    .map(String::trim)
+                    .forEach(values::add);
+        }
+        return List.copyOf(values);
+    }
+
+    private String firstNonBlank(List<String> values) {
+        if (values == null) return null;
+        return values.stream()
+                .filter(v -> v != null && !v.isBlank() && !"null".equalsIgnoreCase(v))
+                .findFirst()
+                .orElse(null);
+    }
+
+    private String strongestVerdict(List<AiDocumentAnalyzer.DocumentCheckResult> results) {
+        String strongest = "CONSISTENT";
+        for (AiDocumentAnalyzer.DocumentCheckResult result : results) {
+            String verdict = result.verdict() != null ? result.verdict().toUpperCase(java.util.Locale.ROOT) : "UNREADABLE";
+            if ("HIGH_RISK".equals(verdict)) return "HIGH_RISK";
+            if ("SUSPICIOUS".equals(verdict)) strongest = "SUSPICIOUS";
+            if ("UNREADABLE".equals(verdict) && "CONSISTENT".equals(strongest)) strongest = "UNREADABLE";
+        }
+        return strongest;
+    }
+
+    private String mergeSummary(List<AiDocumentAnalyzer.DocumentCheckResult> results) {
+        List<String> summaries = distinctStrings(results.stream()
+                .map(AiDocumentAnalyzer.DocumentCheckResult::summary)
+                .filter(v -> v != null && !v.isBlank())
+                .toList());
+        if (summaries.isEmpty()) {
+            return "Đã phân tích các trang GPKD; không có tóm tắt từ AI.";
+        }
+        return String.join(" ", summaries);
+    }
+
+    private String normalizeVietnamese(String value) {
+        if (value == null) return "";
+        String normalized = java.text.Normalizer.normalize(value, java.text.Normalizer.Form.NFD)
+                .replaceAll("\\p{M}", "")
+                .replace('đ', 'd')
+                .replace('Đ', 'D')
+                .toLowerCase(java.util.Locale.ROOT);
+        return normalized.replaceAll("\\s+", " ").trim();
     }
 
     /**

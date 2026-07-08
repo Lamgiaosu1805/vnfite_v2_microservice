@@ -49,6 +49,10 @@ public class UserManagementService {
         return sourceServiceClient.getBusinessProfile(userId);
     }
 
+    public JsonNode lookupBusinessTax(String userId) {
+        return sourceServiceClient.lookupBusinessTax(userId);
+    }
+
     public void decideBusinessProfile(String userId, boolean approved, String reason, String reviewedBy) {
         sourceServiceClient.decideBusinessProfile(userId, approved, reason, reviewedBy);
     }
