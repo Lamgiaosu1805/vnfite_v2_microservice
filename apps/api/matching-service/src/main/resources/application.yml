@@ -43,6 +43,10 @@ spring:
       value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       enable-auto-commit: false
 
+spring.servlet.multipart:
+  max-file-size: 30MB
+  max-request-size: 30MB
+
 server:
   port: 8083
   servlet:

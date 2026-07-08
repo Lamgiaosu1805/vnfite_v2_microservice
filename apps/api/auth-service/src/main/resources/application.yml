@@ -70,6 +70,12 @@ server:
       force-response: true
       enabled: true
 
+# Mặc định Spring Boot chỉ cho 1MB/file — ảnh eKYC/GPKD (JPEG quality 0.8) thường lớn hơn.
+# Khớp giới hạn 30MB đã validate ở FileManagerImageStorageService và nginx client_max_body_size.
+spring.servlet.multipart:
+  max-file-size: 30MB
+  max-request-size: 30MB
+
 # JWT RS256 config
 # Set RSA_PRIVATE_KEY / RSA_PUBLIC_KEY env vars in production (PKCS8/X509 base64, PEM headers optional)
 # If left empty an ephemeral key pair is generated at startup (dev only — tokens don't survive restart)

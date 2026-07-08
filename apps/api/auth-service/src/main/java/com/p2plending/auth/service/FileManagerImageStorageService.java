@@ -28,7 +28,7 @@ import java.util.List;
 @Slf4j
 public class FileManagerImageStorageService implements ImageStorageService {
 
-    private static final long MAX_FILE_SIZE = 10L * 1024 * 1024;
+    private static final long MAX_FILE_SIZE = 30L * 1024 * 1024;
 
     @Value("${file-manager.base-url:https://service.vnfite.com.vn/file-manager/v2}")
     private String fileManagerBaseUrl;
@@ -94,7 +94,7 @@ public class FileManagerImageStorageService implements ImageStorageService {
             throw new IllegalArgumentException("Thiếu ảnh định danh cần tải lên");
         }
         if (file.getSize() > MAX_FILE_SIZE) {
-            throw new IllegalArgumentException("Mỗi ảnh định danh chỉ được tối đa 10MB");
+            throw new IllegalArgumentException("Mỗi ảnh định danh chỉ được tối đa 30MB");
         }
         byte[] bytes;
         try {

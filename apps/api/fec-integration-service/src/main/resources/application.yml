@@ -4,6 +4,10 @@ spring:
   jackson:
     time-zone: Asia/Ho_Chi_Minh
 
+spring.servlet.multipart:
+  max-file-size: 30MB
+  max-request-size: 30MB
+
 server:
   port: 8091
   servlet:
