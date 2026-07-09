@@ -70,7 +70,7 @@ class GeminiClient {
             // JSON schema đã được mô tả trong prompt, Gemini vẫn trả JSON mà không cần ràng buộc này.
             ObjectNode genConfig = body.putObject("generationConfig");
             genConfig.put("temperature", 0.1);
-            genConfig.put("maxOutputTokens", 4096);
+            genConfig.put("maxOutputTokens", 8192);
 
             ArrayNode safetySettings = body.putArray("safetySettings");
             for (String category : List.of(
@@ -108,9 +108,17 @@ class GeminiClient {
                 return null;
             }
 
-            String text = candidate
-                    .path("content").path("parts").path(0)
-                    .path("text").asText(null);
+            StringBuilder textBuilder = new StringBuilder();
+            JsonNode textParts = candidate.path("content").path("parts");
+            if (textParts.isArray()) {
+                for (JsonNode part : textParts) {
+                    String value = part.path("text").asText(null);
+                    if (value != null && !value.isBlank()) {
+                        textBuilder.append(value);
+                    }
+                }
+            }
+            String text = textBuilder.isEmpty() ? null : textBuilder.toString();
             if (text == null || text.isBlank()) {
                 log.warn("Gemini API response has no text part. finishReason={} response={}",
                         candidate.path("finishReason").asText(null), responseBody);

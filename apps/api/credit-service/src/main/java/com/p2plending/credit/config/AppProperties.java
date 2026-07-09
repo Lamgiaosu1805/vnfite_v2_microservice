@@ -39,6 +39,6 @@ public class AppProperties {
         private String model = "claude-opus-4-8";
         // Gemini
         private String geminiApiKey = "";
-        private String geminiModel = "gemini-3.5-flash";
+        private String geminiModel = "gemini-2.5-flash";
     }
 }
