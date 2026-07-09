@@ -1616,6 +1616,10 @@ public class SourceServiceClient {
     private LoanSummaryResponse parseLoan(JsonNode node) {
         String borrowerId = text(node, "borrowerId");
         UserSummaryResponse borrower = resolveBorrower(borrowerId);
+        String productCategory = text(node, "productCategory");
+        JsonNode businessProfile = isBusinessFundingCategory(productCategory)
+                ? safeGetBusinessProfile(borrowerId)
+                : null;
         return LoanSummaryResponse.builder()
                 .loanId(text(node, "id"))
                 .loanCode(text(node, "loanCode"))
@@ -1636,8 +1640,11 @@ public class SourceServiceClient {
                 .borrowerFrontImageId(borrower != null ? borrower.getFrontImageId() : null)
                 .borrowerBackImageId(borrower != null ? borrower.getBackImageId() : null)
                 .borrowerPortraitImageId(borrower != null ? borrower.getPortraitImageId() : null)
+                .businessType(text(businessProfile, "businessType"))
+                .businessName(text(businessProfile, "businessName"))
+                .businessRepresentativeName(text(businessProfile, "representativeName"))
                 .productName(text(node, "productName"))
-                .productCategory(text(node, "productCategory"))
+                .productCategory(productCategory)
                 .amount(decimal(node, "amount"))
                 .fundedAmount(decimal(node, "fundedAmount"))
                 .interestRate(decimal(node, "interestRate"))
@@ -1675,6 +1682,22 @@ public class SourceServiceClient {
                 .createdAt(dateTime(node, "createdAt"))
                 .offers(parseOffers(node.path("offers")))
                 .build();
+    }
+
+    private boolean isBusinessFundingCategory(String productCategory) {
+        return "BUSINESS".equalsIgnoreCase(productCategory) || "ENTERPRISE".equalsIgnoreCase(productCategory);
+    }
+
+    private JsonNode safeGetBusinessProfile(String userId) {
+        if (userId == null || userId.isBlank()) {
+            return null;
+        }
+        try {
+            return getBusinessProfile(userId);
+        } catch (Exception ex) {
+            log.warn("Could not resolve business profile for borrower {}: {}", userId, ex.getMessage());
+            return null;
+        }
     }
 
     private List<LoanOfferSummaryResponse> parseOffers(JsonNode offersNode) {
@@ -1847,6 +1870,7 @@ public class SourceServiceClient {
     }
 
     private String text(JsonNode node, String field) {
+        if (node == null || node.isNull()) return null;
         return node.hasNonNull(field) ? node.get(field).asText() : null;
     }
 

@@ -34,6 +34,9 @@ public class LoanSummaryResponse {
     private String borrowerFrontImageId;
     private String borrowerBackImageId;
     private String borrowerPortraitImageId;
+    private String businessType;
+    private String businessName;
+    private String businessRepresentativeName;
     private String productName;
     private String productCategory;
     private BigDecimal amount;
