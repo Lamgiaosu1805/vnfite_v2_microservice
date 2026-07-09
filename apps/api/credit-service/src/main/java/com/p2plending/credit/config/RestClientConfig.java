@@ -27,7 +27,7 @@ public class RestClientConfig {
         // Gemini phân tích PDF/base64 có thể lâu hơn fetch file-manager.
         return builder
                 .setConnectTimeout(Duration.ofSeconds(10))
-                .setReadTimeout(Duration.ofSeconds(90))
+                .setReadTimeout(Duration.ofSeconds(150))
                 .build();
     }
 }

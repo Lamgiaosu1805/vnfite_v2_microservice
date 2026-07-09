@@ -102,21 +102,20 @@ public class DocumentAnalysisService {
     @Transactional
     public DocumentAnalysis analyzeBusinessLicense(AnalyzeBusinessLicenseRequest req) {
         List<String> fileIds = businessLicenseFileIds(req);
-        List<AiDocumentAnalyzer.DocumentCheckResult> pageResults = new ArrayList<>();
+        List<AiDocumentAnalyzer.DocumentInput> documents = new ArrayList<>();
         String context = buildBusinessLicenseContext(req);
         for (String fileId : fileIds) {
             FileManagerClient.FetchedFile file = fileManagerClient.fetch(fileId);
             String mimeType = file.mimeType();
             String fileBase64 = Base64.getEncoder().encodeToString(file.bytes());
             validateFile(mimeType, fileBase64);
-
-            AiDocumentAnalyzer.DocumentCheckResult pageResult =
-                    documentAnalyzer.analyze(mimeType, fileBase64, context + "\n\nĐây là một trang/ảnh trong bộ GPKD nhiều trang. Nếu trang này không có một trường nào đó, không đưa vào consistencyIssues/Điểm không khớp vì trang khác có thể chứa trường đó. Chỉ ghi nhận thông tin đọc được từ trang này trong findings.");
-            if (pageResult == null) {
-                throw new IllegalStateException(
-                        "AI phân tích chứng từ chưa được bật — cần APP_AI_ENABLED=true và API key tương ứng");
-            }
-            pageResults.add(pageResult);
+            documents.add(new AiDocumentAnalyzer.DocumentInput(mimeType, fileBase64));
+        }
+        List<AiDocumentAnalyzer.DocumentCheckResult> pageResults =
+                documentAnalyzer.analyzePages(documents, context);
+        if (pageResults == null || pageResults.isEmpty()) {
+            throw new IllegalStateException(
+                    "AI phân tích chứng từ chưa được bật — cần APP_AI_ENABLED=true và API key tương ứng");
         }
         AiDocumentAnalyzer.DocumentCheckResult result =
                 normalizeBusinessLicenseResult(mergeBusinessLicenseResults(pageResults), req);

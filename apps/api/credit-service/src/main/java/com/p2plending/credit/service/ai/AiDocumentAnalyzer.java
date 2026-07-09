@@ -20,6 +20,22 @@ public interface AiDocumentAnalyzer {
      */
     DocumentCheckResult analyze(String mimeType, String fileBase64, String context);
 
+    /**
+     * Phân tích bộ chứng từ nhiều trang. Mặc định gọi tuần tự từng trang để các implementation cũ
+     * vẫn hoạt động; implementation hỗ trợ multi-modal nhiều ảnh nên override để gọi một request.
+     */
+    default List<DocumentCheckResult> analyzePages(List<DocumentInput> documents, String context) {
+        if (documents == null || documents.isEmpty()) {
+            return List.of();
+        }
+        return documents.stream()
+                .map(doc -> analyze(doc.mimeType(), doc.fileBase64(),
+                        context + "\n\nĐây là một trang/ảnh trong bộ chứng từ nhiều trang. Nếu trang này không có một trường nào đó, không đưa vào consistencyIssues/Điểm không khớp vì trang khác có thể chứa trường đó. Chỉ ghi nhận thông tin đọc được từ trang này trong findings."))
+                .toList();
+    }
+
+    record DocumentInput(String mimeType, String fileBase64) {}
+
     /** Schema được Claude SDK tự derive từ record này (structured outputs) */
     record DocumentCheckResult(
             @JsonPropertyDescription("Loại chứng từ AI nhận diện được từ nội dung (vd: sao kê ngân hàng MB, hợp đồng lao động)")

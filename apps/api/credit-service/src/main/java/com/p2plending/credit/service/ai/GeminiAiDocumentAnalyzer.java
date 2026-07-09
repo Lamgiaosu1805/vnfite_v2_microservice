@@ -110,6 +110,39 @@ public class GeminiAiDocumentAnalyzer implements AiDocumentAnalyzer {
         }
     }
 
+    @Override
+    public List<DocumentCheckResult> analyzePages(List<DocumentInput> documents, String context) {
+        if (documents == null || documents.isEmpty()) {
+            return List.of();
+        }
+
+        String prompt = SYSTEM_INSTRUCTION
+                + "\n\n" + context
+                + "\n\nCác file ảnh/PDF đính kèm là CÙNG MỘT bộ chứng từ nhiều trang. "
+                + "Hãy phân tích tổng thể tất cả trang trong một lần. Nếu thông tin nằm ở trang khác thì vẫn coi là có trong bộ chứng từ; "
+                + "không đưa các câu như 'không có trên trang này' vào consistencyIssues. "
+                + "Chỉ đưa vào consistencyIssues khi toàn bộ bộ chứng từ không khớp với thông tin khai báo."
+                + "\n\n" + SCHEMA;
+
+        try {
+            List<GeminiClient.Part> parts = new ArrayList<>();
+            for (DocumentInput document : documents) {
+                parts.add(GeminiClient.Part.file(document.mimeType(), document.fileBase64()));
+            }
+            parts.add(GeminiClient.Part.text(prompt));
+
+            String json = gemini.generateContent(parts);
+            if (json == null || json.isBlank()) {
+                log.warn("Gemini trả về rỗng cho multi-page document analysis");
+                return List.of(fallbackUnreadable("Gemini không trả về kết quả phân tích."));
+            }
+            return List.of(parseResultWithRepair(json));
+        } catch (Exception e) {
+            log.error("Gemini multi-page document analysis failed: {}", e.getMessage(), e);
+            return List.of(fallbackUnreadable("Gemini trả về kết quả không hợp lệ, cần bấm phân tích lại hoặc thẩm định thủ công."));
+        }
+    }
+
     private DocumentCheckResult parseResultWithRepair(String json) throws Exception {
         try {
             return parseResult(json);
