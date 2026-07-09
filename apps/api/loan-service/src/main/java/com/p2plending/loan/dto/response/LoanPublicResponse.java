@@ -2,6 +2,7 @@ package com.p2plending.loan.dto.response;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.p2plending.loan.domain.enums.LoanStatus;
+import com.p2plending.loan.domain.enums.ProductCategory;
 import lombok.Builder;
 import lombok.Data;
 
@@ -17,6 +18,8 @@ public class LoanPublicResponse {
     private String productId;
     private String productCode;
     private String productName;
+    /** INDIVIDUAL | BUSINESS | ENTERPRISE — dùng để lọc/hiển thị badge trên app. */
+    private ProductCategory productCategory;
     private BigDecimal amount;
     private BigDecimal interestRate;
     private BigDecimal proposedAmount;
