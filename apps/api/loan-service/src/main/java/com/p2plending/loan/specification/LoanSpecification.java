@@ -50,6 +50,13 @@ public final class LoanSpecification {
                         .toList();
                 predicates.add(cb.or(provincePredicates.toArray(new Predicate[0])));
             }
+            if (params.getProductCategories() != null && !params.getProductCategories().isEmpty()) {
+                Subquery<String> categorySubquery = query.subquery(String.class);
+                var product = categorySubquery.from(LoanProduct.class);
+                categorySubquery.select(product.get("id"))
+                        .where(product.get("category").in(params.getProductCategories()));
+                predicates.add(root.get("productId").in(categorySubquery));
+            }
             if (params.getSearch() != null && !params.getSearch().isBlank()) {
                 String term = params.getSearch().trim().toLowerCase(Locale.ROOT);
                 String pattern = "%" + term + "%";

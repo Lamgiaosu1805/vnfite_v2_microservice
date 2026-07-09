@@ -2,6 +2,7 @@ package com.p2plending.loan.dto.response;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.p2plending.loan.domain.enums.LoanStatus;
+import com.p2plending.loan.domain.enums.ProductCategory;
 import lombok.Builder;
 import lombok.Data;
 
@@ -18,6 +19,7 @@ public class LoanResponse {
     private String productId;
     private String productCode;
     private String productName;
+    private ProductCategory productCategory;
     private String borrowerId;
     private String borrowerFullName;
     private String borrowerPhone;

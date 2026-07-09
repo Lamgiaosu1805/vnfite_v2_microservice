@@ -1,6 +1,7 @@
 package com.p2plending.loan.dto.request;
 
 import com.p2plending.loan.domain.enums.LoanStatus;
+import com.p2plending.loan.domain.enums.ProductCategory;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import lombok.Data;
@@ -24,6 +25,8 @@ public class LoanFilterParams {
     private String province;
     /** Tìm kiếm mã khoản, sản phẩm, mục đích, người gọi vốn/id và thông tin địa chỉ/liên hệ liên quan. */
     private String search;
+    /** Lọc theo nhóm sản phẩm: INDIVIDUAL, BUSINESS, ENTERPRISE. */
+    private List<ProductCategory> productCategories;
     private BigDecimal minAmount;
     private BigDecimal maxAmount;
 
@@ -46,7 +49,7 @@ public class LoanFilterParams {
 
     /** Deterministic cache key for all filter combinations. */
     public String cacheKey() {
-        return "%s|%s|%s|%s|%s|%s|%s|%s|%d|%d|%s|%s"
-                .formatted(status, statuses, overdueOnly, borrowerId, province, search, minAmount, maxAmount, page, size, sortBy, sortDir);
+        return "%s|%s|%s|%s|%s|%s|%s|%s|%s|%d|%d|%s|%s"
+                .formatted(status, statuses, overdueOnly, borrowerId, province, search, productCategories, minAmount, maxAmount, page, size, sortBy, sortDir);
     }
 }

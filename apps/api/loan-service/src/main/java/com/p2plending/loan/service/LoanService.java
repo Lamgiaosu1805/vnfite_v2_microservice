@@ -909,6 +909,7 @@ public class LoanService {
             loanProductService.findProductById(loan.getProductId()).ifPresent(product -> {
                 response.setProductCode(product.getCode());
                 response.setProductName(product.getName());
+                response.setProductCategory(product.getCategory());
             });
         }
 

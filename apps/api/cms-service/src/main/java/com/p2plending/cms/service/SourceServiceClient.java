@@ -140,7 +140,7 @@ public class SourceServiceClient {
         PagedResponse<WalletTransactionSummaryResponse> transactions =
                 safeGetWalletTransactions(userId, transactionPage, transactionSize);
         PagedResponse<LoanSummaryResponse> loans =
-                getLoans(null, userId, null, null, loanPage, loanSize);
+                getLoans(null, userId, null, null, null, loanPage, loanSize);
         enrichLoanOffers(loans);
         InvestorCashflowResponse investments = safeGetInvestorCashflow(userId,
                 investmentPage, investmentSize, investmentStatus);
@@ -1304,7 +1304,8 @@ public class SourceServiceClient {
     }
 
     public PagedResponse<LoanSummaryResponse> getLoans(String status, String borrowerId,
-                                                       String province, String search, int page, int size) {
+                                                       String province, String search,
+                                                       String productCategories, int page, int size) {
         boolean overdueOnly    = "OVERDUE".equalsIgnoreCase(String.valueOf(status));
         boolean repayingGroup  = "REPAYING".equalsIgnoreCase(String.valueOf(status));
         UriComponentsBuilder builder = UriComponentsBuilder.fromHttpUrl(loanServiceUrl)
@@ -1312,6 +1313,7 @@ public class SourceServiceClient {
                 .queryParamIfPresent("borrowerId", Optional.ofNullable(borrowerId))
                 .queryParamIfPresent("province",   Optional.ofNullable(province))
                 .queryParamIfPresent("search",     Optional.ofNullable(search))
+                .queryParamIfPresent("productCategories", Optional.ofNullable(productCategories))
                 .queryParam("page", page)
                 .queryParam("size", size)
                 .queryParam("sortBy", "createdAt")
@@ -1635,6 +1637,7 @@ public class SourceServiceClient {
                 .borrowerBackImageId(borrower != null ? borrower.getBackImageId() : null)
                 .borrowerPortraitImageId(borrower != null ? borrower.getPortraitImageId() : null)
                 .productName(text(node, "productName"))
+                .productCategory(text(node, "productCategory"))
                 .amount(decimal(node, "amount"))
                 .fundedAmount(decimal(node, "fundedAmount"))
                 .interestRate(decimal(node, "interestRate"))

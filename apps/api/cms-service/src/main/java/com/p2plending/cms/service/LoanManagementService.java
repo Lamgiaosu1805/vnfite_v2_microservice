@@ -42,8 +42,9 @@ public class LoanManagementService {
     }
 
     public PagedResponse<LoanSummaryResponse> getLoans(String status, String borrowerId,
-                                                       String province, String search, int page, int size) {
-        return sourceServiceClient.getLoans(status, borrowerId, province, search, page, size);
+                                                       String province, String search,
+                                                       String productCategories, int page, int size) {
+        return sourceServiceClient.getLoans(status, borrowerId, province, search, productCategories, page, size);
     }
 
     public JsonNode getAppraisalSuggestion(String loanId, boolean discouraged, String creditGrade) {

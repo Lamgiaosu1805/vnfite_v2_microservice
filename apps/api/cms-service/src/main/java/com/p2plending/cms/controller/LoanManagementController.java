@@ -49,9 +49,10 @@ public class LoanManagementController {
             @RequestParam(required = false) String borrowerId,
             @RequestParam(required = false) String province,
             @RequestParam(required = false) String search,
+            @RequestParam(required = false) String productCategories,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        return ResponseEntity.ok(loanService.getLoans(status, borrowerId, province, search, page, size));
+        return ResponseEntity.ok(loanService.getLoans(status, borrowerId, province, search, productCategories, page, size));
     }
 
     /**
