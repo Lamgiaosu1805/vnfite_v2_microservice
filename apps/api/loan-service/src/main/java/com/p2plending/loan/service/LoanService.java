@@ -987,6 +987,14 @@ public class LoanService {
             response.setBorrowerCccd(maskCccd(user.getCccdNumber()));
         });
 
+        // Gọi vốn theo tư cách pháp nhân (BUSINESS/ENTERPRISE) → hiển thị tên doanh nghiệp thay vì tên chủ.
+        ProductCategory category = response.getProductCategory();
+        if (category == ProductCategory.BUSINESS || category == ProductCategory.ENTERPRISE) {
+            authServiceClient.getBusinessProfile(loan.getBorrowerId())
+                    .filter(AuthServiceClient.BusinessProfileInfo::isApproved)
+                    .ifPresent(profile -> response.setBusinessName(profile.businessName()));
+        }
+
         return response;
     }
 

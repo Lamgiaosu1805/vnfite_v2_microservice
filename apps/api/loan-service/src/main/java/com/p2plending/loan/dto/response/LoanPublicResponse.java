@@ -47,6 +47,9 @@ public class LoanPublicResponse {
     private String borrowerFullName;
     private String borrowerPhone;
     private String borrowerCccd;
+    /** Tên doanh nghiệp/hộ kinh doanh — chỉ có khi productCategory là BUSINESS/ENTERPRISE và hồ sơ DN đã duyệt.
+     * App hiển thị tên này thay cho borrowerFullName (tên chủ) khi gọi vốn theo tư cách pháp nhân. */
+    private String businessName;
 
     // Người tham chiếu 1
     private String ref1FullName;
