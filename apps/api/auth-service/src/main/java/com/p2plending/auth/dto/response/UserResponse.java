@@ -1,5 +1,6 @@
 package com.p2plending.auth.dto.response;
 
+import com.p2plending.auth.domain.enums.AccountType;
 import com.p2plending.auth.domain.enums.KycStatus;
 import lombok.Builder;
 import lombok.Data;
@@ -14,5 +15,6 @@ public class UserResponse {
     private String email;
     private String fullName;
     private KycStatus kycStatus;
+    private AccountType accountType;
     private LocalDateTime createdAt;
 }
