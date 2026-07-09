@@ -92,8 +92,8 @@ public class GeminiAiDocumentAnalyzer implements AiDocumentAnalyzer {
 
         try {
             List<GeminiClient.Part> parts = List.of(
-                    GeminiClient.Part.file(mimeType, fileBase64),
-                    GeminiClient.Part.text(prompt)
+                    GeminiClient.Part.text(prompt),
+                    GeminiClient.Part.file(mimeType, fileBase64)
             );
 
             String json = gemini.generateContent(parts);
@@ -126,21 +126,36 @@ public class GeminiAiDocumentAnalyzer implements AiDocumentAnalyzer {
 
         try {
             List<GeminiClient.Part> parts = new ArrayList<>();
+            parts.add(GeminiClient.Part.text(prompt));
             for (DocumentInput document : documents) {
                 parts.add(GeminiClient.Part.file(document.mimeType(), document.fileBase64()));
             }
-            parts.add(GeminiClient.Part.text(prompt));
 
             String json = gemini.generateContent(parts);
             if (json == null || json.isBlank()) {
                 log.warn("Gemini trả về rỗng cho multi-page document analysis");
-                return List.of(fallbackUnreadable("Gemini không trả về kết quả phân tích."));
+                return analyzePagesOneByOne(documents, context);
             }
             return List.of(parseResultWithRepair(json));
         } catch (Exception e) {
             log.error("Gemini multi-page document analysis failed: {}", e.getMessage(), e);
-            return List.of(fallbackUnreadable("Gemini trả về kết quả không hợp lệ, cần bấm phân tích lại hoặc thẩm định thủ công."));
+            return analyzePagesOneByOne(documents, context);
         }
+    }
+
+    private List<DocumentCheckResult> analyzePagesOneByOne(List<DocumentInput> documents, String context) {
+        List<DocumentCheckResult> results = new ArrayList<>();
+        for (DocumentInput document : documents) {
+            DocumentCheckResult result = analyze(document.mimeType(), document.fileBase64(),
+                    context + "\n\nĐây là một trang/ảnh trong bộ chứng từ nhiều trang. Nếu trang này không có một trường nào đó, không đưa vào consistencyIssues/Điểm không khớp vì trang khác có thể chứa trường đó. Chỉ ghi nhận thông tin đọc được từ trang này trong findings.");
+            if (result != null) {
+                results.add(result);
+            }
+        }
+        if (results.isEmpty()) {
+            return List.of(fallbackUnreadable("Gemini không trả về kết quả phân tích."));
+        }
+        return results;
     }
 
     private DocumentCheckResult parseResultWithRepair(String json) throws Exception {
