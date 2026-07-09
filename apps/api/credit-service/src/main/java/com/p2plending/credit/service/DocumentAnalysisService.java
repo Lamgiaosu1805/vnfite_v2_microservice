@@ -111,7 +111,7 @@ public class DocumentAnalysisService {
             validateFile(mimeType, fileBase64);
 
             AiDocumentAnalyzer.DocumentCheckResult pageResult =
-                    documentAnalyzer.analyze(mimeType, fileBase64, context + "\n\nĐây là một trang/ảnh trong bộ GPKD nhiều trang. Nếu trang này không có một trường nào đó, không kết luận thiếu nếu trang khác có thể chứa trường đó.");
+                    documentAnalyzer.analyze(mimeType, fileBase64, context + "\n\nĐây là một trang/ảnh trong bộ GPKD nhiều trang. Nếu trang này không có một trường nào đó, không đưa vào consistencyIssues/Điểm không khớp vì trang khác có thể chứa trường đó. Chỉ ghi nhận thông tin đọc được từ trang này trong findings.");
             if (pageResult == null) {
                 throw new IllegalStateException(
                         "AI phân tích chứng từ chưa được bật — cần APP_AI_ENABLED=true và API key tương ứng");
@@ -267,6 +267,7 @@ public class DocumentAnalysisService {
                 .filter(item -> !isIssuerAuthorityFalsePositive(item))
                 .filter(item -> !isFutureDateFalsePositive(item, today))
                 .filter(item -> !isMissingRepresentativeFalsePositive(item, representativeFound))
+                .filter(item -> !isPageScopedMissingFalsePositive(item))
                 .toList();
     }
 
@@ -334,7 +335,22 @@ public class DocumentAnalysisService {
             boolean representativeFound) {
         return summary != null && (isIssuerAuthorityFalsePositive(summary)
                 || isFutureDateFalsePositive(summary, today)
-                || isMissingRepresentativeFalsePositive(summary, representativeFound));
+                || isMissingRepresentativeFalsePositive(summary, representativeFound)
+                || isPageScopedMissingFalsePositive(summary));
+    }
+
+    private boolean isPageScopedMissingFalsePositive(String item) {
+        String normalized = normalizeVietnamese(item);
+        boolean pageScoped = normalized.contains("trang chung tu nay")
+                || normalized.contains("trang nay")
+                || normalized.contains("trang tai lieu");
+        boolean saysMissing = normalized.contains("khong co")
+                || normalized.contains("khong xuat hien")
+                || normalized.contains("khong hien thi")
+                || normalized.contains("khong duoc the hien")
+                || normalized.contains("khong the doi chieu")
+                || normalized.contains("khong the xac minh");
+        return pageScoped && saysMissing;
     }
 
     private boolean looksLikeDocumentTamperingFinding(String item) {
