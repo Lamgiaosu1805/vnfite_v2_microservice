@@ -366,6 +366,10 @@ Luồng định danh điện tử 2 bước, yêu cầu đăng nhập (JWT):
 
 ### Loan Lifecycle
 
+> ⚠️ Sơ đồ dưới đây đã lỗi thời (giai đoạn đầu dự án). Luồng thực tế hiện tại — xem CLAUDE.md gốc (`VNFITE P2P Lending/CLAUDE.md`, mục "Luồng duyệt khoản gọi vốn"):
+> `PENDING_REVIEW → PENDING_APPROVAL → AWAITING_BORROWER_APPROVAL → ACTIVE → FUNDED → AWAITING_DISBURSEMENT → DISBURSED → REPAYING → COMPLETED/DEFAULTED`.
+> Offer nhà đầu tư hiện **auto-accept và khóa tiền ngay** (`LoanService.acceptOfferImmediately`), không qua bước ký OTP như code cũ mô tả. Hợp đồng vay (`LOAN_AGREEMENT`) vẫn cần ký giấy tận nơi — CMS xác nhận qua `ContractService.confirmPaperSignature`; hợp đồng đầu tư (`INVESTMENT`) không cần ký nên luôn dừng ở `PENDING_SIGNATURE` (đây là thiết kế đã chấp nhận, không phải bug).
+
 ```
 PENDING → ACTIVE → FUNDED → REPAYING → COMPLETED
                                      → DEFAULTED
@@ -845,3 +849,4 @@ Khi xây dựng API mới, phải chủ động dùng transaction ở service la
 - Không có service-to-service authentication (mTLS)
 - Kafka event classes bị duplicate giữa loan-service và matching-service (nên extract shared module)
 - Chưa có distributed tracing (OpenTelemetry/Zipkin)
+- `InvestorCashflowResponse` (lịch sử đầu tư trả về CMS/app) chưa có field `ownerType` — nên chưa tách được khoản đầu tư cá nhân vs. doanh nghiệp ở phía nhà đầu tư (CMS đã tách xong phía người gọi vốn, xem `VnFiteCMS/CLAUDE.md`); cần bổ sung khi làm tiếp phần tách biệt cá nhân/doanh nghiệp cho investor
