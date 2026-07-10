@@ -152,7 +152,7 @@ public class BusinessProfileService {
     // ── CMS: quyết định duyệt/từ chối ────────────────────────────────
 
     @Transactional
-    public void decide(String userId, boolean approved, String reason, String reviewedBy) {
+    public void decide(String userId, boolean approved, String reason, String reviewedBy, String resolvedBusinessName) {
         BusinessProfile profile = businessProfileRepository
                 .findTopByUserIdAndIsDeletedFalseOrderByCreatedAtDesc(userId)
                 .orElseThrow(() -> new ResourceNotFoundException(
@@ -168,6 +168,12 @@ public class BusinessProfileService {
         if (approved) {
             profile.setStatus(KycStatus.APPROVED);
             profile.setRejectReason(null);
+            // Ưu tiên tên VietQR tra được theo MST tại thời điểm duyệt; không tra ra thì giữ tên đã nộp.
+            if (resolvedBusinessName != null && !resolvedBusinessName.isBlank()) {
+                log.info("Business profile {}: dùng tên VietQR '{}' thay cho tên tự nhập '{}'",
+                        profile.getId(), resolvedBusinessName.trim(), profile.getBusinessName());
+                profile.setBusinessName(resolvedBusinessName.trim());
+            }
             businessProfileRepository.save(profile);
 
             User user = userRepository.findById(userId)

@@ -251,7 +251,11 @@ public class SourceServiceClient {
         return result;
     }
 
-    /** Duyệt/từ chối hồ sơ doanh nghiệp. Body: {approved, reason, reviewedBy}. */
+    /**
+     * Duyệt/từ chối hồ sơ doanh nghiệp. Body: {approved, reason, reviewedBy, resolvedBusinessName}.
+     * Khi duyệt, tự tra VietQR theo MST ngay tại thời điểm này — tra ra tên thì dùng làm tên chính
+     * thức thay cho tên tự nhập; không tra ra thì auth-service giữ nguyên tên đã nộp.
+     */
     public void decideBusinessProfile(String userId, boolean approved, String reason, String reviewedBy) {
         String url = UriComponentsBuilder.fromHttpUrl(authServiceUrl)
                 .path("/internal/users/{userId}/business-profile/decision")
@@ -261,6 +265,19 @@ public class SourceServiceClient {
         body.put("approved", approved);
         body.put("reason", reason);
         body.put("reviewedBy", reviewedBy);
+        if (approved) {
+            try {
+                JsonNode taxLookup = lookupBusinessTax(userId);
+                if (taxLookup.path("found").asBoolean(false)) {
+                    String resolvedName = firstNonBlank(text(taxLookup, "name"), text(taxLookup, "shortName"));
+                    if (resolvedName != null) {
+                        body.put("resolvedBusinessName", resolvedName);
+                    }
+                }
+            } catch (Exception ex) {
+                log.warn("Không tra được VietQR khi duyệt hồ sơ DN user {}, giữ tên tự nhập: {}", userId, ex.getMessage());
+            }
+        }
         exchangeForJson(url, HttpMethod.POST, body);
     }
 
