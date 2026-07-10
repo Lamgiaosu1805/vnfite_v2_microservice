@@ -309,34 +309,53 @@ public class LoanService {
                     .formatted(available, request.getAmount()));
         }
 
-        // Không cho phép cùng nhà đầu tư đặt offer trùng khi đã có offer đang PENDING hoặc ACCEPTED
+        // Lệnh PENDING được tạo bởi luồng khế ước điện tử cũ: hoàn tất theo luồng hiện hành,
+        // tránh bắt nhà đầu tư tạo lệnh thứ hai hoặc phải xử lý DB thủ công.
+        var pending = loanOfferRepository.findFirstByLoanRequestIdAndInvestorIdAndStatusAndIsDeletedFalse(
+                loanId, investorId, OfferStatus.PENDING);
+        if (pending.isPresent()) {
+            acceptOfferImmediately(loan, pending.get());
+            return OfferCreateResponse.builder().offerId(pending.get().getId()).build();
+        }
+
+        // Không cho phép cùng nhà đầu tư đặt offer trùng khi đã được chấp nhận.
         if (loanOfferRepository.existsByLoanRequestIdAndInvestorIdAndStatusIn(
-                loanId, investorId, List.of(OfferStatus.PENDING, OfferStatus.ACCEPTED))) {
+                loanId, investorId, List.of(OfferStatus.ACCEPTED))) {
             throw new InvalidLoanStateException(
                     "Bạn đã có lệnh đầu tư đang chờ xử lý hoặc đã được chấp nhận cho khoản gọi vốn này.");
         }
 
-        // Offer ở trạng thái PENDING (giữ chỗ) — chỉ tính vào fundedAmount sau khi nhà đầu tư
-        // ký hợp đồng đầu tư bằng OTP (ContractService.signContract).
+        // Luồng vận hành hiện tại: xác nhận đầu tư thì chấp nhận và khóa tiền ngay.
         LoanOffer offer = LoanOffer.builder()
                 .loanRequestId(loanId)
                 .investorId(investorId)
                 .ownerType(ownerType)
                 .amount(request.getAmount())
-                .status(OfferStatus.PENDING)
+                .status(OfferStatus.ACCEPTED)
                 .build();
 
         LoanOffer saved = loanOfferRepository.save(offer);
+        acceptOfferImmediately(loan, saved);
+        return OfferCreateResponse.builder().offerId(saved.getId()).build();
+    }
 
-        // Phát hành hợp đồng đầu tư PENDING_SIGNATURE để nhà đầu tư ký OTP.
-        LoanContract contract = contractService.issueInvestmentContract(loan, saved);
-
-        log.info("Offer created (PENDING, awaiting signature): id={} loan={} investor={} amount={} contract={}",
-                saved.getId(), loanId, investorId, request.getAmount(), contract.getId());
-        return OfferCreateResponse.builder()
-                .offerId(saved.getId())
-                .contract(contractService.toContractResponse(contract, loan))
-                .build();
+    private void acceptOfferImmediately(LoanRequest loan, LoanOffer offer) {
+        if (offer.getStatus() == OfferStatus.PENDING) {
+            offer.setStatus(OfferStatus.ACCEPTED);
+            loanOfferRepository.save(offer);
+        }
+        paymentServiceClient.lock(offer.getInvestorId(), offer.getOwnerType(), offer.getAmount(),
+                "Đầu tư khoản gọi vốn " + loan.getLoanCode(), "LOCK-" + offer.getId());
+        BigDecimal accepted = loanOfferRepository.sumAmountByLoanRequestIdAndStatus(loan.getId(), OfferStatus.ACCEPTED);
+        loan.setFundedAmount(accepted == null ? BigDecimal.ZERO : accepted);
+        if (loan.isFullyFunded() && loan.getStatus() == LoanStatus.ACTIVE) {
+            loan.setStatus(LoanStatus.AWAITING_DISBURSEMENT);
+            loan.setFundedAt(LocalDateTime.now(ZoneId.of("Asia/Ho_Chi_Minh")));
+            kafkaProducerService.publishLoanFunded(loan);
+        }
+        loanRequestRepository.save(loan);
+        log.info("Offer {} accepted immediately; loan={} fundedAmount={}",
+                offer.getId(), loan.getId(), loan.getFundedAmount());
     }
 
     /** Giải ngân (OPS trên CMS): AWAITING_DISBURSEMENT → DISBURSED, sinh lịch trả nợ từ ngày giải ngân. */
