@@ -185,7 +185,9 @@ public class ContractService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Mã OTP không đúng. Vui lòng kiểm tra lại.");
         }
 
-        LoanRequest loan = loanRequestRepository.findById(contract.getLoanId())
+        // Khóa row khoản gọi vốn — tránh race với createOffer/sign khác đang chấp nhận offer
+        // cùng lúc, khiến fundedAmount vượt quá amount.
+        LoanRequest loan = loanRequestRepository.findByIdForUpdate(contract.getLoanId())
                 .orElseThrow(() -> new LoanNotFoundException(contract.getLoanId()));
 
         // Hợp đồng đầu tư: re-validate trước khi ký để tránh vượt số tiền còn lại.
@@ -219,7 +221,7 @@ public class ContractService {
     public ContractResponse confirmPaperSignature(String contractId, String confirmedBy) {
         LoanContract contract = contractRepository.findByIdAndIsDeletedFalse(contractId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy khế ước."));
-        LoanRequest loan = loanRequestRepository.findById(contract.getLoanId())
+        LoanRequest loan = loanRequestRepository.findByIdForUpdate(contract.getLoanId())
                 .orElseThrow(() -> new LoanNotFoundException(contract.getLoanId()));
         if (contract.getStatus() == ContractStatus.SIGNED) return toResponse(contract, loan);
         if (contract.getStatus() != ContractStatus.PENDING_SIGNATURE) {
@@ -292,8 +294,10 @@ public class ContractService {
 
     /**
      * Hoàn tiền cho toàn bộ nhà đầu tư của một khoản (unlock các offer ACCEPTED) và void các
-     * hợp đồng đầu tư chưa ký. Dùng khi khoản bị hủy/hết hạn gọi vốn. Idempotent theo offerId
-     * (unlock dùng referenceId "REFUND-{offerId}"), nên chạy lại an toàn không hoàn trùng.
+     * hợp đồng CHƯA KÝ (PENDING_SIGNATURE). Dùng khi khoản bị hủy/hết hạn gọi vốn. Idempotent
+     * theo offerId (unlock dùng referenceId "REFUND-{offerId}"), nên chạy lại an toàn không
+     * hoàn trùng. Hợp đồng đã SIGNED không bị đổi trạng thái — đó là hồ sơ pháp lý đã ký hợp
+     * lệ tại thời điểm ký, việc khoản bị hủy sau đó không làm hợp đồng "chưa từng tồn tại".
      */
     @Transactional
     public void refundInvestorsAndVoid(LoanRequest loan, String reason) {
@@ -313,9 +317,10 @@ public class ContractService {
                     .build());
         }
 
-        // Trước giải ngân: nếu khoản bị hủy/hết hạn, mọi hợp đồng chưa giải ngân đều không còn hiệu lực.
+        // Chỉ void hợp đồng CHƯA KÝ — hợp đồng đã SIGNED giữ nguyên trạng thái để không xóa
+        // dấu vết đã ký hợp lệ trước khi khoản bị hủy (audit trail pháp lý).
         contractRepository.findByLoanIdAndIsDeletedFalseOrderByCreatedAtDesc(loan.getId()).stream()
-                .filter(c -> c.getStatus() != ContractStatus.VOIDED)
+                .filter(c -> c.getStatus() == ContractStatus.PENDING_SIGNATURE)
                 .forEach(c -> {
                     c.setStatus(ContractStatus.VOIDED);
                     contractRepository.save(c);

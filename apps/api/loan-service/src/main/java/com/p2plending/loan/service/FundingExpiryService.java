@@ -21,19 +21,26 @@ public class FundingExpiryService {
             "Hết hạn gọi vốn — đã hoàn tiền cho nhà đầu tư";
     public static final String REASON_SIGNING_EXPIRED =
             "Người gọi vốn không hoàn tất ký khế ước — đã hoàn tiền cho nhà đầu tư";
+    public static final String REASON_BORROWER_CONFIRMATION_EXPIRED =
+            "Người gọi vốn không xác nhận điều khoản sau khi được duyệt";
 
     private final LoanService loanService;
 
     /** Kết quả một lần quét hết hạn. */
     public record ExpirySweepResult(int activeExpired, int activeFailed,
-                                    int fundedStuck, int fundedFailed) {}
+                                    int fundedStuck, int fundedFailed,
+                                    int awaitingApprovalExpired, int awaitingApprovalFailed) {}
 
     public ExpirySweepResult runSweep() {
         int[] active = sweep("ACTIVE quá hạn gọi vốn",
                 loanService.findExpiredActiveLoanIds(), LoanStatus.ACTIVE, REASON_FUNDING_EXPIRED);
         int[] funded = sweep("FUNDED quá hạn ký khế ước",
                 loanService.findStuckFundedLoanIds(), LoanStatus.FUNDED, REASON_SIGNING_EXPIRED);
-        return new ExpirySweepResult(active[0], active[1], funded[0], funded[1]);
+        int[] awaitingApproval = sweep("AWAITING_BORROWER_APPROVAL quá hạn xác nhận",
+                loanService.findExpiredAwaitingBorrowerApprovalLoanIds(),
+                LoanStatus.AWAITING_BORROWER_APPROVAL, REASON_BORROWER_CONFIRMATION_EXPIRED);
+        return new ExpirySweepResult(active[0], active[1], funded[0], funded[1],
+                awaitingApproval[0], awaitingApproval[1]);
     }
 
     /** @return {ok, failed} */

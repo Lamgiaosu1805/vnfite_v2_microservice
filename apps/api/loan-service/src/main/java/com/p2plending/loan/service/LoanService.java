@@ -100,13 +100,21 @@ public class LoanService {
     private final CacheManager           cacheManager;
     private final KycGuardService        kycGuardService;
 
-    /** Số ngày một khoản được phép ở trạng thái ACTIVE để gọi vốn trước khi hết hạn & hoàn tiền. */
-    @Value("${app.funding.window-days:30}")
+    /**
+     * Số ngày một khoản được phép ở trạng thái ACTIVE để gọi vốn trước khi hết hạn & hoàn tiền.
+     * Fallback 180 khớp với default thật ở application.yml — không dùng số khác ở đây để tránh
+     * 2 nguồn sự thật (xem sự cố cancel hàng loạt khoản migrate từng xảy ra khi 2 giá trị lệch nhau).
+     */
+    @Value("${app.funding.window-days:180}")
     private int fundingWindowDays;
 
     /** Số ngày người gọi vốn được phép ký khế ước sau khi FUNDED; quá hạn → hủy & hoàn tiền. */
     @Value("${app.funding.signing-window-days:7}")
     private int signingWindowDays;
+
+    /** Số ngày người gọi vốn được phép xác nhận điều khoản sau khi ban lãnh đạo duyệt; quá hạn → tự hủy. */
+    @Value("${app.funding.borrower-confirmation-window-days:7}")
+    private int borrowerConfirmationWindowDays;
 
     // ── Create ────────────────────────────────────────────────────
 
@@ -248,7 +256,11 @@ public class LoanService {
         @CacheEvict(value = CacheConfig.CACHE_LOAN_BY_ID, key = "#loanId")
     })
     public OfferCreateResponse createOffer(String loanId, LoanOfferCreateRequest request, String investorId) {
-        LoanRequest loan = findLoanOrThrow(loanId);
+        // Khóa row khoản gọi vốn trong suốt transaction — serialize các lệnh đặt offer đồng thời
+        // trên cùng 1 khoản, tránh 2 nhà đầu tư cùng vượt qua check "còn đủ chỗ" rồi cùng được
+        // chấp nhận, khiến fundedAmount vượt quá amount.
+        LoanRequest loan = loanRequestRepository.findByIdForUpdate(loanId)
+                .orElseThrow(() -> new LoanNotFoundException(loanId));
 
         if (!OFFERABLE_STATUSES.contains(loan.getStatus())) {
             throw new InvalidLoanStateException(
@@ -512,6 +524,20 @@ public class LoanService {
         LocalDateTime cutoff = LocalDateTime.now(ZoneId.of("Asia/Ho_Chi_Minh")).minusDays(signingWindowDays);
         return loanRequestRepository
                 .findByStatusAndFundedAtBeforeAndIsDeletedFalse(LoanStatus.FUNDED, cutoff)
+                .stream().map(LoanRequest::getId).toList();
+    }
+
+    /**
+     * ID các khoản AWAITING_BORROWER_APPROVAL kẹt — ban lãnh đạo đã duyệt nhưng người gọi vốn
+     * không xác nhận điều khoản trong thời hạn cho phép. Chưa có nhà đầu tư nào cam kết vốn ở
+     * trạng thái này nên hủy thẳng, không cần hoàn tiền (refundInvestorsAndVoid vẫn an toàn gọi
+     * vì danh sách offer ACCEPTED của khoản này luôn rỗng).
+     */
+    @Transactional(readOnly = true)
+    public List<String> findExpiredAwaitingBorrowerApprovalLoanIds() {
+        LocalDateTime cutoff = LocalDateTime.now(ZoneId.of("Asia/Ho_Chi_Minh")).minusDays(borrowerConfirmationWindowDays);
+        return loanRequestRepository
+                .findByStatusAndReviewedAtBeforeAndIsDeletedFalse(LoanStatus.AWAITING_BORROWER_APPROVAL, cutoff)
                 .stream().map(LoanRequest::getId).toList();
     }
 
