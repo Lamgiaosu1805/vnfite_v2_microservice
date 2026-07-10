@@ -50,6 +50,11 @@ public class AuthServiceClient {
                 && "APPROVED".equalsIgnoreCase(kycNode.asText());
     }
 
+    public boolean isBlacklisted(String userId) {
+        JsonNode body = fetchUser(userId);
+        return body != null && body.path("blacklisted").asBoolean(false);
+    }
+
     /** Thông tin hồ sơ doanh nghiệp cần cho đối chiếu tên tài khoản ngân hàng ví DN. */
     public record BusinessProfileInfo(String businessType, String businessName, String representativeName,
                                       String status) {
