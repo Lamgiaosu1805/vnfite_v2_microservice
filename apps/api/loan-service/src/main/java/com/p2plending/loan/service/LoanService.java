@@ -335,6 +335,7 @@ public class LoanService {
                 .build();
 
         LoanOffer saved = loanOfferRepository.save(offer);
+        contractService.issueInvestmentContract(loan, saved);
         acceptOfferImmediately(loan, saved);
         return OfferCreateResponse.builder().offerId(saved.getId()).build();
     }
@@ -349,8 +350,9 @@ public class LoanService {
         BigDecimal accepted = loanOfferRepository.sumAmountByLoanRequestIdAndStatus(loan.getId(), OfferStatus.ACCEPTED);
         loan.setFundedAmount(accepted == null ? BigDecimal.ZERO : accepted);
         if (loan.isFullyFunded() && loan.getStatus() == LoanStatus.ACTIVE) {
-            loan.setStatus(LoanStatus.AWAITING_DISBURSEMENT);
+            loan.setStatus(LoanStatus.FUNDED);
             loan.setFundedAt(LocalDateTime.now(ZoneId.of("Asia/Ho_Chi_Minh")));
+            contractService.issueLoanAgreement(loan);
             kafkaProducerService.publishLoanFunded(loan);
         }
         loanRequestRepository.save(loan);

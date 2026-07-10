@@ -59,6 +59,11 @@ public class LoanManagementService {
         return sourceServiceClient.getLoanContracts(loanId);
     }
 
+    public JsonNode confirmPaperSignature(String contractId, CmsPrincipal operator) {
+        return sourceServiceClient.confirmPaperSignature(contractId,
+                operator != null ? operator.displayName() : "CMS");
+    }
+
     public JsonNode getDocuments(String loanId) {
         return sourceServiceClient.getLoanDocuments(loanId);
     }

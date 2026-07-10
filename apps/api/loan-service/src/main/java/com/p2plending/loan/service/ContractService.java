@@ -214,6 +214,29 @@ public class ContractService {
         return toResponse(contract, fresh);
     }
 
+    /** CMS xác nhận khế ước giấy đã ký; giữ riêng với luồng OTP để có thể bật ký số sau này. */
+    @Transactional
+    public ContractResponse confirmPaperSignature(String contractId, String confirmedBy) {
+        LoanContract contract = contractRepository.findByIdAndIsDeletedFalse(contractId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy khế ước."));
+        LoanRequest loan = loanRequestRepository.findById(contract.getLoanId())
+                .orElseThrow(() -> new LoanNotFoundException(contract.getLoanId()));
+        if (contract.getStatus() == ContractStatus.SIGNED) return toResponse(contract, loan);
+        if (contract.getStatus() != ContractStatus.PENDING_SIGNATURE) {
+            throw new InvalidLoanStateException("Khế ước không ở trạng thái chờ ký giấy.");
+        }
+        if (contract.getContractType() == ContractType.INVESTMENT) validateInvestmentStillFits(loan, contract);
+        contract.setStatus(ContractStatus.SIGNED);
+        contract.setSignedVia("PAPER");
+        contract.setSignedAt(LocalDateTime.now(TZ));
+        contractRepository.save(contract);
+        if (contract.getContractType() == ContractType.INVESTMENT) applyInvestmentSigned(loan, contract);
+        else applyLoanAgreementSigned(loan);
+        evictLoanCaches(loan.getId());
+        log.info("Paper contract confirmed: contract={} by={}", contractId, confirmedBy);
+        return toResponse(contract, loanRequestRepository.findById(loan.getId()).orElse(loan));
+    }
+
     private void validateInvestmentStillFits(LoanRequest loan, LoanContract contract) {
         LoanOffer offer = loanOfferRepository.findById(contract.getOfferId())
                 .orElseThrow(() -> new InvalidLoanStateException("Không tìm thấy lệnh đầu tư của hợp đồng này."));

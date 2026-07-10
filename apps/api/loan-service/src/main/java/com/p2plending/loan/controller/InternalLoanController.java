@@ -267,6 +267,16 @@ public class InternalLoanController {
         return ResponseEntity.ok(contractService.getContractsByLoan(loanId));
     }
 
+    @PostMapping("/contracts/{contractId}/confirm-paper-signature")
+    public ResponseEntity<ContractResponse> confirmPaperSignature(
+            @RequestHeader(INTERNAL_SECRET_HEADER) String secret,
+            @PathVariable String contractId,
+            @RequestBody(required = false) java.util.Map<String, String> request) {
+        requireInternalSecret(secret);
+        return ResponseEntity.ok(contractService.confirmPaperSignature(contractId,
+                request != null ? request.getOrDefault("confirmedBy", "CMS") : "CMS"));
+    }
+
     /** Giải ngân vốn cho người gọi vốn (OPS bấm trên CMS): AWAITING_DISBURSEMENT → DISBURSED. */
     @PostMapping("/{loanId}/disburse")
     public ResponseEntity<LoanResponse> disburse(
