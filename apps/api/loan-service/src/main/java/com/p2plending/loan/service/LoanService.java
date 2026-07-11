@@ -10,6 +10,7 @@ import com.p2plending.loan.domain.entity.LoanOffer;
 import com.p2plending.loan.domain.entity.LoanProduct;
 import com.p2plending.loan.domain.entity.LoanRequest;
 import com.p2plending.loan.domain.enums.ContractStatus;
+import com.p2plending.loan.domain.enums.ContractType;
 import com.p2plending.loan.domain.enums.LoanStatus;
 import com.p2plending.loan.domain.enums.OfferStatus;
 import com.p2plending.loan.domain.enums.ProductCategory;
@@ -390,8 +391,28 @@ public class LoanService {
                     .formatted(loan.getLoanCode(), loan.getStatus()));
         }
 
-        boolean hasUnsignedContract = loanContractRepository
-                .findByLoanIdAndIsDeletedFalseOrderByCreatedAtDesc(loanId).stream()
+        List<LoanContract> contracts = loanContractRepository
+                .findByLoanIdAndIsDeletedFalseOrderByCreatedAtDesc(loanId);
+        boolean hasLoanAgreement = contracts.stream()
+                .anyMatch(contract -> contract.getContractType() == ContractType.LOAN_AGREEMENT);
+        if (!hasLoanAgreement) {
+            throw new InvalidLoanStateException(
+                    "Khoản gọi vốn %s chưa có khế ước vay của người gọi vốn — chưa thể giải ngân"
+                            .formatted(loan.getLoanCode()));
+        }
+
+        List<LoanOffer> acceptedOffers = loanOfferRepository
+                .findByLoanRequestIdAndStatus(loanId, OfferStatus.ACCEPTED);
+        long investmentContractCount = contracts.stream()
+                .filter(contract -> contract.getContractType() == ContractType.INVESTMENT)
+                .count();
+        if (investmentContractCount < acceptedOffers.size()) {
+            throw new InvalidLoanStateException(
+                    "Khoản gọi vốn %s thiếu khế ước đầu tư tương ứng với lệnh đã chốt — chưa thể giải ngân"
+                            .formatted(loan.getLoanCode()));
+        }
+
+        boolean hasUnsignedContract = contracts.stream()
                 .anyMatch(contract -> contract.getStatus() != ContractStatus.SIGNED);
         if (hasUnsignedContract) {
             throw new InvalidLoanStateException(
@@ -406,9 +427,6 @@ public class LoanService {
 
         // Sinh lịch trả nợ từ ngày giải ngân (generator dùng LocalDate.now).
         repaymentService.generateSchedule(loan);
-
-        List<LoanOffer> acceptedOffers = loanOfferRepository
-                .findByLoanRequestIdAndStatus(loanId, OfferStatus.ACCEPTED);
 
         // Tính tổng offer ACCEPTED — phải khớp với loan.amount trước khi debit bất kỳ nhà đầu tư nào.
         BigDecimal totalAccepted = acceptedOffers.stream()

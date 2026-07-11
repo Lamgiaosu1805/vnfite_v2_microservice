@@ -250,6 +250,15 @@ public class ContractService {
                 .orElseThrow(() -> new LoanNotFoundException(loanId));
         List<LoanContract> contracts = contractRepository
                 .findByLoanIdAndIsDeletedFalseOrderByCreatedAtDesc(loanId);
+        boolean hasLoanAgreement = contracts.stream()
+                .anyMatch(contract -> contract.getContractType() == ContractType.LOAN_AGREEMENT);
+        // Dữ liệu chuyển đổi có thể đã giải ngân trước khi hệ thống phát hành khế ước vay.
+        // Khi CMS đã nhận giấy ký thực tế, tạo record còn thiếu trong cùng transaction để
+        // audit không bị bỏ trống; record này vẫn được đánh dấu PAPER, không phải ký số.
+        if (!hasLoanAgreement && loan.isFullyFunded()) {
+            issueLoanAgreement(loan);
+            contracts = contractRepository.findByLoanIdAndIsDeletedFalseOrderByCreatedAtDesc(loanId);
+        }
         if (contracts.isEmpty()) {
             throw new InvalidLoanStateException("Khoản gọi vốn chưa có khế ước để xác nhận ký giấy.");
         }
