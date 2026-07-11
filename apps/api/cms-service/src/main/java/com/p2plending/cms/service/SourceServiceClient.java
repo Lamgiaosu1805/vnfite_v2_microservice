@@ -870,6 +870,13 @@ public class SourceServiceClient {
         return exchangeForJson(url, HttpMethod.POST, Map.of("confirmedBy", confirmedBy));
     }
 
+    public JsonNode confirmAllPaperSignatures(String loanId, String confirmedBy) {
+        String url = UriComponentsBuilder.fromHttpUrl(loanServiceUrl)
+                .path("/internal/loans/{loanId}/confirm-all-paper-signatures")
+                .buildAndExpand(loanId).toUriString();
+        return exchangeForJson(url, HttpMethod.POST, Map.of("confirmedBy", confirmedBy));
+    }
+
     /** Danh sách chứng từ của một khoản — raw JSON cho CMS web. */
     public JsonNode getLoanDocuments(String loanId) {
         String url = UriComponentsBuilder.fromHttpUrl(loanServiceUrl)

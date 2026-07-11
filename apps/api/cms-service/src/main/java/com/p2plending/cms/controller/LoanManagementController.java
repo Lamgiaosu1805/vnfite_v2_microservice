@@ -260,6 +260,13 @@ public class LoanManagementController {
         return ResponseEntity.ok(loanService.confirmPaperSignature(contractId, operator));
     }
 
+    @PostMapping("/{loanId}/confirm-all-paper-signatures")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'OPS') or hasAuthority('loan.disburse')")
+    public ResponseEntity<com.fasterxml.jackson.databind.JsonNode> confirmAllPaperSignatures(
+            @PathVariable String loanId, @AuthenticationPrincipal CmsPrincipal operator) {
+        return ResponseEntity.ok(loanService.confirmAllPaperSignatures(loanId, operator));
+    }
+
     /**
      * POST /cms/loans/{loanId}/repayments
      * Admin ghi nhận một lần trả nợ thủ công khi khách trả tiền mặt / chuyển khoản ngoài ví VNFITE.

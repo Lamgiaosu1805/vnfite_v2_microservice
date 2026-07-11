@@ -9,10 +9,12 @@ import com.p2plending.loan.domain.entity.LoanDocument;
 import com.p2plending.loan.domain.entity.LoanOffer;
 import com.p2plending.loan.domain.entity.LoanProduct;
 import com.p2plending.loan.domain.entity.LoanRequest;
+import com.p2plending.loan.domain.enums.ContractStatus;
 import com.p2plending.loan.domain.enums.LoanStatus;
 import com.p2plending.loan.domain.enums.OfferStatus;
 import com.p2plending.loan.domain.enums.ProductCategory;
 import com.p2plending.loan.domain.repository.FeeRevenueLedgerRepository;
+import com.p2plending.loan.domain.repository.LoanContractRepository;
 import com.p2plending.loan.domain.repository.LoanDocumentRepository;
 import com.p2plending.loan.domain.repository.LoanOfferRepository;
 import com.p2plending.loan.domain.repository.LoanRequestRepository;
@@ -87,6 +89,7 @@ public class LoanService {
 
     private final LoanRequestRepository  loanRequestRepository;
     private final LoanOfferRepository    loanOfferRepository;
+    private final LoanContractRepository loanContractRepository;
     private final LoanDocumentRepository loanDocumentRepository;
     private final FeeRevenueLedgerRepository feeRevenueLedgerRepository;
     private final LoanRequestMapper      loanRequestMapper;
@@ -385,6 +388,15 @@ public class LoanService {
             throw new InvalidLoanStateException(
                     "Khoản gọi vốn %s không ở trạng thái chờ giải ngân (status: %s)"
                     .formatted(loan.getLoanCode(), loan.getStatus()));
+        }
+
+        boolean hasUnsignedContract = loanContractRepository
+                .findByLoanIdAndIsDeletedFalseOrderByCreatedAtDesc(loanId).stream()
+                .anyMatch(contract -> contract.getStatus() != ContractStatus.SIGNED);
+        if (hasUnsignedContract) {
+            throw new InvalidLoanStateException(
+                    "Khoản gọi vốn %s vẫn còn khế ước chưa được xác nhận ký giấy — chưa thể giải ngân"
+                            .formatted(loan.getLoanCode()));
         }
 
         loan.setStatus(LoanStatus.DISBURSED);

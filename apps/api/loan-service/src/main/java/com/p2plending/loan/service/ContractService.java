@@ -190,8 +190,10 @@ public class ContractService {
         LoanRequest loan = loanRequestRepository.findByIdForUpdate(contract.getLoanId())
                 .orElseThrow(() -> new LoanNotFoundException(contract.getLoanId()));
 
-        // Hợp đồng đầu tư: re-validate trước khi ký để tránh vượt số tiền còn lại.
-        if (contract.getContractType() == ContractType.INVESTMENT) {
+        // Luồng cũ chỉ chốt lệnh sau khi ký điện tử. Luồng hiện tại đã chốt và khóa vốn
+        // ngay khi đặt lệnh, vì vậy không được re-validate một offer ACCEPTED lần nữa.
+        if (contract.getContractType() == ContractType.INVESTMENT
+                && investmentOfferIsPending(contract)) {
             validateInvestmentStillFits(loan, contract);
         }
 
@@ -204,10 +206,10 @@ public class ContractService {
         contract.setStatus(ContractStatus.SIGNED);
         contractRepository.save(contract);
 
-        if (contract.getContractType() == ContractType.INVESTMENT) {
+        if (contract.getContractType() == ContractType.INVESTMENT && investmentOfferIsPending(contract)) {
             applyInvestmentSigned(loan, contract);
         } else {
-            applyLoanAgreementSigned(loan);
+            advanceToAwaitingDisbursementWhenAllContractsSigned(loan);
         }
 
         evictLoanCaches(loan.getId());
@@ -227,16 +229,46 @@ public class ContractService {
         if (contract.getStatus() != ContractStatus.PENDING_SIGNATURE) {
             throw new InvalidLoanStateException("Khế ước không ở trạng thái chờ ký giấy.");
         }
-        if (contract.getContractType() == ContractType.INVESTMENT) validateInvestmentStillFits(loan, contract);
         contract.setStatus(ContractStatus.SIGNED);
         contract.setSignedVia("PAPER");
         contract.setSignedAt(LocalDateTime.now(TZ));
         contractRepository.save(contract);
-        if (contract.getContractType() == ContractType.INVESTMENT) applyInvestmentSigned(loan, contract);
-        else applyLoanAgreementSigned(loan);
+        if (contract.getContractType() == ContractType.INVESTMENT && investmentOfferIsPending(contract)) {
+            applyInvestmentSigned(loan, contract);
+        } else {
+            advanceToAwaitingDisbursementWhenAllContractsSigned(loan);
+        }
         evictLoanCaches(loan.getId());
         log.info("Paper contract confirmed: contract={} by={}", contractId, confirmedBy);
         return toResponse(contract, loanRequestRepository.findById(loan.getId()).orElse(loan));
+    }
+
+    /** CMS xác nhận một lần rằng đã nhận đủ toàn bộ khế ước giấy của khoản gọi vốn. */
+    @Transactional
+    public List<ContractResponse> confirmAllPaperSignatures(String loanId, String confirmedBy) {
+        LoanRequest loan = loanRequestRepository.findByIdForUpdate(loanId)
+                .orElseThrow(() -> new LoanNotFoundException(loanId));
+        List<LoanContract> contracts = contractRepository
+                .findByLoanIdAndIsDeletedFalseOrderByCreatedAtDesc(loanId);
+        if (contracts.isEmpty()) {
+            throw new InvalidLoanStateException("Khoản gọi vốn chưa có khế ước để xác nhận ký giấy.");
+        }
+
+        contracts.stream()
+                .filter(contract -> contract.getStatus() == ContractStatus.PENDING_SIGNATURE)
+                .forEach(contract -> {
+                    contract.setStatus(ContractStatus.SIGNED);
+                    contract.setSignedVia("PAPER");
+                    contract.setSignedAt(LocalDateTime.now(TZ));
+                    contractRepository.save(contract);
+                    if (contract.getContractType() == ContractType.INVESTMENT && investmentOfferIsPending(contract)) {
+                        applyInvestmentSigned(loan, contract);
+                    }
+                });
+        advanceToAwaitingDisbursementWhenAllContractsSigned(loan);
+        evictLoanCaches(loanId);
+        log.info("All paper contracts confirmed: loan={} by={}", loanId, confirmedBy);
+        return getContractsByLoan(loanId);
     }
 
     private void validateInvestmentStillFits(LoanRequest loan, LoanContract contract) {
@@ -333,15 +365,26 @@ public class ContractService {
                 refunds.size(), loan.getId(), reason);
     }
 
-    private void applyLoanAgreementSigned(LoanRequest loan) {
-        if (loan.getStatus() != LoanStatus.FUNDED) {
-            throw new InvalidLoanStateException(
-                    "Khoản gọi vốn %s không ở trạng thái chờ ký hợp đồng vay (status: %s)"
-                            .formatted(loan.getLoanCode(), loan.getStatus()));
+    private boolean investmentOfferIsPending(LoanContract contract) {
+        if (contract.getContractType() != ContractType.INVESTMENT || contract.getOfferId() == null) {
+            return false;
+        }
+        return loanOfferRepository.findById(contract.getOfferId())
+                .map(offer -> offer.getStatus() == OfferStatus.PENDING)
+                .orElse(false);
+    }
+
+    /** Chỉ cho phép giải ngân khi người gọi vốn và toàn bộ nhà đầu tư đã ký đủ khế ước. */
+    private void advanceToAwaitingDisbursementWhenAllContractsSigned(LoanRequest loan) {
+        if (loan.getStatus() != LoanStatus.FUNDED) return;
+        List<LoanContract> contracts = contractRepository
+                .findByLoanIdAndIsDeletedFalseOrderByCreatedAtDesc(loan.getId());
+        if (contracts.isEmpty() || contracts.stream().anyMatch(c -> c.getStatus() != ContractStatus.SIGNED)) {
+            return;
         }
         loan.setStatus(LoanStatus.AWAITING_DISBURSEMENT);
         loanRequestRepository.save(loan);
-        log.info("Loan agreement signed — loan {} → AWAITING_DISBURSEMENT", loan.getId());
+        log.info("All paper contracts signed — loan {} → AWAITING_DISBURSEMENT", loan.getId());
     }
 
     // ── Đọc hợp đồng ──────────────────────────────────────────────

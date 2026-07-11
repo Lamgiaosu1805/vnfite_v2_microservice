@@ -64,6 +64,11 @@ public class LoanManagementService {
                 operator != null ? operator.displayName() : "CMS");
     }
 
+    public JsonNode confirmAllPaperSignatures(String loanId, CmsPrincipal operator) {
+        return sourceServiceClient.confirmAllPaperSignatures(loanId,
+                operator != null ? operator.displayName() : "CMS");
+    }
+
     public JsonNode getDocuments(String loanId) {
         return sourceServiceClient.getLoanDocuments(loanId);
     }
