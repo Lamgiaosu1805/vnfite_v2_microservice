@@ -14,6 +14,7 @@ import com.p2plending.auth.service.FcmTokenService;
 import com.p2plending.auth.service.InternalCustomerAdminService;
 import com.p2plending.auth.service.InternalUserQueryService;
 import com.p2plending.auth.service.KycDecisionService;
+import com.p2plending.auth.service.OtpIpBlockService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
@@ -39,6 +40,7 @@ public class InternalUserController {
     private final KycDecisionService       kycDecisionService;
     private final InternalCustomerAdminService customerAdminService;
     private final BusinessProfileService   businessProfileService;
+    private final OtpIpBlockService        otpIpBlockService;
 
     @Value("${app.internal.secret}")
     private String internalSecret;
@@ -192,6 +194,28 @@ public class InternalUserController {
         requireInternalSecret(secret);
         customerAdminService.setBlacklist(userId, request.isBlacklisted(), request.getReason());
         return ResponseEntity.ok(userQueryService.getUser(userId));
+    }
+
+    @GetMapping("/otp-ip-unblock-requests")
+    public ResponseEntity<PagedResponse<?>> getOtpIpUnblockRequests(
+            @RequestHeader(INTERNAL_SECRET_HEADER) String secret,
+            @RequestParam(required = false) String status,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        requireInternalSecret(secret);
+        return ResponseEntity.ok(otpIpBlockService.listRequests(status, Math.max(page, 0), Math.min(Math.max(size, 1), 100)));
+    }
+
+    @PostMapping("/otp-ip-unblock-requests/{requestId}/decision")
+    public ResponseEntity<?> decideOtpIpUnblockRequest(
+            @RequestHeader(INTERNAL_SECRET_HEADER) String secret,
+            @PathVariable String requestId,
+            @RequestBody Map<String, Object> body) {
+        requireInternalSecret(secret);
+        boolean approved = Boolean.TRUE.equals(body.get("approved"));
+        String note = body.get("reason") instanceof String value ? value : null;
+        String reviewedBy = body.get("reviewedBy") instanceof String value ? value : "CMS";
+        return ResponseEntity.ok(otpIpBlockService.reviewRequest(requestId, approved, note, reviewedBy));
     }
 
     private void requireInternalSecret(String secret) {

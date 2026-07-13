@@ -12,6 +12,7 @@ import com.p2plending.auth.dto.request.KycInitRequest;
 import com.p2plending.auth.dto.request.KycVerifyRequest;
 import com.p2plending.auth.dto.request.LoginRequest;
 import com.p2plending.auth.dto.request.OtpVerifyRequest;
+import com.p2plending.auth.dto.request.OtpIpUnblockRequestPayload;
 import com.p2plending.auth.dto.request.BiometricChallengeRequest;
 import com.p2plending.auth.dto.request.BiometricEnableRequest;
 import com.p2plending.auth.dto.request.BiometricLoginRequest;
@@ -32,6 +33,7 @@ import com.p2plending.auth.service.ChangePasswordService;
 import com.p2plending.auth.service.FcmTokenService;
 import com.p2plending.auth.service.KycService;
 import com.p2plending.auth.service.PasswordResetService;
+import com.p2plending.auth.service.OtpIpBlockService;
 import com.p2plending.auth.service.VnptEkycTokenService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -59,6 +61,7 @@ public class AuthController {
     private final FcmTokenService        fcmTokenService;
     private final VnptEkycTokenService   vnptEkycTokenService;
     private final BusinessProfileService businessProfileService;
+    private final OtpIpBlockService       otpIpBlockService;
 
     /**
      * POST /api/auth/check-phone
@@ -80,7 +83,18 @@ public class AuthController {
             @Valid @RequestBody RegisterRequest request,
             HttpServletRequest servletRequest
     ) {
-        return ResponseEntity.ok(authService.registerInit(request, resolveClientIp(servletRequest)));
+        String clientIp = resolveClientIp(servletRequest);
+        otpIpBlockService.assertRegistrationAllowed(clientIp);
+        return ResponseEntity.ok(authService.registerInit(request, clientIp));
+    }
+
+    /** Khách bị chặn OTP vẫn có thể gửi yêu cầu CSKH; IP được server tự xác định. */
+    @PostMapping("/register/unblock-request")
+    public ResponseEntity<Map<String, String>> requestRegisterUnblock(
+            @Valid @RequestBody OtpIpUnblockRequestPayload request,
+            HttpServletRequest servletRequest) {
+        return ResponseEntity.ok(otpIpBlockService.createUnblockRequest(
+                request.getPhone(), request.getNote(), resolveClientIp(servletRequest)));
     }
 
     /**

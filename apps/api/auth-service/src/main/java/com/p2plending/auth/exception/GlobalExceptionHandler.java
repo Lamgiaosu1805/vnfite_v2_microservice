@@ -56,6 +56,12 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.error(RequestIdHolder.get(), HttpStatus.TOO_MANY_REQUESTS.value(), ex.getMessage()));
     }
 
+    @ExceptionHandler(OtpIpBlockedException.class)
+    public ResponseEntity<ApiResponse<Void>> handleOtpIpBlocked(OtpIpBlockedException ex) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(ApiResponse.error(RequestIdHolder.get(), HttpStatus.FORBIDDEN.value(), ex.getMessage(), "OTP_IP_BLOCKED"));
+    }
+
     @ExceptionHandler(DuplicateCccdException.class)
     public ResponseEntity<ApiResponse<Void>> handleDuplicateCccd(DuplicateCccdException ex) {
         return build(HttpStatus.CONFLICT, ex.getMessage());

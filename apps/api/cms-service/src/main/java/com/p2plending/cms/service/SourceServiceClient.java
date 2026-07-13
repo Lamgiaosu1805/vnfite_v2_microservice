@@ -817,6 +817,24 @@ public class SourceServiceClient {
         return exchangeForJson(uri, HttpMethod.POST, Map.of("reviewedBy", reviewedBy, "reason", reason));
     }
 
+    public JsonNode getOtpIpUnblockRequests(String status, int page, int size) {
+        URI uri = UriComponentsBuilder.fromHttpUrl(authServiceUrl)
+                .path("/internal/users/otp-ip-unblock-requests")
+                .queryParamIfPresent("status", Optional.ofNullable(status).filter(value -> !value.isBlank()))
+                .queryParam("page", page).queryParam("size", size).build().encode().toUri();
+        return exchangeForJson(uri, HttpMethod.GET, null);
+    }
+
+    public JsonNode decideOtpIpUnblockRequest(String requestId, boolean approved, String reason, String reviewedBy) {
+        URI uri = UriComponentsBuilder.fromHttpUrl(authServiceUrl)
+                .path("/internal/users/otp-ip-unblock-requests/{requestId}/decision")
+                .buildAndExpand(requestId).toUri();
+        return exchangeForJson(uri, HttpMethod.POST, Map.of(
+                "approved", approved,
+                "reason", reason == null ? "" : reason,
+                "reviewedBy", reviewedBy));
+    }
+
     // ─── Stats ────────────────────────────────────────────────────────────────
 
     public com.fasterxml.jackson.databind.JsonNode getUserStats(java.time.LocalDate from) {
