@@ -77,6 +77,11 @@ public class FeeRevenueLedger {
     @Builder.Default
     private boolean isDeleted = false;
 
+    /** Đảo ghi nhận khi hoàn giải ngân trước khi có giao dịch phân phối. */
+    @Column(nullable = false)
+    @Builder.Default
+    private boolean isReversed = false;
+
     @CreationTimestamp
     @Column(updatable = false)
     private LocalDateTime createdAt;

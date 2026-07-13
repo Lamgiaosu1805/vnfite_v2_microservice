@@ -7,12 +7,16 @@ import com.p2plending.payment.dto.response.LinkedBankResponse;
 import com.p2plending.payment.dto.response.TransactionResponse;
 import com.p2plending.payment.dto.response.SystemTransactionResponse;
 import com.p2plending.payment.dto.response.WalletResponse;
+import com.p2plending.payment.dto.response.ManualDepositResponse;
+import com.p2plending.payment.dto.request.ManualDepositDecisionRequest;
 import com.p2plending.payment.domain.enums.TransactionStatus;
 import com.p2plending.payment.domain.enums.TransactionType;
 import com.p2plending.payment.domain.enums.WalletOwnerType;
+import com.p2plending.payment.domain.enums.ManualDepositStatus;
 import com.p2plending.payment.service.LinkedBankService;
 import com.p2plending.payment.service.TikluyClient;
 import com.p2plending.payment.service.WalletService;
+import com.p2plending.payment.service.ManualDepositService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -43,8 +47,39 @@ public class InternalPaymentController {
     private final LinkedBankService linkedBankService;
     private final AppProperties appProperties;
     private final TikluyClient tikluyClient;
+    private final ManualDepositService manualDepositService;
 
     // ─── TIKLUY deposit callback ──────────────────────────────────────────────
+
+    @GetMapping("/internal/payment/manual-deposits")
+    public ResponseEntity<Page<ManualDepositResponse>> listManualDeposits(
+            @RequestHeader(value = "X-Internal-Secret", required = false) String secret,
+            @RequestParam(required = false) ManualDepositStatus status,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        if (!isValidInternalSecret(secret)) return ResponseEntity.status(401).build();
+        return ResponseEntity.ok(manualDepositService.getForCms(status, Math.max(page, 0), Math.min(Math.max(size, 1), 100)));
+    }
+
+    @PostMapping("/internal/payment/manual-deposits/{requestId}/approve")
+    public ResponseEntity<ManualDepositResponse> approveManualDeposit(
+            @RequestHeader(value = "X-Internal-Secret", required = false) String secret,
+            @PathVariable String requestId,
+            @RequestBody(required = false) ManualDepositDecisionRequest request) {
+        if (!isValidInternalSecret(secret)) return ResponseEntity.status(401).build();
+        return ResponseEntity.ok(manualDepositService.approve(requestId, request != null ? request.getReviewedBy() : null));
+    }
+
+    @PostMapping("/internal/payment/manual-deposits/{requestId}/reject")
+    public ResponseEntity<ManualDepositResponse> rejectManualDeposit(
+            @RequestHeader(value = "X-Internal-Secret", required = false) String secret,
+            @PathVariable String requestId,
+            @RequestBody ManualDepositDecisionRequest request) {
+        if (!isValidInternalSecret(secret)) return ResponseEntity.status(401).build();
+        return ResponseEntity.ok(manualDepositService.reject(requestId,
+                request != null ? request.getReviewedBy() : null,
+                request != null ? request.getReason() : null));
+    }
 
     /**
      * TIKLUY gọi endpoint này (AppFeignService) khi có giao dịch nạp tiền thành công.
@@ -255,6 +290,40 @@ public class InternalPaymentController {
         }
 
         walletService.creditDisbursement(userId, parseOwnerType(ownerType), amount, description, referenceId);
+        return ResponseEntity.ok(Map.of("status", "OK"));
+    }
+
+    /** Thu hồi tiền đã giải ngân trước khi khoản phát sinh giao dịch phân phối. */
+    @PostMapping("/internal/payment/wallet/{userId}/recover-disbursement")
+    public ResponseEntity<Map<String, String>> recoverDisbursement(
+            @RequestHeader(value = "X-Internal-Secret", required = false) String secret,
+            @PathVariable String userId,
+            @RequestParam BigDecimal amount,
+            @RequestParam(required = false) String description,
+            @RequestParam(required = false) String referenceId,
+            @RequestParam(required = false) String ownerType) {
+
+        if (!appProperties.getInternal().getSecret().equals(secret)) {
+            return ResponseEntity.status(401).body(Map.of("error", "Unauthorized"));
+        }
+        walletService.recoverDisbursement(userId, parseOwnerType(ownerType), amount, description, referenceId);
+        return ResponseEntity.ok(Map.of("status", "OK"));
+    }
+
+    /** Khôi phục và khóa lại tiền đầu tư sau khi hoàn giải ngân. */
+    @PostMapping("/internal/payment/wallet/{userId}/restore-investment-lock")
+    public ResponseEntity<Map<String, String>> restoreInvestmentLock(
+            @RequestHeader(value = "X-Internal-Secret", required = false) String secret,
+            @PathVariable String userId,
+            @RequestParam BigDecimal amount,
+            @RequestParam(required = false) String description,
+            @RequestParam(required = false) String referenceId,
+            @RequestParam(required = false) String ownerType) {
+
+        if (!appProperties.getInternal().getSecret().equals(secret)) {
+            return ResponseEntity.status(401).body(Map.of("error", "Unauthorized"));
+        }
+        walletService.restoreInvestmentLock(userId, parseOwnerType(ownerType), amount, description, referenceId);
         return ResponseEntity.ok(Map.of("status", "OK"));
     }
 
