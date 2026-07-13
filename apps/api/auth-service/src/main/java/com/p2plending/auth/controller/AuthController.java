@@ -33,6 +33,7 @@ import com.p2plending.auth.service.FcmTokenService;
 import com.p2plending.auth.service.KycService;
 import com.p2plending.auth.service.PasswordResetService;
 import com.p2plending.auth.service.VnptEkycTokenService;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -75,8 +76,11 @@ public class AuthController {
      * Môi trường test: OTP luôn là "000000" và được trả về trong response.
      */
     @PostMapping("/register")
-    public ResponseEntity<RegisterInitResponse> register(@Valid @RequestBody RegisterRequest request) {
-        return ResponseEntity.ok(authService.registerInit(request));
+    public ResponseEntity<RegisterInitResponse> register(
+            @Valid @RequestBody RegisterRequest request,
+            HttpServletRequest servletRequest
+    ) {
+        return ResponseEntity.ok(authService.registerInit(request, resolveClientIp(servletRequest)));
     }
 
     /**
@@ -86,6 +90,14 @@ public class AuthController {
     @PostMapping("/register/verify")
     public ResponseEntity<AuthResponse> registerVerify(@Valid @RequestBody OtpVerifyRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(authService.registerVerify(request));
+    }
+
+    private String resolveClientIp(HttpServletRequest request) {
+        String forwardedFor = request.getHeader("X-Forwarded-For");
+        if (forwardedFor != null && !forwardedFor.isBlank()) {
+            return forwardedFor.split(",")[0].trim();
+        }
+        return request.getRemoteAddr();
     }
 
     /**

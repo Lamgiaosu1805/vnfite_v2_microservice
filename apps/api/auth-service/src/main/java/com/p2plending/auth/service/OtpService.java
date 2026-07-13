@@ -11,7 +11,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
-import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.Optional;
 
@@ -33,8 +32,8 @@ public class OtpService {
     private final RedisNamespaceProperties redisNamespaceProperties;
     private final VnfOtpSenderService vnfOtpSenderService;
 
-    public String generateAndStore(PendingRegistration pending) {
-        otpRateLimitService.assertCanRequest(pending.getPhone());
+    public String generateAndStore(PendingRegistration pending, String clientIp) {
+        otpRateLimitService.assertCanRegisterRequest(pending.getPhone(), clientIp);
 
         String otp;
         if (mockMode) {
@@ -42,7 +41,10 @@ public class OtpService {
             log.info("[MOCK] OTP for {}: {}", pending.getPhone(), otp);
         } else {
             String sentOtp = vnfOtpSenderService.sendOtp(pending.getPhone(), VnfOtpSenderService.FN_REGISTER);
-            otp = (sentOtp != null) ? sentOtp : String.format("%06d", new SecureRandom().nextInt(1_000_000));
+            if (sentOtp == null || sentOtp.isBlank()) {
+                throw new InvalidOtpException("Không gửi được OTP đăng ký. Vui lòng thử lại sau.");
+            }
+            otp = sentOtp;
         }
         pending.setOtp(otp);
 

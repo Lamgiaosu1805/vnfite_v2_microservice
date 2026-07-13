@@ -130,7 +130,7 @@ public class AuthService {
     // ── Register step 1: validate + send OTP ─────────────────────
 
     @Transactional(readOnly = true)
-    public RegisterInitResponse registerInit(RegisterRequest request) {
+    public RegisterInitResponse registerInit(RegisterRequest request, String clientIp) {
         if (userRepository.existsByPhone(request.getPhone())) {
             throw new UserAlreadyExistsException("Số điện thoại đã được đăng ký");
         }
@@ -151,7 +151,7 @@ public class AuthService {
                 null
         );
 
-        String otp = otpService.generateAndStore(pending);
+        String otp = otpService.generateAndStore(pending, clientIp);
 
         return RegisterInitResponse.builder()
                 .message("OTP đã được gửi đến số điện thoại của bạn")
