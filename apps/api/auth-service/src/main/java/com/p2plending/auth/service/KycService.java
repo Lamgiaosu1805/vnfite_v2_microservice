@@ -16,12 +16,15 @@ import com.p2plending.auth.exception.DuplicateCccdException;
 import com.p2plending.auth.exception.InvalidOtpException;
 import com.p2plending.auth.exception.ResourceNotFoundException;
 import com.p2plending.auth.kafka.KafkaProducerService;
+import com.p2plending.auth.service.vwork.CustomerSyncService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.security.SecureRandom;
 import java.time.Duration;
@@ -48,6 +51,10 @@ public class KycService {
     private final OtpRateLimitService      otpRateLimitService;
     private final RedisNamespaceProperties redisNamespaceProperties;
     private final VnfOtpSenderService      vnfOtpSenderService;
+    private final CustomerSyncService      customerSyncService;
+
+    @Value("${spring.vwork.api-key}")
+    private String apiKey;
 
     // ── Bước 1: kiểm tra CCCD, upload ảnh mock, gửi OTP ─────────────
 
@@ -152,6 +159,16 @@ public class KycService {
                 .orElseThrow(() -> new ResourceNotFoundException("User not found: " + userId));
         user.setKycStatus(KycStatus.APPROVED);
         userRepository.save(user);
+
+        // Call VWork
+        TransactionSynchronizationManager.registerSynchronization(
+                new TransactionSynchronization() {
+                    @Override
+                    public void afterCommit() {
+                        customerSyncService.vWorkEKYC(apiKey, userId, user.getPhone(), submission);
+                    }
+                }
+        );
 
         // Notify analytics/notification về submission
         kafkaProducerService.publishKycSubmitted(userId, saved.getId());

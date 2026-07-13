@@ -33,9 +33,11 @@ import com.p2plending.auth.exception.InvalidTokenException;
 import com.p2plending.auth.exception.OtpRateLimitException;
 import com.p2plending.auth.exception.ResourceNotFoundException;
 import com.p2plending.auth.exception.UserAlreadyExistsException;
+import com.p2plending.auth.feign.VWorkFeignService;
 import com.p2plending.auth.kafka.KafkaProducerService;
 import com.p2plending.auth.mapper.KycDocumentMapper;
 import com.p2plending.auth.mapper.UserMapper;
+import com.p2plending.auth.service.vwork.CustomerSyncService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -44,6 +46,8 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.util.StringUtils;
 
 import java.nio.charset.StandardCharsets;
@@ -111,6 +115,10 @@ public class AuthService {
     private final RedisNamespaceProperties      redisNamespaceProperties;
     private final FcmTokenService               fcmTokenService;
     private final VnfOtpSenderService           vnfOtpSenderService;
+    private final CustomerSyncService           customerSyncService;
+
+    @Value("${spring.vwork.api-key}")
+    private String apiKey;
 
     // ── Check phone ───────────────────────────────────────────────
 
@@ -171,6 +179,16 @@ public class AuthService {
 
         log.info("User registered: id={} phone={}", saved.getId(), saved.getPhone());
         kafkaProducerService.publishUserRegistered(saved.getId(), saved.getPhone());
+
+        // Call VWork
+        TransactionSynchronizationManager.registerSynchronization(
+                new TransactionSynchronization() {
+                    @Override
+                    public void afterCommit() {
+                        customerSyncService.vWorkRegister(apiKey, saved.getId(), pending.getReferrerPhone(), saved.getPhone());
+                    }
+                }
+        );
         return issueTokenPair(saved);
     }
 

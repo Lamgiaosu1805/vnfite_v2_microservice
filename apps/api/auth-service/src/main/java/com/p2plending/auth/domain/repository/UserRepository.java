@@ -2,6 +2,7 @@ package com.p2plending.auth.domain.repository;
 
 import com.p2plending.auth.domain.entity.User;
 import com.p2plending.auth.domain.enums.KycStatus;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
@@ -45,4 +46,7 @@ public interface UserRepository extends JpaRepository<User, String>, JpaSpecific
                    "GROUP BY DATE(created_at) ORDER BY d",
            nativeQuery = true)
     List<Object[]> countDailyNewUsers(@Param("from") LocalDateTime from);
+
+    @Query(value = "SELECT u FROM User u WHERE u.isDeleted = false")
+    List<User> findAllUser(Pageable pageable);
 }
