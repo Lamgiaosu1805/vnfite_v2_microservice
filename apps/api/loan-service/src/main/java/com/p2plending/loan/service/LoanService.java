@@ -57,8 +57,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.time.temporal.ChronoUnit;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
@@ -79,6 +81,9 @@ public class LoanService {
     );
     private static final BigDecimal MIN_OFFER   = new BigDecimal("500000");
     private static final BigDecimal OFFER_UNIT  = new BigDecimal("500000");
+
+    /** Sau khi bị từ chối, người gọi vốn phải chờ đủ khoảng thời gian này mới được tạo khoản mới. */
+    private static final Duration REJECTED_RESUBMIT_COOLDOWN = Duration.ofDays(14);
 
     /** Trạng thái "đang hoạt động" — borrower chưa thể tạo khoản vay mới khi còn khoản ở các trạng thái này. */
     private static final Set<LoanStatus> BLOCKING_STATUSES = EnumSet.of(
@@ -163,6 +168,23 @@ public class LoanService {
                     "Bạn đang có một khoản gọi vốn chưa hoàn tất. " +
                     "Vui lòng chờ khoản hiện tại được hủy hoặc hoàn tất trước khi tạo khoản mới.");
         }
+
+        // 5. Sau khi bị từ chối, phải chờ đủ cooldown mới được tạo khoản mới
+        loanRequestRepository.findTopByBorrowerIdAndStatusAndIsDeletedFalseOrderByReviewedAtDesc(
+                borrowerId, LoanStatus.REJECTED)
+                .ifPresent(rejected -> {
+                    LocalDateTime reviewedAt = rejected.getReviewedAt();
+                    if (reviewedAt != null) {
+                        LocalDateTime eligibleAt = reviewedAt.plus(REJECTED_RESUBMIT_COOLDOWN);
+                        LocalDateTime now = LocalDateTime.now(ZoneId.of("Asia/Ho_Chi_Minh"));
+                        if (now.isBefore(eligibleAt)) {
+                            long daysLeft = ChronoUnit.DAYS.between(now, eligibleAt) + 1;
+                            throw new InvalidLoanStateException(
+                                    "Khoản gọi vốn trước đó đã bị từ chối. Vui lòng thử tạo khoản mới sau "
+                                            + daysLeft + " ngày nữa.");
+                        }
+                    }
+                });
 
         LoanRequest loan = loanRequestMapper.toEntity(request);
         loan.setProductId(product.getId());

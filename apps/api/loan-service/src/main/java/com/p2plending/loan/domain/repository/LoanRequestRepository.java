@@ -57,6 +57,10 @@ public interface LoanRequestRepository
     /** Số khoản gọi vốn đã hoàn thành của borrower — dùng cho credit scoring. */
     long countByBorrowerIdAndStatusAndIsDeletedFalse(String borrowerId, LoanStatus status);
 
+    /** Khoản REJECTED gần nhất của borrower — dùng để tính cooldown trước khi cho tạo khoản mới. */
+    Optional<LoanRequest> findTopByBorrowerIdAndStatusAndIsDeletedFalseOrderByReviewedAtDesc(
+            String borrowerId, LoanStatus status);
+
     @Modifying
     @Query("UPDATE LoanRequest l SET l.status = :status WHERE l.id = :id")
     int updateStatus(@Param("id") String id, @Param("status") LoanStatus status);

@@ -20,6 +20,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mock.web.MockMultipartFile;
 
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -135,6 +137,48 @@ class BusinessProfileServiceTest {
         assertThat(response.getStatus()).isEqualTo(KycStatus.PENDING);
         assertThat(response.getLicenseImageId()).isEqualTo("file-new");
         assertThat(rejected.isDeleted()).isTrue();   // hồ sơ REJECTED cũ bị soft-delete
+    }
+
+    // ── 3b. Chặn nộp lại trong vòng 14 ngày kể từ lúc bị từ chối ──────────────
+
+    @Test
+    void submit_blocksResubmit_within14DaysOfRejection() {
+        when(userRepository.findById("user-1")).thenReturn(Optional.of(userWithKyc(KycStatus.APPROVED)));
+        when(businessProfileRepository.existsByUserIdAndStatusInAndIsDeletedFalse(eq("user-1"), any()))
+                .thenReturn(false);
+        BusinessProfile rejected = pendingProfile(BusinessType.HOUSEHOLD);
+        rejected.setStatus(KycStatus.REJECTED);
+        rejected.setReviewedAt(LocalDateTime.now(ZoneId.of("Asia/Ho_Chi_Minh")).minusDays(5));
+        when(businessProfileRepository.findTopByUserIdAndIsDeletedFalseOrderByCreatedAtDesc("user-1"))
+                .thenReturn(Optional.of(rejected));
+
+        assertThatThrownBy(() -> service.submit("user-1", submitRequest(BusinessType.HOUSEHOLD)))
+                .isInstanceOf(BusinessProfileConflictException.class)
+                .hasMessageContaining("ngày nữa");
+
+        verify(businessProfileRepository, never()).save(any());
+        assertThat(rejected.isDeleted()).isFalse();
+    }
+
+    @Test
+    void submit_allowsResubmit_after14DaysOfRejection() {
+        when(userRepository.findById("user-1")).thenReturn(Optional.of(userWithKyc(KycStatus.APPROVED)));
+        when(businessProfileRepository.existsByUserIdAndStatusInAndIsDeletedFalse(eq("user-1"), any()))
+                .thenReturn(false);
+        BusinessProfile rejected = pendingProfile(BusinessType.HOUSEHOLD);
+        rejected.setStatus(KycStatus.REJECTED);
+        rejected.setReviewedAt(LocalDateTime.now(ZoneId.of("Asia/Ho_Chi_Minh")).minusDays(15));
+        when(businessProfileRepository.findTopByUserIdAndIsDeletedFalseOrderByCreatedAtDesc("user-1"))
+                .thenReturn(Optional.of(rejected));
+        when(imageStorageService.upload(any())).thenReturn("file-new");
+        when(businessProfileRepository.save(any(BusinessProfile.class))).thenAnswer(i -> i.getArgument(0));
+        lenient().when(kycSubmissionRepository.findTopByUserIdAndStatusOrderByCreatedAtDesc(anyString(), any()))
+                .thenReturn(Optional.empty());
+
+        BusinessProfileResponse response = service.submit("user-1", submitRequest(BusinessType.HOUSEHOLD));
+
+        assertThat(response.getStatus()).isEqualTo(KycStatus.PENDING);
+        assertThat(rejected.isDeleted()).isTrue();
     }
 
     // ── 4. Duyệt hộ kinh doanh → account_type BUSINESS + publish event ────────

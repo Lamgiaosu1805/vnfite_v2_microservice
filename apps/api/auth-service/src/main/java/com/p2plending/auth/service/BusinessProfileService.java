@@ -24,8 +24,10 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.time.temporal.ChronoUnit;
 import java.util.EnumSet;
 import java.util.Optional;
 
@@ -43,6 +45,7 @@ import java.util.Optional;
 public class BusinessProfileService {
 
     private static final ZoneId TZ = ZoneId.of("Asia/Ho_Chi_Minh");
+    private static final Duration REJECTED_RESUBMIT_COOLDOWN = Duration.ofDays(14);
 
     private final BusinessProfileRepository businessProfileRepository;
     private final UserRepository            userRepository;
@@ -74,10 +77,22 @@ public class BusinessProfileService {
                     "Bạn đã có hồ sơ doanh nghiệp đang chờ duyệt hoặc đã được duyệt");
         }
 
-        // Nộp lại sau khi bị từ chối: soft-delete hồ sơ REJECTED cũ để giữ đúng 1 hồ sơ active
+        // Nộp lại sau khi bị từ chối: chỉ cho phép sau 14 ngày kể từ lúc bị từ chối,
+        // sau đó soft-delete hồ sơ REJECTED cũ để giữ đúng 1 hồ sơ active.
         businessProfileRepository.findTopByUserIdAndIsDeletedFalseOrderByCreatedAtDesc(userId)
                 .filter(p -> p.getStatus() == KycStatus.REJECTED)
                 .ifPresent(old -> {
+                    LocalDateTime rejectedAt = old.getReviewedAt();
+                    if (rejectedAt != null) {
+                        LocalDateTime eligibleAt = rejectedAt.plus(REJECTED_RESUBMIT_COOLDOWN);
+                        LocalDateTime now = LocalDateTime.now(TZ);
+                        if (now.isBefore(eligibleAt)) {
+                            long daysLeft = ChronoUnit.DAYS.between(now, eligibleAt) + 1;
+                            throw new BusinessProfileConflictException(
+                                    "Hồ sơ doanh nghiệp trước đó đã bị từ chối. Vui lòng thử nộp lại sau "
+                                            + daysLeft + " ngày nữa.");
+                        }
+                    }
                     old.setDeleted(true);
                     businessProfileRepository.save(old);
                 });
