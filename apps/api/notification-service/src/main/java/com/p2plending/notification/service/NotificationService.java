@@ -13,6 +13,7 @@ import com.p2plending.notification.kafka.event.InvestmentCreditReconciledEvent;
 import com.p2plending.notification.kafka.event.LoanApprovedAwaitingBorrowerEvent;
 import com.p2plending.notification.kafka.event.LoanDisbursedEvent;
 import com.p2plending.notification.kafka.event.LoanRepaidEvent;
+import com.p2plending.notification.kafka.event.ManualDepositStatusEvent;
 import com.p2plending.notification.kafka.event.RepaymentDueReminderEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -376,6 +377,38 @@ public class NotificationService {
                 "Ví VNFITE của bạn vừa nhận %s.".formatted(formatMoney(event.getAmount())),
                 Map.of("action", "OPEN_WALLET", "txnId", event.getTxnId() != null ? event.getTxnId() : "")
         );
+    }
+
+    @Transactional
+    public void notifyManualDepositStatus(ManualDepositStatusEvent event) {
+        if (!"PENDING".equals(event.getStatus()) && !"REJECTED".equals(event.getStatus())) {
+            return;
+        }
+
+        boolean pending = "PENDING".equals(event.getStatus());
+        String title = pending ? "Đã tiếp nhận bill nạp tiền" : "Bill nạp tiền chưa được duyệt";
+        String message = pending
+                ? "Bill nạp tiền %s đang chờ CMS kiểm tra. Tiền sẽ được cộng vào ví sau khi phê duyệt."
+                        .formatted(formatMoney(event.getAmount()))
+                : "Bill nạp tiền %s chưa được duyệt. Lý do: %s"
+                        .formatted(formatMoney(event.getAmount()),
+                                event.getRejectionReason() == null || event.getRejectionReason().isBlank()
+                                        ? "Bill chưa đáp ứng điều kiện đối chiếu."
+                                        : event.getRejectionReason());
+
+        notificationRepository.save(Notification.builder()
+                .userId(event.getUserId())
+                .title(title)
+                .message(message)
+                .type(NotificationType.IN_APP)
+                .channel("WALLET")
+                .referenceId(event.getRequestId())
+                .referenceType("MANUAL_DEPOSIT")
+                .sentAt(LocalDateTime.now(ZoneId.of("Asia/Ho_Chi_Minh")))
+                .build());
+
+        pushClient.pushToUser(event.getUserId(), title, message,
+                Map.of("action", "OPEN_WALLET", "manualDepositId", event.getRequestId()));
     }
 
     private String formatMoney(BigDecimal value) {

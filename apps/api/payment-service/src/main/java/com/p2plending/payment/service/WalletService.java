@@ -423,6 +423,77 @@ public class WalletService {
     }
 
     /**
+     * Thu hồi phần tiền thực nhận của một lần giải ngân bị hoàn lại trước khi phát sinh giao dịch
+     * phân phối. Không dùng nghiệp vụ trả nợ để tránh làm sai bản chất và lịch sử ví.
+     */
+    @Transactional
+    public void recoverDisbursement(String userId, WalletOwnerType ownerType, BigDecimal amount,
+                                    String description, String referenceId) {
+        amount = money(amount);
+        if (referenceId != null && transactionRepository.existsByReferenceId(referenceId)) {
+            log.warn("Idempotent disbursement recovery skip: referenceId={} đã xử lý", referenceId);
+            return;
+        }
+
+        Wallet wallet = findByUser(userId, ownerType);
+        boolean mock = appProperties.getPayment().isMock();
+        BigDecimal tikluyTotal = mock ? BigDecimal.ZERO : getTikluyBalance(wallet);
+        BigDecimal available = money(tikluyTotal.subtract(money(wallet.getLockedBalance())).max(BigDecimal.ZERO));
+        if (!mock && available.compareTo(amount) < 0) {
+            throw new IllegalStateException(
+                    "Số dư khả dụng không đủ để thu hồi giải ngân. Khả dụng: " + available + ", cần: " + amount);
+        }
+
+        transactionRepository.save(WalletTransaction.builder()
+                .walletId(wallet.getId())
+                .type(TransactionType.DISBURSE_REVERSAL)
+                .amount(amount)
+                .status(TransactionStatus.SUCCESS)
+                .referenceId(referenceId)
+                .description(description != null ? description : "Thu hồi tiền giải ngân")
+                .balanceAfter(money(available.subtract(amount).max(BigDecimal.ZERO)))
+                .build());
+
+        if (!mock) {
+            tikluyClient.deductAccount(referenceId != null ? referenceId : "DISBURSE-REVERSE-" + UUID.randomUUID(),
+                    wallet.getVnfAccountNo(), amount);
+        }
+    }
+
+    /**
+     * Trả lại tiền cho nhà đầu tư nhưng giữ ở trạng thái khóa, để khoản gọi vốn có thể quay về
+     * FUNDED chờ ký giấy thay vì mở tiền cho một lệnh mới.
+     */
+    @Transactional
+    public void restoreInvestmentLock(String userId, WalletOwnerType ownerType, BigDecimal amount,
+                                      String description, String referenceId) {
+        amount = money(amount);
+        if (referenceId != null && transactionRepository.existsByReferenceId(referenceId)) {
+            log.warn("Idempotent investment restore skip: referenceId={} đã xử lý", referenceId);
+            return;
+        }
+
+        Wallet wallet = findByUser(userId, ownerType);
+        boolean mock = appProperties.getPayment().isMock();
+        if (!mock) {
+            tikluyClient.topUpAccount(referenceId != null ? referenceId : "INVEST-RESTORE-" + UUID.randomUUID(),
+                    wallet.getVnfAccountNo(), amount);
+        }
+
+        wallet.setLockedBalance(money(wallet.getLockedBalance().add(amount)));
+        walletRepository.save(wallet);
+        transactionRepository.save(WalletTransaction.builder()
+                .walletId(wallet.getId())
+                .type(TransactionType.INVEST_RESTORE)
+                .amount(amount)
+                .status(TransactionStatus.SUCCESS)
+                .referenceId(referenceId)
+                .description(description != null ? description : "Khôi phục tiền đầu tư đã khóa")
+                .balanceAfter(computeAvailable(wallet))
+                .build());
+    }
+
+    /**
      * Nhà đầu tư nhận tiền hoàn trả (gốc + lãi) khi người gọi vốn trả nợ.
      *
      * <p>Đây là vế CỘNG của giao dịch chuyển nội bộ: tiền vừa bị trừ khỏi VA người gọi vốn

@@ -84,6 +84,11 @@ app:
   payment:
     # mock=true: bỏ qua TIKLUY, dùng dữ liệu giả cho môi trường dev/test
     mock: ${APP_PAYMENT_MOCK:true}
+  manual-deposit:
+    bank-name: ${APP_MANUAL_DEPOSIT_BANK_NAME:MB Bank}
+    account-no: ${APP_MANUAL_DEPOSIT_ACCOUNT_NO:}
+    account-name: ${APP_MANUAL_DEPOSIT_ACCOUNT_NAME:}
+    instruction: ${APP_MANUAL_DEPOSIT_INSTRUCTION:Chuyển khoản vào tài khoản công ty VNFITE rồi tải bill để CMS kiểm tra.}
   auth:
     service-url: ${AUTH_SERVICE_URL:http://auth-service:8081}
   vnf-otp:

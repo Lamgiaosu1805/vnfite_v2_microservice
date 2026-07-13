@@ -17,6 +17,7 @@ public interface WalletTransactionRepository extends JpaRepository<WalletTransac
     Page<WalletTransaction> findByWalletIdAndIsDeletedFalseOrderByCreatedAtDesc(String walletId, Pageable pageable);
     List<WalletTransaction> findByWalletIdAndIsDeletedFalseOrderByCreatedAtAsc(String walletId);
     boolean existsByReferenceId(String referenceId);
+    Optional<WalletTransaction> findByReferenceId(String referenceId);
     Optional<WalletTransaction> findByExternalRefAndStatus(String externalRef, TransactionStatus status);
 
     List<WalletTransaction> findByStatusAndTypeAndCreatedAtBeforeAndIsDeletedFalse(

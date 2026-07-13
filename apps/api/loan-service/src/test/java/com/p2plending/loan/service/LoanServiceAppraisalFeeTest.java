@@ -15,6 +15,8 @@ import com.p2plending.loan.domain.repository.LoanDocumentRepository;
 import com.p2plending.loan.domain.repository.LoanContractRepository;
 import com.p2plending.loan.domain.repository.LoanOfferRepository;
 import com.p2plending.loan.domain.repository.LoanRequestRepository;
+import com.p2plending.loan.domain.repository.RepaymentScheduleRepository;
+import com.p2plending.loan.domain.repository.RepaymentTransactionRepository;
 import com.p2plending.loan.dto.response.LoanResponse;
 import com.p2plending.loan.exception.InvalidLoanStateException;
 import com.p2plending.loan.kafka.KafkaProducerService;
@@ -55,6 +57,8 @@ class LoanServiceAppraisalFeeTest {
     @Mock AuthServiceClient     authServiceClient;
     @Mock PaymentServiceClient  paymentServiceClient;
     @Mock FeeRevenueLedgerRepository feeRevenueLedgerRepository;
+    @Mock RepaymentScheduleRepository repaymentScheduleRepository;
+    @Mock RepaymentTransactionRepository repaymentTransactionRepository;
     @Mock CacheManager          cacheManager;
 
     @InjectMocks LoanService loanService;
@@ -126,6 +130,45 @@ class LoanServiceAppraisalFeeTest {
         assertThatThrownBy(() -> loanService.disburse(loan.getId(), "CMS"))
                 .isInstanceOf(InvalidLoanStateException.class)
                 .hasMessageContaining("chưa có khế ước vay");
+    }
+
+    @Test
+    void reverseDisbursement_recoversNetAmountAndRestoresInvestorLock() {
+        LoanRequest loan = pendingReviewLoan("loan-reverse");
+        loan.setLoanSeq(1L);
+        loan.setStatus(LoanStatus.DISBURSED);
+        loan.setAmount(new BigDecimal("10000000"));
+        loan.setNetDisbursement(new BigDecimal("9560000"));
+        loan.setDisbursedAt(LocalDateTime.now());
+        loan.setDisbursedBy("OPS");
+        when(loanRequestMapper.toResponse(loan)).thenReturn(LoanResponse.builder().id(loan.getId()).build());
+        LoanOffer offer = LoanOffer.builder()
+                .id("offer-reverse")
+                .loanRequestId(loan.getId())
+                .investorId("investor-business")
+                .ownerType("BUSINESS")
+                .amount(new BigDecimal("10000000"))
+                .status(OfferStatus.ACCEPTED)
+                .build();
+        when(loanRequestRepository.findByIdForUpdate(loan.getId())).thenReturn(Optional.of(loan));
+        when(loanRequestRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(loanOfferRepository.findByLoanRequestIdAndStatus(loan.getId(), OfferStatus.ACCEPTED))
+                .thenReturn(List.of(offer));
+        when(repaymentTransactionRepository.existsByLoanIdAndIsDeletedFalse(loan.getId())).thenReturn(false);
+        when(repaymentScheduleRepository.findByLoanIdAndIsDeletedFalseOrderByPeriodNumberAsc(loan.getId()))
+                .thenReturn(List.of());
+        when(feeRevenueLedgerRepository.findByLoanId(loan.getId())).thenReturn(Optional.empty());
+
+        loanService.reverseDisbursement(loan.getId(), "OPS", "Chưa hoàn tất ký giấy");
+
+        verify(paymentServiceClient).recoverDisbursement(eq("borrower-1"), eq("PERSONAL"),
+                eq(new BigDecimal("9560000")), contains("VNF000001"), eq("REVERSE-DISBURSE-loan-reverse"));
+        verify(paymentServiceClient).restoreInvestmentLock(eq("investor-business"), eq("BUSINESS"),
+                eq(new BigDecimal("10000000")), contains("VNF000001"), eq("RESTORE-INVEST-offer-reverse"));
+        verify(contractService).issueLoanAgreement(loan);
+        assertThat(loan.getStatus()).isEqualTo(LoanStatus.FUNDED);
+        assertThat(loan.getDisbursedAt()).isNull();
+        assertThat(loan.getDisbursedBy()).isNull();
     }
 
     // ── 1. feeRate = 0.00 (miễn phí) ─────────────────────────────────────────

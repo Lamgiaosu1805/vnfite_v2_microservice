@@ -298,6 +298,18 @@ public class InternalLoanController {
         return ResponseEntity.ok(loanService.disburse(loanId, disbursedBy));
     }
 
+    /** Hoàn giải ngân khi chưa hoàn tất ký giấy và chưa phát sinh giao dịch phân phối. */
+    @PostMapping("/{loanId}/reverse-disbursement")
+    public ResponseEntity<LoanResponse> reverseDisbursement(
+            @RequestHeader(INTERNAL_SECRET_HEADER) String secret,
+            @PathVariable String loanId,
+            @RequestBody(required = false) java.util.Map<String, String> request) {
+        requireInternalSecret(secret);
+        String reversedBy = request != null ? request.getOrDefault("reversedBy", "CMS") : "CMS";
+        String reason = request != null ? request.getOrDefault("reason", "Chưa hoàn tất ký giấy") : "Chưa hoàn tất ký giấy";
+        return ResponseEntity.ok(loanService.reverseDisbursement(loanId, reversedBy, reason));
+    }
+
     /** Số khoản gọi vốn đã COMPLETED của borrower — credit-service dùng cho scoring. */
     @GetMapping("/borrowers/{borrowerId}/completed-count")
     public ResponseEntity<Long> getCompletedLoanCount(

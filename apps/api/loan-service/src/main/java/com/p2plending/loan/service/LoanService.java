@@ -9,6 +9,7 @@ import com.p2plending.loan.domain.entity.LoanDocument;
 import com.p2plending.loan.domain.entity.LoanOffer;
 import com.p2plending.loan.domain.entity.LoanProduct;
 import com.p2plending.loan.domain.entity.LoanRequest;
+import com.p2plending.loan.domain.entity.RepaymentSchedule;
 import com.p2plending.loan.domain.enums.ContractStatus;
 import com.p2plending.loan.domain.enums.ContractType;
 import com.p2plending.loan.domain.enums.LoanStatus;
@@ -19,6 +20,8 @@ import com.p2plending.loan.domain.repository.LoanContractRepository;
 import com.p2plending.loan.domain.repository.LoanDocumentRepository;
 import com.p2plending.loan.domain.repository.LoanOfferRepository;
 import com.p2plending.loan.domain.repository.LoanRequestRepository;
+import com.p2plending.loan.domain.repository.RepaymentScheduleRepository;
+import com.p2plending.loan.domain.repository.RepaymentTransactionRepository;
 import com.p2plending.loan.dto.request.LoanCreateRequest;
 import com.p2plending.loan.dto.request.LoanDocumentInput;
 import com.p2plending.loan.dto.request.LoanFilterParams;
@@ -91,6 +94,8 @@ public class LoanService {
     private final LoanRequestRepository  loanRequestRepository;
     private final LoanOfferRepository    loanOfferRepository;
     private final LoanContractRepository loanContractRepository;
+    private final RepaymentScheduleRepository repaymentScheduleRepository;
+    private final RepaymentTransactionRepository repaymentTransactionRepository;
     private final LoanDocumentRepository loanDocumentRepository;
     private final FeeRevenueLedgerRepository feeRevenueLedgerRepository;
     private final LoanRequestMapper      loanRequestMapper;
@@ -490,20 +495,21 @@ public class LoanService {
 
         // Hạch toán doanh thu phí vào sổ cái (chỉ khoản mới có thu phí). Tiền phí thực tế đọng ở
         // tài khoản tổng VNFITE — bảng này chỉ ghi sổ. Idempotent theo loanId: retry không ghi trùng.
-        if (isNewLoan && loan.getTotalFee() != null && loan.getTotalFee().signum() > 0
-                && !feeRevenueLedgerRepository.existsByLoanIdAndIsDeletedFalse(loanId)) {
-            feeRevenueLedgerRepository.save(FeeRevenueLedger.builder()
-                    .loanId(loanId)
-                    .loanCode(loan.getLoanCode())
-                    .borrowerId(loan.getBorrowerId())
-                    .loanAmount(loan.getAmount())
-                    .appraisalFeeRate(loan.getAppraisalFeeRate())
-                    .appraisalFee(loan.getAppraisalFee())
-                    .vatAmount(loan.getVatAmount())
-                    .totalFee(loan.getTotalFee())
-                    .disbursedAt(loan.getDisbursedAt())
-                    .disbursedBy(disbursedBy)
-                    .build());
+        if (isNewLoan && loan.getTotalFee() != null && loan.getTotalFee().signum() > 0) {
+            FeeRevenueLedger ledger = feeRevenueLedgerRepository.findByLoanId(loanId)
+                    .orElseGet(() -> FeeRevenueLedger.builder().loanId(loanId).build());
+            ledger.setLoanCode(loan.getLoanCode());
+            ledger.setBorrowerId(loan.getBorrowerId());
+            ledger.setLoanAmount(loan.getAmount());
+            ledger.setAppraisalFeeRate(loan.getAppraisalFeeRate());
+            ledger.setAppraisalFee(loan.getAppraisalFee());
+            ledger.setVatAmount(loan.getVatAmount());
+            ledger.setTotalFee(loan.getTotalFee());
+            ledger.setDisbursedAt(loan.getDisbursedAt());
+            ledger.setDisbursedBy(disbursedBy);
+            ledger.setDeleted(false);
+            ledger.setReversed(false);
+            feeRevenueLedgerRepository.save(ledger);
             log.info("Ghi sổ doanh thu phí khoản {}: totalFee={}", loanId, loan.getTotalFee());
         }
 
@@ -514,6 +520,71 @@ public class LoanService {
         kafkaProducerService.publishLoanDisbursed(loan, investorIds);
 
         log.info("Loan {} disbursed by {} — schedule generated, loan.disbursed published", loanId, disbursedBy);
+        return buildResponse(loan, false);
+    }
+
+    /**
+     * Hoàn một lần giải ngân sai quy trình khi tiền vẫn còn nguyên trong ví người gọi vốn và
+     * chưa có bất cứ giao dịch phân phối nào. Tiền nhà đầu tư được khôi phục về trạng thái khóa;
+     * khoản quay về FUNDED để CMS chờ đủ giấy ký rồi mới cho giải ngân lại.
+     */
+    @Transactional
+    @Caching(evict = {
+            @CacheEvict(value = CacheConfig.CACHE_LOANS, allEntries = true),
+            @CacheEvict(value = CacheConfig.CACHE_LOAN_BY_ID, key = "#loanId")
+    })
+    public LoanResponse reverseDisbursement(String loanId, String reversedBy, String reason) {
+        LoanRequest loan = loanRequestRepository.findByIdForUpdate(loanId)
+                .orElseThrow(() -> new LoanNotFoundException(loanId));
+        if (loan.getStatus() != LoanStatus.DISBURSED) {
+            throw new InvalidLoanStateException("Khoản gọi vốn %s không ở trạng thái đã giải ngân."
+                    .formatted(loan.getLoanCode()));
+        }
+        if (repaymentTransactionRepository.existsByLoanIdAndIsDeletedFalse(loanId)) {
+            throw new InvalidLoanStateException("Khoản gọi vốn %s đã có giao dịch phân phối, không thể hoàn giải ngân tự động."
+                    .formatted(loan.getLoanCode()));
+        }
+
+        List<LoanOffer> acceptedOffers = loanOfferRepository
+                .findByLoanRequestIdAndStatus(loanId, OfferStatus.ACCEPTED);
+        if (acceptedOffers.isEmpty()) {
+            throw new InvalidLoanStateException("Khoản gọi vốn %s không có lệnh đầu tư đã chốt để hoàn giải ngân."
+                    .formatted(loan.getLoanCode()));
+        }
+        BigDecimal totalAccepted = acceptedOffers.stream()
+                .map(LoanOffer::getAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        if (totalAccepted.compareTo(loan.getAmount()) != 0) {
+            throw new InvalidLoanStateException("Tổng lệnh đầu tư đã chốt không khớp số tiền khoản gọi vốn; dừng hoàn giải ngân.");
+        }
+
+        BigDecimal netAmount = loan.getNetDisbursement() != null
+                ? loan.getNetDisbursement() : totalAccepted;
+        String borrowerOwnerType = borrowerWalletOwnerType(loan);
+        String operator = reversedBy == null || reversedBy.isBlank() ? "CMS" : reversedBy;
+        String note = reason == null || reason.isBlank() ? "Chưa hoàn tất ký giấy" : reason.trim();
+
+        paymentServiceClient.recoverDisbursement(loan.getBorrowerId(), borrowerOwnerType, netAmount,
+                "Thu hồi giải ngân khoản gọi vốn " + loan.getLoanCode() + ": " + note,
+                "REVERSE-DISBURSE-" + loanId);
+
+        for (LoanOffer offer : acceptedOffers) {
+            paymentServiceClient.restoreInvestmentLock(offer.getInvestorId(), normalizeOfferOwnerType(offer.getOwnerType()),
+                    offer.getAmount(), "Khôi phục tiền đầu tư đã khóa cho khoản " + loan.getLoanCode(),
+                    "RESTORE-INVEST-" + offer.getId());
+        }
+
+        repaymentScheduleRepository.findByLoanIdAndIsDeletedFalseOrderByPeriodNumberAsc(loanId)
+                .forEach(schedule -> schedule.setDeleted(true));
+        feeRevenueLedgerRepository.findByLoanId(loanId).ifPresent(ledger -> ledger.setReversed(true));
+
+        loan.setStatus(LoanStatus.FUNDED);
+        loan.setDisbursedAt(null);
+        loan.setDisbursedBy(null);
+        loanRequestRepository.save(loan);
+        contractService.issueLoanAgreement(loan);
+
+        log.warn("Disbursement reversed: loan={} by={} reason={}", loan.getLoanCode(), operator, note);
         return buildResponse(loan, false);
     }
 
@@ -991,6 +1062,8 @@ public class LoanService {
         }
 
         // Phí được tính tại bước propose và lưu thẳng vào loan_requests.
+        response.setInvestorCount(loanOfferRepository.countDistinctInvestorByLoanRequestIdAndStatus(
+                loan.getId(), OfferStatus.ACCEPTED));
 
         if (includeOffers) {
             List<LoanOfferResponse> offers = loanOfferRepository
@@ -1154,7 +1227,7 @@ public class LoanService {
         org.springframework.data.domain.Pageable pageable =
                 org.springframework.data.domain.PageRequest.of(Math.max(0, page), safeSize);
         org.springframework.data.domain.Page<com.p2plending.loan.domain.entity.FeeRevenueLedger> p =
-                feeRevenueLedgerRepository.findByIsDeletedFalseOrderByDisbursedAtDesc(pageable);
+                feeRevenueLedgerRepository.findByIsDeletedFalseAndIsReversedFalseOrderByDisbursedAtDesc(pageable);
 
         java.util.List<com.p2plending.loan.dto.response.FeeRevenueReportResponse.Item> items = p.getContent().stream()
                 .map(f -> com.p2plending.loan.dto.response.FeeRevenueReportResponse.Item.builder()
@@ -1172,7 +1245,7 @@ public class LoanService {
                 .toList();
 
         return com.p2plending.loan.dto.response.FeeRevenueReportResponse.builder()
-                .totalCount(feeRevenueLedgerRepository.countByIsDeletedFalse())
+                .totalCount(feeRevenueLedgerRepository.countByIsDeletedFalseAndIsReversedFalse())
                 .totalAppraisalFee(feeRevenueLedgerRepository.sumAppraisalFee())
                 .totalVat(feeRevenueLedgerRepository.sumVatAmount())
                 .totalFeeRevenue(feeRevenueLedgerRepository.sumTotalFee())

@@ -1,0 +1,22 @@
+CREATE TABLE IF NOT EXISTS manual_deposit_requests (
+    id VARCHAR(36) NOT NULL,
+    wallet_id VARCHAR(36) NOT NULL,
+    user_id VARCHAR(36) NOT NULL,
+    owner_type VARCHAR(20) NOT NULL DEFAULT 'PERSONAL',
+    amount DECIMAL(15,0) NOT NULL,
+    bill_file_id VARCHAR(100) NOT NULL,
+    bill_file_name VARCHAR(255) NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
+    rejection_reason VARCHAR(500) NULL,
+    reviewed_by VARCHAR(120) NULL,
+    reviewed_at DATETIME NULL,
+    wallet_transaction_id VARCHAR(36) NULL,
+    is_deleted TINYINT(1) NOT NULL DEFAULT 0,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_manual_deposit_bill_file (bill_file_id),
+    KEY idx_manual_deposit_user (user_id, created_at),
+    KEY idx_manual_deposit_status (status, created_at),
+    KEY idx_manual_deposit_wallet (wallet_id)
+);

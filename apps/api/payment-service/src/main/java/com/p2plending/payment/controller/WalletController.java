@@ -6,12 +6,17 @@ import com.p2plending.payment.domain.enums.WalletOwnerType;
 import com.p2plending.payment.domain.repository.LinkedBankRepository;
 import com.p2plending.payment.dto.request.WithdrawalConfirmOtpRequest;
 import com.p2plending.payment.dto.request.WithdrawalInitiateRequest;
+import com.p2plending.payment.dto.request.ManualDepositCreateRequest;
+import com.p2plending.payment.dto.response.ManualDepositResponse;
+import com.p2plending.payment.dto.response.ManualDepositInstructionResponse;
+import com.p2plending.payment.config.AppProperties;
 import com.p2plending.payment.dto.response.TransactionResponse;
 import com.p2plending.payment.dto.response.WalletResponse;
 import com.p2plending.payment.dto.response.WithdrawalResponse;
 import com.p2plending.payment.security.AuthenticatedUser;
 import com.p2plending.payment.service.KycGuardService;
 import com.p2plending.payment.service.WalletService;
+import com.p2plending.payment.service.ManualDepositService;
 import com.p2plending.payment.service.WithdrawalRequestService;
 import com.p2plending.payment.service.WithdrawalTransferOrchestrator;
 import jakarta.validation.Valid;
@@ -33,6 +38,8 @@ public class WalletController {
     private final WithdrawalTransferOrchestrator withdrawalTransferOrchestrator;
     private final LinkedBankRepository linkedBankRepository;
     private final KycGuardService kycGuardService;
+    private final ManualDepositService manualDepositService;
+    private final AppProperties appProperties;
 
     /** Lấy thông tin ví + số dư */
     @GetMapping("/wallet")
@@ -51,6 +58,34 @@ public class WalletController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
         return ResponseEntity.ok(walletService.getTransactions(user.userId(), parseOwnerType(ownerType), page, size));
+    }
+
+    /** Nộp bill chuyển khoản vào tài khoản công ty để CMS kiểm tra và cộng vào ví sau khi duyệt. */
+    @PostMapping("/wallet/manual-deposits")
+    public ResponseEntity<ManualDepositResponse> createManualDeposit(
+            @AuthenticationPrincipal AuthenticatedUser user,
+            @RequestBody @Valid ManualDepositCreateRequest request) {
+        kycGuardService.requireApproved(user.userId(), "nạp tiền bằng bill");
+        return ResponseEntity.ok(manualDepositService.create(user.userId(), request));
+    }
+
+    @GetMapping("/wallet/manual-deposits")
+    public ResponseEntity<Page<ManualDepositResponse>> getMyManualDeposits(
+            @AuthenticationPrincipal AuthenticatedUser user,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        return ResponseEntity.ok(manualDepositService.getMine(user.userId(), Math.max(page, 0), Math.min(Math.max(size, 1), 50)));
+    }
+
+    @GetMapping("/wallet/manual-deposit-instructions")
+    public ResponseEntity<ManualDepositInstructionResponse> getManualDepositInstructions() {
+        AppProperties.ManualDeposit config = appProperties.getManualDeposit();
+        return ResponseEntity.ok(ManualDepositInstructionResponse.builder()
+                .bankName(config.getBankName())
+                .accountNo(config.getAccountNo())
+                .accountName(config.getAccountName())
+                .instruction(config.getInstruction())
+                .build());
     }
 
     // ─── Luồng rút tiền state machine ────────────────────────────────────────

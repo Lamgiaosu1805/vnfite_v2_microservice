@@ -151,6 +151,20 @@ public class PaymentServiceClient {
                 "Không thể cộng tiền giải ngân vào ví người gọi vốn.");
     }
 
+    /** Thu hồi phần tiền thực nhận khi hoàn giải ngân trước khi có giao dịch phân phối. */
+    public void recoverDisbursement(String userId, String ownerType, BigDecimal amount,
+                                    String description, String referenceId) {
+        post(userId, "recover-disbursement", ownerType, amount, description, referenceId,
+                "Không thể thu hồi tiền giải ngân từ ví người gọi vốn.");
+    }
+
+    /** Khôi phục tiền nhà đầu tư về trạng thái khóa để khoản có thể chờ ký giấy. */
+    public void restoreInvestmentLock(String userId, String ownerType, BigDecimal amount,
+                                      String description, String referenceId) {
+        post(userId, "restore-investment-lock", ownerType, amount, description, referenceId,
+                "Không thể khôi phục tiền đầu tư đã khóa.");
+    }
+
 
     private void post(String userId, String action, BigDecimal amount, String description,
                       String referenceId, String fallback) {

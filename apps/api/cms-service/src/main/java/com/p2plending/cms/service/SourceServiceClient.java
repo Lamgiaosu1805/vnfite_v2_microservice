@@ -771,6 +771,52 @@ public class SourceServiceClient {
                 .build();
     }
 
+    /** Danh sách yêu cầu nạp tiền bằng bill để CMS kiểm tra. */
+    public JsonNode getManualDeposits(String status, int page, int size) {
+        URI uri = UriComponentsBuilder.fromHttpUrl(paymentServiceUrl)
+                .path("/internal/payment/manual-deposits")
+                .queryParamIfPresent("status", Optional.ofNullable(status).filter(value -> !value.isBlank()))
+                .queryParam("page", page)
+                .queryParam("size", size)
+                .build().encode().toUri();
+        JsonNode response = exchangeForJson(uri, HttpMethod.GET, null);
+        if (!response.isObject()) return response;
+        var enriched = response.deepCopy();
+        Map<String, UserSummaryResponse> users = new HashMap<>();
+        enriched.path("content").forEach(item -> {
+            if (!(item instanceof com.fasterxml.jackson.databind.node.ObjectNode request)) return;
+            String userId = text(request, "userId");
+            if (userId == null) return;
+            UserSummaryResponse user = users.computeIfAbsent(userId, id -> {
+                try {
+                    return getUser(id);
+                } catch (Exception ex) {
+                    log.warn("Could not resolve manual-deposit customer {}: {}", id, ex.getMessage());
+                    return null;
+                }
+            });
+            if (user != null) {
+                request.put("customerName", user.getFullName());
+                request.put("customerPhone", user.getPhone());
+            }
+        });
+        return enriched;
+    }
+
+    public JsonNode approveManualDeposit(String requestId, String reviewedBy) {
+        URI uri = UriComponentsBuilder.fromHttpUrl(paymentServiceUrl)
+                .path("/internal/payment/manual-deposits/{requestId}/approve")
+                .buildAndExpand(requestId).toUri();
+        return exchangeForJson(uri, HttpMethod.POST, Map.of("reviewedBy", reviewedBy));
+    }
+
+    public JsonNode rejectManualDeposit(String requestId, String reviewedBy, String reason) {
+        URI uri = UriComponentsBuilder.fromHttpUrl(paymentServiceUrl)
+                .path("/internal/payment/manual-deposits/{requestId}/reject")
+                .buildAndExpand(requestId).toUri();
+        return exchangeForJson(uri, HttpMethod.POST, Map.of("reviewedBy", reviewedBy, "reason", reason));
+    }
+
     // ─── Stats ────────────────────────────────────────────────────────────────
 
     public com.fasterxml.jackson.databind.JsonNode getUserStats(java.time.LocalDate from) {

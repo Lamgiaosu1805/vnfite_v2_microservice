@@ -11,5 +11,7 @@ public interface RepaymentTransactionRepository extends JpaRepository<RepaymentT
 
     List<RepaymentTransaction> findByLoanIdAndIsDeletedFalseOrderByPaidAtAsc(String loanId);
 
+    boolean existsByLoanIdAndIsDeletedFalse(String loanId);
+
     boolean existsByScheduleIdAndChannelInAndIsDeletedFalse(String scheduleId, Collection<PaymentChannel> channels);
 }

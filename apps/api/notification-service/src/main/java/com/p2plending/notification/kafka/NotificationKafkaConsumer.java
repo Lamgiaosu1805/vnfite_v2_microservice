@@ -8,6 +8,7 @@ import com.p2plending.notification.kafka.event.InvestmentRefundedEvent;
 import com.p2plending.notification.kafka.event.LoanApprovedAwaitingBorrowerEvent;
 import com.p2plending.notification.kafka.event.LoanDisbursedEvent;
 import com.p2plending.notification.kafka.event.LoanRepaidEvent;
+import com.p2plending.notification.kafka.event.ManualDepositStatusEvent;
 import com.p2plending.notification.kafka.event.RepaymentDueReminderEvent;
 import com.p2plending.notification.service.NotificationService;
 import lombok.RequiredArgsConstructor;
@@ -34,6 +35,19 @@ public class NotificationKafkaConsumer {
             notificationService.notifyDepositCompleted(event);
         } catch (Exception ex) {
             log.error("Failed to process payment.deposit_completed key={}: {}", record.key(), ex.getMessage(), ex);
+        }
+    }
+
+    @KafkaListener(
+            topics = "payment.manual_deposit_status",
+            groupId = "${spring.kafka.consumer.group-id:notification-service-group}"
+    )
+    public void onManualDepositStatus(ConsumerRecord<String, String> record) {
+        try {
+            ManualDepositStatusEvent event = objectMapper.readValue(record.value(), ManualDepositStatusEvent.class);
+            notificationService.notifyManualDepositStatus(event);
+        } catch (Exception ex) {
+            log.error("Failed to process payment.manual_deposit_status key={}: {}", record.key(), ex.getMessage(), ex);
         }
     }
 
