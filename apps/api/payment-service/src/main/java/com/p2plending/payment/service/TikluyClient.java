@@ -322,6 +322,11 @@ public class TikluyClient {
         adjustBalance(txnId, accNo, amount, true, false);
     }
 
+    /** Cộng tiền sau khi CMS duyệt bill; lỗi phải trả về để không đánh dấu duyệt sai. */
+    public void creditManualDeposit(String txnId, String accNo, BigDecimal amount) {
+        adjustBalance(txnId, accNo, amount, true, true);
+    }
+
     /**
      * Trừ tiền trực tiếp khỏi tài khoản TIKLUY — dùng khi giải ngân (tiền rời ví nhà đầu tư).
      * Ném RuntimeException nếu thất bại để caller rollback (không được nuốt lỗi tiền).

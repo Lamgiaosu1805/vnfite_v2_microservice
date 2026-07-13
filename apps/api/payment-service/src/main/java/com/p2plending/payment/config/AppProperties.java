@@ -17,6 +17,7 @@ public class AppProperties {
     private Reconciliation reconciliation = new Reconciliation();
     private Auth auth = new Auth();
     private VnfOtp vnfOtp = new VnfOtp();
+    private ManualDeposit manualDeposit = new ManualDeposit();
 
     @Data
     public static class Redis {
@@ -38,6 +39,14 @@ public class AppProperties {
     public static class VnfOtp {
         private String url = "";
         private int withdrawalFunctionType = 2;
+    }
+
+    @Data
+    public static class ManualDeposit {
+        private String bankName = "MB Bank";
+        private String accountNo = "";
+        private String accountName = "";
+        private String instruction = "Chuyển khoản vào tài khoản công ty VNFITE rồi tải bill để CMS kiểm tra.";
     }
 
     @Data
