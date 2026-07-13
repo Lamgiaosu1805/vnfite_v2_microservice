@@ -30,4 +30,10 @@ public interface LoanOfferRepository extends JpaRepository<LoanOffer, String> {
     BigDecimal sumAmountByLoanRequestIdAndStatus(
             @Param("loanRequestId") String loanRequestId,
             @Param("status") OfferStatus status);
+
+    @Query("SELECT COUNT(DISTINCT o.investorId) FROM LoanOffer o " +
+           "WHERE o.loanRequestId = :loanRequestId AND o.status = :status AND o.isDeleted = false")
+    long countDistinctInvestorByLoanRequestIdAndStatus(
+            @Param("loanRequestId") String loanRequestId,
+            @Param("status") OfferStatus status);
 }

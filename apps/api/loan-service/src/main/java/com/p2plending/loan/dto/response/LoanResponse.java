@@ -54,6 +54,7 @@ public class LoanResponse {
     private LoanStatus status;
     private BigDecimal fundedAmount;
     private BigDecimal remainingAmount;
+    private long investorCount;
     private String rejectionReason;
     private String borrowerCancelledReason;
     private LocalDateTime reviewedAt;

@@ -1062,6 +1062,8 @@ public class LoanService {
         }
 
         // Phí được tính tại bước propose và lưu thẳng vào loan_requests.
+        response.setInvestorCount(loanOfferRepository.countDistinctInvestorByLoanRequestIdAndStatus(
+                loan.getId(), OfferStatus.ACCEPTED));
 
         if (includeOffers) {
             List<LoanOfferResponse> offers = loanOfferRepository
