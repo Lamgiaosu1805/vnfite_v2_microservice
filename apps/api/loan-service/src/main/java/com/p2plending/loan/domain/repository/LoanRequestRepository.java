@@ -2,8 +2,10 @@ package com.p2plending.loan.domain.repository;
 
 import com.p2plending.loan.domain.entity.LoanRequest;
 import com.p2plending.loan.domain.enums.LoanStatus;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -12,11 +14,21 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 
 public interface LoanRequestRepository
         extends JpaRepository<LoanRequest, String>, JpaSpecificationExecutor<LoanRequest> {
 
     List<LoanRequest> findByBorrowerId(String borrowerId);
+
+    /**
+     * Khóa row (SELECT ... FOR UPDATE) trong suốt transaction hiện tại — dùng khi tạo/chấp nhận
+     * offer để serialize các request đồng thời trên cùng 1 khoản, tránh fundedAmount vượt quá
+     * amount khi 2 nhà đầu tư cùng đặt lệnh vào phần vốn còn lại cuối cùng.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT l FROM LoanRequest l WHERE l.id = :id")
+    Optional<LoanRequest> findByIdForUpdate(@Param("id") String id);
 
     List<LoanRequest> findByStatus(LoanStatus status);
 
@@ -29,6 +41,13 @@ public interface LoanRequestRepository
 
     /** Khoản ở trạng thái cho trước và gọi đủ vốn trước mốc cutoff — dùng cho job hết hạn ký khế ước. */
     List<LoanRequest> findByStatusAndFundedAtBeforeAndIsDeletedFalse(
+            LoanStatus status, LocalDateTime cutoff);
+
+    /**
+     * Khoản ở trạng thái cho trước và được ban lãnh đạo duyệt (reviewedAt) trước mốc cutoff —
+     * dùng cho job hết hạn chờ người gọi vốn xác nhận (AWAITING_BORROWER_APPROVAL).
+     */
+    List<LoanRequest> findByStatusAndReviewedAtBeforeAndIsDeletedFalse(
             LoanStatus status, LocalDateTime cutoff);
 
     /** Kiểm tra borrower có đang có khoản vay ở một trong các trạng thái chặn không. */

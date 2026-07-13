@@ -47,6 +47,11 @@ public class LoanManagementService {
         return sourceServiceClient.getLoans(status, borrowerId, province, search, productCategories, page, size);
     }
 
+    /** Chi tiết khoản gọi vốn, bao gồm toàn bộ lệnh đầu tư để CMS theo dõi tiến độ chính xác. */
+    public LoanSummaryResponse getLoan(String loanId) {
+        return sourceServiceClient.getLoanById(loanId);
+    }
+
     public JsonNode getAppraisalSuggestion(String loanId, boolean discouraged, String creditGrade) {
         return sourceServiceClient.getAppraisalSuggestion(loanId, discouraged, creditGrade);
     }
@@ -57,6 +62,16 @@ public class LoanManagementService {
 
     public JsonNode getContracts(String loanId) {
         return sourceServiceClient.getLoanContracts(loanId);
+    }
+
+    public JsonNode confirmPaperSignature(String contractId, CmsPrincipal operator) {
+        return sourceServiceClient.confirmPaperSignature(contractId,
+                operator != null ? operator.displayName() : "CMS");
+    }
+
+    public JsonNode confirmAllPaperSignatures(String loanId, CmsPrincipal operator) {
+        return sourceServiceClient.confirmAllPaperSignatures(loanId,
+                operator != null ? operator.displayName() : "CMS");
     }
 
     public JsonNode getDocuments(String loanId) {

@@ -149,7 +149,7 @@ class BusinessProfileServiceTest {
         when(businessProfileRepository.save(any(BusinessProfile.class))).thenAnswer(i -> i.getArgument(0));
         when(userRepository.save(any(User.class))).thenAnswer(i -> i.getArgument(0));
 
-        service.decide("user-1", true, null, "admin-cms");
+        service.decide("user-1", true, null, "admin-cms", null);
 
         assertThat(profile.getStatus()).isEqualTo(KycStatus.APPROVED);
         assertThat(profile.getReviewedBy()).isEqualTo("admin-cms");
@@ -170,9 +170,26 @@ class BusinessProfileServiceTest {
         when(businessProfileRepository.save(any(BusinessProfile.class))).thenAnswer(i -> i.getArgument(0));
         when(userRepository.save(any(User.class))).thenAnswer(i -> i.getArgument(0));
 
-        service.decide("user-1", true, null, "admin-cms");
+        service.decide("user-1", true, null, "admin-cms", null);
 
         assertThat(user.getAccountType()).isEqualTo(AccountType.ENTERPRISE);
+    }
+
+    // ── 5b. Duyệt kèm tên VietQR tra được → ghi đè tên tự nhập ─────────────────
+
+    @Test
+    void decide_approveWithResolvedBusinessName_overridesSubmittedName() {
+        BusinessProfile profile = pendingProfile(BusinessType.COMPANY);
+        User user = userWithKyc(KycStatus.APPROVED);
+        when(businessProfileRepository.findTopByUserIdAndIsDeletedFalseOrderByCreatedAtDesc("user-1"))
+                .thenReturn(Optional.of(profile));
+        when(userRepository.findById("user-1")).thenReturn(Optional.of(user));
+        when(businessProfileRepository.save(any(BusinessProfile.class))).thenAnswer(i -> i.getArgument(0));
+        when(userRepository.save(any(User.class))).thenAnswer(i -> i.getArgument(0));
+
+        service.decide("user-1", true, null, "admin-cms", "CÔNG TY TNHH ABC (VIETQR)");
+
+        assertThat(profile.getBusinessName()).isEqualTo("CÔNG TY TNHH ABC (VIETQR)");
     }
 
     // ── 6. Từ chối → giữ nguyên account_type, lưu lý do, không publish ────────
@@ -184,7 +201,7 @@ class BusinessProfileServiceTest {
                 .thenReturn(Optional.of(profile));
         when(businessProfileRepository.save(any(BusinessProfile.class))).thenAnswer(i -> i.getArgument(0));
 
-        service.decide("user-1", false, "GPKD mờ, không đọc được số đăng ký", "admin-cms");
+        service.decide("user-1", false, "GPKD mờ, không đọc được số đăng ký", "admin-cms", null);
 
         assertThat(profile.getStatus()).isEqualTo(KycStatus.REJECTED);
         assertThat(profile.getRejectReason()).contains("GPKD mờ");
@@ -201,7 +218,7 @@ class BusinessProfileServiceTest {
         when(businessProfileRepository.findTopByUserIdAndIsDeletedFalseOrderByCreatedAtDesc("user-1"))
                 .thenReturn(Optional.of(profile));
 
-        assertThatThrownBy(() -> service.decide("user-1", true, null, "admin-cms"))
+        assertThatThrownBy(() -> service.decide("user-1", true, null, "admin-cms", null))
                 .isInstanceOf(BusinessProfileConflictException.class)
                 .hasMessageContaining("không ở trạng thái chờ duyệt");
     }

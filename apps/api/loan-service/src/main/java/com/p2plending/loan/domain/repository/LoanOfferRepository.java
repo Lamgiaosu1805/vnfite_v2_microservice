@@ -8,8 +8,11 @@ import org.springframework.data.repository.query.Param;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Optional;
 
 public interface LoanOfferRepository extends JpaRepository<LoanOffer, String> {
+    Optional<LoanOffer> findFirstByLoanRequestIdAndInvestorIdAndStatusAndIsDeletedFalse(
+            String loanRequestId, String investorId, OfferStatus status);
 
     List<LoanOffer> findByLoanRequestId(String loanRequestId);
 

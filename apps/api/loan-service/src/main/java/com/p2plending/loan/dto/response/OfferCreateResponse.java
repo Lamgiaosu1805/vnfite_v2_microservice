@@ -5,8 +5,7 @@ import lombok.Builder;
 import lombok.Data;
 
 /**
- * Trả về khi nhà đầu tư đặt lệnh đầu tư: offer được tạo ở trạng thái PENDING +
- * một hợp đồng đầu tư PENDING_SIGNATURE chờ ký OTP để hoàn tất.
+ * Trả về khi nhà đầu tư xác nhận đầu tư. Lệnh được chấp nhận ngay theo luồng vận hành hiện hành.
  */
 @Data
 @Builder

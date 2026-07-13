@@ -132,6 +132,8 @@ app:
     window-days: ${APP_FUNDING_WINDOW_DAYS:180}
     # Số ngày người gọi vốn được phép ký khế ước sau khi FUNDED trước khi hủy & hoàn tiền
     signing-window-days: ${APP_FUNDING_SIGNING_WINDOW_DAYS:7}
+    # Số ngày người gọi vốn được phép xác nhận điều khoản sau khi ban lãnh đạo duyệt trước khi tự hủy
+    borrower-confirmation-window-days: ${APP_FUNDING_BORROWER_CONFIRMATION_WINDOW_DAYS:7}
     # Cron quét hết hạn gọi vốn / ký khế ước hằng ngày (giờ Việt Nam)
     expiry-cron: ${APP_FUNDING_EXPIRY_CRON:0 30 1 * * *}
   appraisal:

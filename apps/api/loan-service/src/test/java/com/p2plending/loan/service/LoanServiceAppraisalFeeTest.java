@@ -3,12 +3,16 @@ package com.p2plending.loan.service;
 import com.p2plending.loan.client.AuthServiceClient;
 import com.p2plending.loan.client.PaymentServiceClient;
 import com.p2plending.loan.domain.entity.LoanOffer;
+import com.p2plending.loan.domain.entity.LoanContract;
 import com.p2plending.loan.domain.entity.LoanProduct;
 import com.p2plending.loan.domain.entity.LoanRequest;
 import com.p2plending.loan.domain.enums.LoanStatus;
+import com.p2plending.loan.domain.enums.ContractStatus;
+import com.p2plending.loan.domain.enums.ContractType;
 import com.p2plending.loan.domain.enums.OfferStatus;
 import com.p2plending.loan.domain.repository.FeeRevenueLedgerRepository;
 import com.p2plending.loan.domain.repository.LoanDocumentRepository;
+import com.p2plending.loan.domain.repository.LoanContractRepository;
 import com.p2plending.loan.domain.repository.LoanOfferRepository;
 import com.p2plending.loan.domain.repository.LoanRequestRepository;
 import com.p2plending.loan.dto.response.LoanResponse;
@@ -41,6 +45,7 @@ class LoanServiceAppraisalFeeTest {
     @Mock LoanRequestRepository loanRequestRepository;
     @Mock LoanOfferRepository   loanOfferRepository;
     @Mock LoanDocumentRepository loanDocumentRepository;
+    @Mock LoanContractRepository loanContractRepository;
     @Mock LoanRequestMapper     loanRequestMapper;
     @Mock LoanOfferMapper       loanOfferMapper;
     @Mock KafkaProducerService  kafkaProducerService;
@@ -58,6 +63,16 @@ class LoanServiceAppraisalFeeTest {
     void setup() {
         ReflectionTestUtils.setField(loanService, "fundingWindowDays", 30);
         ReflectionTestUtils.setField(loanService, "signingWindowDays", 7);
+        LoanContract signedLoanAgreement = LoanContract.builder()
+                .contractType(ContractType.LOAN_AGREEMENT)
+                .status(ContractStatus.SIGNED)
+                .build();
+        LoanContract signedInvestmentContract = LoanContract.builder()
+                .contractType(ContractType.INVESTMENT)
+                .status(ContractStatus.SIGNED)
+                .build();
+        lenient().when(loanContractRepository.findByLoanIdAndIsDeletedFalseOrderByCreatedAtDesc(anyString()))
+                .thenReturn(List.of(signedLoanAgreement, signedInvestmentContract));
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
@@ -93,6 +108,24 @@ class LoanServiceAppraisalFeeTest {
         when(loanRequestMapper.toResponse(loan)).thenReturn(resp);
         when(loanRequestRepository.findById(loan.getId())).thenReturn(Optional.of(loan));
         return resp;
+    }
+
+    @Test
+    void disburse_rejectsLoanWithoutBorrowerLoanAgreement() {
+        LoanRequest loan = pendingReviewLoan("loan-missing-agreement");
+        loan.setStatus(LoanStatus.AWAITING_DISBURSEMENT);
+        when(loanRequestRepository.findById(loan.getId())).thenReturn(Optional.of(loan));
+        LoanContract investorContract = LoanContract.builder()
+                .loanId(loan.getId())
+                .contractType(ContractType.INVESTMENT)
+                .status(ContractStatus.SIGNED)
+                .build();
+        when(loanContractRepository.findByLoanIdAndIsDeletedFalseOrderByCreatedAtDesc(loan.getId()))
+                .thenReturn(List.of(investorContract));
+
+        assertThatThrownBy(() -> loanService.disburse(loan.getId(), "CMS"))
+                .isInstanceOf(InvalidLoanStateException.class)
+                .hasMessageContaining("chưa có khế ước vay");
     }
 
     // ── 1. feeRate = 0.00 (miễn phí) ─────────────────────────────────────────

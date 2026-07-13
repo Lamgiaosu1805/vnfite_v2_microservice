@@ -160,6 +160,10 @@ P2P lending loans must not go live immediately after CMS leadership approval:
 
 Never change CMS approval to directly publish a loan to the marketplace unless the user explicitly changes the business flow.
 
+After `ACTIVE`, once fully funded the loan becomes `FUNDED` (investor offers auto-accept and lock funds immediately via `LoanService.acceptOfferImmediately` — no signing step for investors). There is no real e-contract generation yet: the borrower must sign the `LOAN_AGREEMENT` contract on paper in person, and CMS staff confirm it via `ContractService.confirmPaperSignature` (`POST /cms/loans/contracts/{contractId}/confirm-paper-signature`), which moves the loan to `AWAITING_DISBURSEMENT`. Investor `INVESTMENT` contracts never need signing and permanently stay `PENDING_SIGNATURE` — this is accepted design, not a bug; do not show a "confirm signature" action for them.
+
+Loans with `productCategory` `BUSINESS`/`ENTERPRISE` (fundraiser side) must be attributed to the business/household in any response used for CMS display (see `SourceServiceClient.parseLoan` / `LoanSummaryResponse` resolving business name), not the individual account holder. The investor side is not yet separated this way — `InvestorCashflowResponse` has no `ownerType` field, so CMS cannot yet distinguish personal vs. business investment history; add it there before extending the separation to investors.
+
 ## Credit Score 360 And Appraisal Rules
 
 Credit evaluation standard:

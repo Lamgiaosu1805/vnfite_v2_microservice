@@ -513,6 +513,15 @@ public class AuthService {
                 .findTopByUserIdAndStatusOrderByCreatedAtDesc(user.getId(), KycStatus.APPROVED)
                 .ifPresent(kyc -> userResponse.setFullName(kyc.getFullName()));
 
+        // Hồ sơ doanh nghiệp — cần có ngay ở login/refresh để app hiện được toggle ví doanh nghiệp
+        businessProfileRepository.findTopByUserIdAndIsDeletedFalseOrderByCreatedAtDesc(user.getId())
+                .ifPresent(bp -> {
+                    userResponse.setBusinessProfileStatus(bp.getStatus());
+                    userResponse.setBusinessType(bp.getBusinessType());
+                    userResponse.setBusinessName(bp.getBusinessName());
+                    userResponse.setBusinessRejectReason(bp.getRejectReason());
+                });
+
         return AuthResponse.builder()
                 .accessToken(accessToken)
                 .refreshToken(refreshToken)

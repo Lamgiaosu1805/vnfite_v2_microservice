@@ -9,10 +9,13 @@ import com.p2plending.loan.domain.entity.LoanDocument;
 import com.p2plending.loan.domain.entity.LoanOffer;
 import com.p2plending.loan.domain.entity.LoanProduct;
 import com.p2plending.loan.domain.entity.LoanRequest;
+import com.p2plending.loan.domain.enums.ContractStatus;
+import com.p2plending.loan.domain.enums.ContractType;
 import com.p2plending.loan.domain.enums.LoanStatus;
 import com.p2plending.loan.domain.enums.OfferStatus;
 import com.p2plending.loan.domain.enums.ProductCategory;
 import com.p2plending.loan.domain.repository.FeeRevenueLedgerRepository;
+import com.p2plending.loan.domain.repository.LoanContractRepository;
 import com.p2plending.loan.domain.repository.LoanDocumentRepository;
 import com.p2plending.loan.domain.repository.LoanOfferRepository;
 import com.p2plending.loan.domain.repository.LoanRequestRepository;
@@ -87,6 +90,7 @@ public class LoanService {
 
     private final LoanRequestRepository  loanRequestRepository;
     private final LoanOfferRepository    loanOfferRepository;
+    private final LoanContractRepository loanContractRepository;
     private final LoanDocumentRepository loanDocumentRepository;
     private final FeeRevenueLedgerRepository feeRevenueLedgerRepository;
     private final LoanRequestMapper      loanRequestMapper;
@@ -100,13 +104,21 @@ public class LoanService {
     private final CacheManager           cacheManager;
     private final KycGuardService        kycGuardService;
 
-    /** Số ngày một khoản được phép ở trạng thái ACTIVE để gọi vốn trước khi hết hạn & hoàn tiền. */
-    @Value("${app.funding.window-days:30}")
+    /**
+     * Số ngày một khoản được phép ở trạng thái ACTIVE để gọi vốn trước khi hết hạn & hoàn tiền.
+     * Fallback 180 khớp với default thật ở application.yml — không dùng số khác ở đây để tránh
+     * 2 nguồn sự thật (xem sự cố cancel hàng loạt khoản migrate từng xảy ra khi 2 giá trị lệch nhau).
+     */
+    @Value("${app.funding.window-days:180}")
     private int fundingWindowDays;
 
     /** Số ngày người gọi vốn được phép ký khế ước sau khi FUNDED; quá hạn → hủy & hoàn tiền. */
     @Value("${app.funding.signing-window-days:7}")
     private int signingWindowDays;
+
+    /** Số ngày người gọi vốn được phép xác nhận điều khoản sau khi ban lãnh đạo duyệt; quá hạn → tự hủy. */
+    @Value("${app.funding.borrower-confirmation-window-days:7}")
+    private int borrowerConfirmationWindowDays;
 
     // ── Create ────────────────────────────────────────────────────
 
@@ -248,7 +260,11 @@ public class LoanService {
         @CacheEvict(value = CacheConfig.CACHE_LOAN_BY_ID, key = "#loanId")
     })
     public OfferCreateResponse createOffer(String loanId, LoanOfferCreateRequest request, String investorId) {
-        LoanRequest loan = findLoanOrThrow(loanId);
+        // Khóa row khoản gọi vốn trong suốt transaction — serialize các lệnh đặt offer đồng thời
+        // trên cùng 1 khoản, tránh 2 nhà đầu tư cùng vượt qua check "còn đủ chỗ" rồi cùng được
+        // chấp nhận, khiến fundedAmount vượt quá amount.
+        LoanRequest loan = loanRequestRepository.findByIdForUpdate(loanId)
+                .orElseThrow(() -> new LoanNotFoundException(loanId));
 
         if (!OFFERABLE_STATUSES.contains(loan.getStatus())) {
             throw new InvalidLoanStateException(
@@ -309,34 +325,55 @@ public class LoanService {
                     .formatted(available, request.getAmount()));
         }
 
-        // Không cho phép cùng nhà đầu tư đặt offer trùng khi đã có offer đang PENDING hoặc ACCEPTED
+        // Lệnh PENDING được tạo bởi luồng khế ước điện tử cũ: hoàn tất theo luồng hiện hành,
+        // tránh bắt nhà đầu tư tạo lệnh thứ hai hoặc phải xử lý DB thủ công.
+        var pending = loanOfferRepository.findFirstByLoanRequestIdAndInvestorIdAndStatusAndIsDeletedFalse(
+                loanId, investorId, OfferStatus.PENDING);
+        if (pending.isPresent()) {
+            acceptOfferImmediately(loan, pending.get());
+            return OfferCreateResponse.builder().offerId(pending.get().getId()).build();
+        }
+
+        // Không cho phép cùng nhà đầu tư đặt offer trùng khi đã được chấp nhận.
         if (loanOfferRepository.existsByLoanRequestIdAndInvestorIdAndStatusIn(
-                loanId, investorId, List.of(OfferStatus.PENDING, OfferStatus.ACCEPTED))) {
+                loanId, investorId, List.of(OfferStatus.ACCEPTED))) {
             throw new InvalidLoanStateException(
                     "Bạn đã có lệnh đầu tư đang chờ xử lý hoặc đã được chấp nhận cho khoản gọi vốn này.");
         }
 
-        // Offer ở trạng thái PENDING (giữ chỗ) — chỉ tính vào fundedAmount sau khi nhà đầu tư
-        // ký hợp đồng đầu tư bằng OTP (ContractService.signContract).
+        // Luồng vận hành hiện tại: xác nhận đầu tư thì chấp nhận và khóa tiền ngay.
         LoanOffer offer = LoanOffer.builder()
                 .loanRequestId(loanId)
                 .investorId(investorId)
                 .ownerType(ownerType)
                 .amount(request.getAmount())
-                .status(OfferStatus.PENDING)
+                .status(OfferStatus.ACCEPTED)
                 .build();
 
         LoanOffer saved = loanOfferRepository.save(offer);
+        contractService.issueInvestmentContract(loan, saved);
+        acceptOfferImmediately(loan, saved);
+        return OfferCreateResponse.builder().offerId(saved.getId()).build();
+    }
 
-        // Phát hành hợp đồng đầu tư PENDING_SIGNATURE để nhà đầu tư ký OTP.
-        LoanContract contract = contractService.issueInvestmentContract(loan, saved);
-
-        log.info("Offer created (PENDING, awaiting signature): id={} loan={} investor={} amount={} contract={}",
-                saved.getId(), loanId, investorId, request.getAmount(), contract.getId());
-        return OfferCreateResponse.builder()
-                .offerId(saved.getId())
-                .contract(contractService.toContractResponse(contract, loan))
-                .build();
+    private void acceptOfferImmediately(LoanRequest loan, LoanOffer offer) {
+        if (offer.getStatus() == OfferStatus.PENDING) {
+            offer.setStatus(OfferStatus.ACCEPTED);
+            loanOfferRepository.save(offer);
+        }
+        paymentServiceClient.lock(offer.getInvestorId(), offer.getOwnerType(), offer.getAmount(),
+                "Đầu tư khoản gọi vốn " + loan.getLoanCode(), "LOCK-" + offer.getId());
+        BigDecimal accepted = loanOfferRepository.sumAmountByLoanRequestIdAndStatus(loan.getId(), OfferStatus.ACCEPTED);
+        loan.setFundedAmount(accepted == null ? BigDecimal.ZERO : accepted);
+        if (loan.isFullyFunded() && loan.getStatus() == LoanStatus.ACTIVE) {
+            loan.setStatus(LoanStatus.FUNDED);
+            loan.setFundedAt(LocalDateTime.now(ZoneId.of("Asia/Ho_Chi_Minh")));
+            contractService.issueLoanAgreement(loan);
+            kafkaProducerService.publishLoanFunded(loan);
+        }
+        loanRequestRepository.save(loan);
+        log.info("Offer {} accepted immediately; loan={} fundedAmount={}",
+                offer.getId(), loan.getId(), loan.getFundedAmount());
     }
 
     /** Giải ngân (OPS trên CMS): AWAITING_DISBURSEMENT → DISBURSED, sinh lịch trả nợ từ ngày giải ngân. */
@@ -354,6 +391,35 @@ public class LoanService {
                     .formatted(loan.getLoanCode(), loan.getStatus()));
         }
 
+        List<LoanContract> contracts = loanContractRepository
+                .findByLoanIdAndIsDeletedFalseOrderByCreatedAtDesc(loanId);
+        boolean hasLoanAgreement = contracts.stream()
+                .anyMatch(contract -> contract.getContractType() == ContractType.LOAN_AGREEMENT);
+        if (!hasLoanAgreement) {
+            throw new InvalidLoanStateException(
+                    "Khoản gọi vốn %s chưa có khế ước vay của người gọi vốn — chưa thể giải ngân"
+                            .formatted(loan.getLoanCode()));
+        }
+
+        List<LoanOffer> acceptedOffers = loanOfferRepository
+                .findByLoanRequestIdAndStatus(loanId, OfferStatus.ACCEPTED);
+        long investmentContractCount = contracts.stream()
+                .filter(contract -> contract.getContractType() == ContractType.INVESTMENT)
+                .count();
+        if (investmentContractCount < acceptedOffers.size()) {
+            throw new InvalidLoanStateException(
+                    "Khoản gọi vốn %s thiếu khế ước đầu tư tương ứng với lệnh đã chốt — chưa thể giải ngân"
+                            .formatted(loan.getLoanCode()));
+        }
+
+        boolean hasUnsignedContract = contracts.stream()
+                .anyMatch(contract -> contract.getStatus() != ContractStatus.SIGNED);
+        if (hasUnsignedContract) {
+            throw new InvalidLoanStateException(
+                    "Khoản gọi vốn %s vẫn còn khế ước chưa được xác nhận ký giấy — chưa thể giải ngân"
+                            .formatted(loan.getLoanCode()));
+        }
+
         loan.setStatus(LoanStatus.DISBURSED);
         loan.setDisbursedAt(LocalDateTime.now(ZoneId.of("Asia/Ho_Chi_Minh")));
         loan.setDisbursedBy(disbursedBy);
@@ -361,9 +427,6 @@ public class LoanService {
 
         // Sinh lịch trả nợ từ ngày giải ngân (generator dùng LocalDate.now).
         repaymentService.generateSchedule(loan);
-
-        List<LoanOffer> acceptedOffers = loanOfferRepository
-                .findByLoanRequestIdAndStatus(loanId, OfferStatus.ACCEPTED);
 
         // Tính tổng offer ACCEPTED — phải khớp với loan.amount trước khi debit bất kỳ nhà đầu tư nào.
         BigDecimal totalAccepted = acceptedOffers.stream()
@@ -491,6 +554,20 @@ public class LoanService {
         LocalDateTime cutoff = LocalDateTime.now(ZoneId.of("Asia/Ho_Chi_Minh")).minusDays(signingWindowDays);
         return loanRequestRepository
                 .findByStatusAndFundedAtBeforeAndIsDeletedFalse(LoanStatus.FUNDED, cutoff)
+                .stream().map(LoanRequest::getId).toList();
+    }
+
+    /**
+     * ID các khoản AWAITING_BORROWER_APPROVAL kẹt — ban lãnh đạo đã duyệt nhưng người gọi vốn
+     * không xác nhận điều khoản trong thời hạn cho phép. Chưa có nhà đầu tư nào cam kết vốn ở
+     * trạng thái này nên hủy thẳng, không cần hoàn tiền (refundInvestorsAndVoid vẫn an toàn gọi
+     * vì danh sách offer ACCEPTED của khoản này luôn rỗng).
+     */
+    @Transactional(readOnly = true)
+    public List<String> findExpiredAwaitingBorrowerApprovalLoanIds() {
+        LocalDateTime cutoff = LocalDateTime.now(ZoneId.of("Asia/Ho_Chi_Minh")).minusDays(borrowerConfirmationWindowDays);
+        return loanRequestRepository
+                .findByStatusAndReviewedAtBeforeAndIsDeletedFalse(LoanStatus.AWAITING_BORROWER_APPROVAL, cutoff)
                 .stream().map(LoanRequest::getId).toList();
     }
 

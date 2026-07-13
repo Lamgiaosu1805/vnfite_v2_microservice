@@ -13,4 +13,11 @@ public class BusinessProfileDecisionInternalRequest {
 
     /** Admin CMS thực hiện quyết định (displayName). */
     private String reviewedBy;
+
+    /**
+     * Tên công ty tra được từ VietQR (MST) tại thời điểm duyệt — CMS tự tra trước khi gửi quyết định.
+     * Khi duyệt, nếu có giá trị này thì dùng làm tên chính thức thay cho tên tự nhập;
+     * null/rỗng (VietQR không tra ra) thì giữ nguyên tên hồ sơ đã nộp.
+     */
+    private String resolvedBusinessName;
 }

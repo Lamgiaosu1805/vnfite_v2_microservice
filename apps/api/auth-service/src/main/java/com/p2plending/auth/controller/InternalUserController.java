@@ -151,7 +151,8 @@ public class InternalUserController {
             @PathVariable String userId,
             @Valid @RequestBody BusinessProfileDecisionInternalRequest request) {
         requireInternalSecret(secret);
-        businessProfileService.decide(userId, request.isApproved(), request.getReason(), request.getReviewedBy());
+        businessProfileService.decide(userId, request.isApproved(), request.getReason(), request.getReviewedBy(),
+                request.getResolvedBusinessName());
         return ResponseEntity.noContent().build();
     }
 

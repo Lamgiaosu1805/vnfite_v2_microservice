@@ -55,6 +55,12 @@ public class LoanManagementController {
         return ResponseEntity.ok(loanService.getLoans(status, borrowerId, province, search, productCategories, page, size));
     }
 
+    /** GET /cms/loans/{loanId} — chi tiết khoản, bao gồm danh sách lệnh nhà đầu tư. */
+    @GetMapping("/{loanId}")
+    public ResponseEntity<LoanSummaryResponse> getLoan(@PathVariable String loanId) {
+        return ResponseEntity.ok(loanService.getLoan(loanId));
+    }
+
     /**
      * GET /cms/loans/{loanId}/appraisal-suggestion
      * Gợi ý hỗ trợ thẩm định: điểm/hạng tín nhiệm, năng lực trả nợ, số tiền & lãi suất + phí
@@ -251,6 +257,20 @@ public class LoanManagementController {
             @PathVariable String loanId,
             @AuthenticationPrincipal CmsPrincipal operator) {
         return ResponseEntity.ok(loanService.disburse(loanId, operator));
+    }
+
+    @PostMapping("/contracts/{contractId}/confirm-paper-signature")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'OPS') or hasAuthority('loan.disburse')")
+    public ResponseEntity<com.fasterxml.jackson.databind.JsonNode> confirmPaperSignature(
+            @PathVariable String contractId, @AuthenticationPrincipal CmsPrincipal operator) {
+        return ResponseEntity.ok(loanService.confirmPaperSignature(contractId, operator));
+    }
+
+    @PostMapping("/{loanId}/confirm-all-paper-signatures")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'OPS') or hasAuthority('loan.disburse')")
+    public ResponseEntity<com.fasterxml.jackson.databind.JsonNode> confirmAllPaperSignatures(
+            @PathVariable String loanId, @AuthenticationPrincipal CmsPrincipal operator) {
+        return ResponseEntity.ok(loanService.confirmAllPaperSignatures(loanId, operator));
     }
 
     /**
