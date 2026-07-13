@@ -15,7 +15,7 @@ public interface KycSubmissionRepository extends JpaRepository<KycSubmission, St
 
     boolean existsByUserIdAndCccdNumber(String userId, String cccdNumber);
 
-    List<KycSubmission> findByUserId(String userId);
+    KycSubmission findByUserId(String userId);
 
     /** Lấy submission APPROVED mới nhất của user — dùng để lấy fullName. */
     Optional<KycSubmission> findTopByUserIdAndStatusOrderByCreatedAtDesc(String userId, KycStatus status);
