@@ -40,6 +40,7 @@ public class LoanOtpService {
     private final RedisNamespaceProperties redisNamespaceProperties;
     private final VnfOtpSenderService vnfOtpSenderService;
     private final KycGuardService kycGuardService;
+    private final OtpRateLimitService otpRateLimitService;
 
     @Value("${app.otp.mock:true}")
     private boolean mockOtp;
@@ -47,6 +48,7 @@ public class LoanOtpService {
     // ── Init ─────────────────────────────────────────────────────────────────
 
     public LoanOtpInitResponse init(LoanCreateRequest request, String borrowerId) {
+        otpRateLimitService.assertCanRequest(borrowerId);
         String otp = resolveOtp(borrowerId);
 
         PendingLoanData pending = PendingLoanData.builder()
@@ -95,6 +97,8 @@ public class LoanOtpService {
     // ── Confirm ───────────────────────────────────────────────────────────────
 
     public LoanResponse confirm(String otp, String borrowerId) {
+        otpRateLimitService.assertCanVerify(borrowerId);
+
         String key = pendingKey(borrowerId);
         String json = redisTemplate.opsForValue().get(key);
 
@@ -113,9 +117,11 @@ public class LoanOtpService {
         }
 
         if (!pending.getOtp().equals(otp)) {
+            otpRateLimitService.recordFailedVerify(borrowerId);
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "Mã OTP không đúng. Vui lòng kiểm tra lại.");
         }
+        otpRateLimitService.clearVerifyFailures(borrowerId);
 
         // Consume once — xóa key khỏi Redis
         redisTemplate.delete(key);

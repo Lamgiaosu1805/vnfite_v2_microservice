@@ -83,6 +83,15 @@ public class WithdrawalRequestService {
                                       BigDecimal amount, String linkedBankId) {
         WithdrawalTransferConfig cfg = activeConfig();
 
+        // Chống spam OTP qua vòng lặp initiate → cancel → initiate (bỏ qua vì "1 active tại
+        // một thời điểm" không chặn được việc hủy rồi tạo lại ngay lập tức).
+        String ns = appProperties.getRedis().getNamespace();
+        String initiateCooldownKey = ns + ":withdrawal_otp_initiate:" + userId;
+        if (Boolean.TRUE.equals(redisTemplate.hasKey(initiateCooldownKey))) {
+            throw new IllegalStateException(
+                    "Vui lòng chờ 60 giây trước khi tạo yêu cầu rút tiền mới.");
+        }
+
         // Một user chỉ được có 1 withdrawal active tại một thời điểm
         if (withdrawalRepository.existsByUserIdAndOwnerTypeAndStatusInAndIsDeletedFalse(
                 userId, ownerType, WithdrawalStatus.ACTIVE)) {
@@ -142,6 +151,7 @@ public class WithdrawalRequestService {
         audit(wr, null, WithdrawalStatus.INITIATED, "USER", userId, "Tạo yêu cầu rút tiền");
 
         sendOtp(wr.getId(), userId);
+        redisTemplate.opsForValue().set(initiateCooldownKey, "1", 60, TimeUnit.SECONDS);
         transition(wr, WithdrawalStatus.OTP_PENDING, "USER", userId, "Đã gửi OTP");
 
         log.info("withdrawal.initiate withdrawalId={} userId={} ownerType={} amount={}",

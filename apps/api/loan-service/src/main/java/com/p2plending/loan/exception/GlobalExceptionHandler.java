@@ -35,6 +35,13 @@ public class GlobalExceptionHandler {
                 .body(ErrorResponse.of(HttpStatus.CONFLICT.value(), ex.getMessage()));
     }
 
+    @ExceptionHandler(OtpRateLimitException.class)
+    public ResponseEntity<ErrorResponse> handleOtpRateLimit(OtpRateLimitException ex) {
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .header("Retry-After", String.valueOf(ex.getRetryAfterSeconds()))
+                .body(ErrorResponse.of(HttpStatus.TOO_MANY_REQUESTS.value(), ex.getMessage()));
+    }
+
     @ExceptionHandler(OptimisticLockingFailureException.class)
     public ResponseEntity<ErrorResponse> handleOptimisticLock(OptimisticLockingFailureException ex) {
         log.warn("Optimistic lock conflict: {}", ex.getMessage());
