@@ -21,7 +21,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
-import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
@@ -64,8 +63,8 @@ public class PasswordResetService {
     // ── Bước 1: xác minh danh tính, gửi OTP ──────────────────────────────
 
     @Transactional(readOnly = true)
-    public Map<String, String> initReset(ForgotPasswordRequest request) {
-        otpRateLimitService.assertCanRequest(request.getPhone());
+    public Map<String, String> initReset(ForgotPasswordRequest request, String clientIp) {
+        otpRateLimitService.assertCanRegisterRequest(request.getPhone(), clientIp);
 
         Optional<User> userOpt = userRepository.findByPhone(request.getPhone());
 
@@ -92,7 +91,10 @@ public class PasswordResetService {
             log.info("[MOCK] Password reset OTP for phone={}: {}", request.getPhone(), otp);
         } else {
             String sentOtp = vnfOtpSenderService.sendOtp(request.getPhone(), VnfOtpSenderService.FN_FORGOT_PASSWORD);
-            otp = (sentOtp != null) ? sentOtp : String.format("%06d", new SecureRandom().nextInt(1_000_000));
+            if (!StringUtils.hasText(sentOtp)) {
+                throw new InvalidOtpException("Không gửi được OTP đặt lại mật khẩu. Vui lòng thử lại sau.");
+            }
+            otp = sentOtp;
         }
         redisTemplate.opsForValue().set(otpKey(request.getPhone()), otp, OTP_TTL);
 

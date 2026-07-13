@@ -185,9 +185,13 @@ public class AuthController {
      * Xác minh danh tính qua CCCD để đặt lại session (dùng khi mất thiết bị cũ).
      */
     @PostMapping("/device-reset/init")
-    public ResponseEntity<Map<String, String>> deviceResetInit(@Valid @RequestBody DeviceResetInitRequest request) {
+    public ResponseEntity<Map<String, String>> deviceResetInit(
+            @Valid @RequestBody DeviceResetInitRequest request,
+            HttpServletRequest servletRequest) {
+        String clientIp = resolveClientIp(servletRequest);
+        otpIpBlockService.assertRegistrationAllowed(clientIp);
         return ResponseEntity.ok(authService.initDeviceReset(
-                request.getPhone(), request.getCccdNumber(), request.getIssueDate()));
+                request.getPhone(), request.getCccdNumber(), request.getIssueDate(), clientIp));
     }
 
     /**
@@ -271,8 +275,12 @@ public class AuthController {
      * - Đã eKYC: phone + cccdNumber.
      */
     @PostMapping("/forgot-password")
-    public ResponseEntity<Map<String, String>> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
-        return ResponseEntity.ok(passwordResetService.initReset(request));
+    public ResponseEntity<Map<String, String>> forgotPassword(
+            @Valid @RequestBody ForgotPasswordRequest request,
+            HttpServletRequest servletRequest) {
+        String clientIp = resolveClientIp(servletRequest);
+        otpIpBlockService.assertRegistrationAllowed(clientIp);
+        return ResponseEntity.ok(passwordResetService.initReset(request, clientIp));
     }
 
     /**

@@ -760,8 +760,8 @@ public class AuthService {
     // ── Device Reset (xác minh qua CCCD để đặt lại session) ──────────────────
 
     @Transactional(readOnly = true)
-    public Map<String, String> initDeviceReset(String phone, String cccdNumber, String issueDateStr) {
-        otpRateLimitService.assertCanRequest(phone);
+    public Map<String, String> initDeviceReset(String phone, String cccdNumber, String issueDateStr, String clientIp) {
+        otpRateLimitService.assertCanRegisterRequest(phone, clientIp);
 
         User user = userRepository.findByPhone(phone)
                 .orElseThrow(() -> new InvalidCredentialsException("Số điện thoại không tồn tại trong hệ thống"));
@@ -788,7 +788,10 @@ public class AuthService {
             log.info("[MOCK] Device reset OTP for phone={}: {}", phone, otp);
         } else {
             String sentOtp = vnfOtpSenderService.sendOtp(phone, VnfOtpSenderService.FN_DEVICE_RESET);
-            otp = (sentOtp != null) ? sentOtp : String.format("%06d", new SecureRandom().nextInt(1_000_000));
+            if (!StringUtils.hasText(sentOtp)) {
+                throw new InvalidOtpException("Không gửi được OTP đặt lại thiết bị. Vui lòng thử lại sau.");
+            }
+            otp = sentOtp;
         }
         redisTemplate.opsForValue().set(deviceResetOtpKey(phone), otp, DEVICE_RESET_OTP_TTL);
 
