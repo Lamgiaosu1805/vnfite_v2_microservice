@@ -1,5 +1,6 @@
 package com.p2plending.payment.service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.p2plending.payment.domain.entity.ManualDepositRequest;
 import com.p2plending.payment.domain.entity.Wallet;
 import com.p2plending.payment.domain.enums.ManualDepositStatus;
@@ -12,6 +13,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.kafka.core.KafkaTemplate;
 
 import java.math.BigDecimal;
 import java.util.Optional;
@@ -31,6 +33,8 @@ class ManualDepositServiceTest {
     @Mock private WalletTransactionRepository walletTransactionRepository;
     @Mock private WalletService walletService;
     @Mock private TikluyClient tikluyClient;
+    @Mock private KafkaTemplate<String, String> kafkaTemplate;
+    @Mock private ObjectMapper objectMapper;
     @InjectMocks private ManualDepositService manualDepositService;
 
     @Test
@@ -59,18 +63,21 @@ class ManualDepositServiceTest {
     }
 
     @Test
-    void reject_doesNotCreditWallet() {
+    void reject_doesNotCreditWallet() throws Exception {
         ManualDepositRequest request = ManualDepositRequest.builder()
                 .id("bill-2")
+                .userId("user-2")
                 .status(ManualDepositStatus.PENDING)
                 .build();
         when(requestRepository.findByIdForUpdate("bill-2")).thenReturn(Optional.of(request));
         when(requestRepository.save(any(ManualDepositRequest.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(objectMapper.writeValueAsString(any())).thenReturn("{}");
 
         manualDepositService.reject("bill-2", "finance-1", "Bill không khớp số tiền");
 
         verify(tikluyClient, never()).creditManualDeposit(any(), any(), any());
         verify(walletService, never()).processDeposit(any(), any(), any(), any(), any(), any());
+        verify(kafkaTemplate).send("payment.manual_deposit_status", "user-2", "{}");
         assertThat(request.getStatus()).isEqualTo(ManualDepositStatus.REJECTED);
     }
 }

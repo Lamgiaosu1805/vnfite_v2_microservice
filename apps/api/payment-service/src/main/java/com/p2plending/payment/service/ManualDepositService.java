@@ -1,5 +1,6 @@
 package com.p2plending.payment.service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.p2plending.payment.domain.entity.ManualDepositRequest;
 import com.p2plending.payment.domain.entity.Wallet;
 import com.p2plending.payment.domain.enums.ManualDepositStatus;
@@ -13,12 +14,15 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -30,6 +34,8 @@ public class ManualDepositService {
     private final WalletTransactionRepository walletTransactionRepository;
     private final WalletService walletService;
     private final TikluyClient tikluyClient;
+    private final KafkaTemplate<String, String> kafkaTemplate;
+    private final ObjectMapper objectMapper;
 
     @Transactional
     public ManualDepositResponse create(String userId, ManualDepositCreateRequest input) {
@@ -49,6 +55,7 @@ public class ManualDepositService {
                 .build());
         log.info("Manual deposit requested: request={} user={} wallet={} amount={}",
                 request.getId(), userId, wallet.getId(), amount);
+        publishStatusEvent(request);
         return ManualDepositResponse.from(request);
     }
 
@@ -100,6 +107,7 @@ public class ManualDepositService {
         request.setReviewedBy(blankToNull(reviewedBy));
         request.setReviewedAt(LocalDateTime.now(java.time.ZoneId.of("Asia/Ho_Chi_Minh")));
         requestRepository.save(request);
+        publishStatusEvent(request);
         log.info("Manual deposit rejected: request={} by={}", requestId, reviewedBy);
         return ManualDepositResponse.from(request);
     }
@@ -126,5 +134,20 @@ public class ManualDepositService {
 
     private String blankToNull(String value) {
         return value == null || value.isBlank() ? null : value.trim();
+    }
+
+    private void publishStatusEvent(ManualDepositRequest request) {
+        try {
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("requestId", request.getId());
+            payload.put("userId", request.getUserId());
+            payload.put("amount", request.getAmount());
+            payload.put("status", request.getStatus().name());
+            payload.put("rejectionReason", request.getRejectionReason());
+            kafkaTemplate.send("payment.manual_deposit_status", request.getUserId(),
+                    objectMapper.writeValueAsString(payload));
+        } catch (Exception ex) {
+            log.error("Could not publish manual deposit status request={}: {}", request.getId(), ex.getMessage(), ex);
+        }
     }
 }
