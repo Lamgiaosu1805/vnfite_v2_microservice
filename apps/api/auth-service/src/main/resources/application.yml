@@ -62,6 +62,12 @@ spring:
       value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       enable-auto-commit: false
 
+  vwork:
+    url: ${VWORK_URL}
+    api-key: ${VWORK_API_KEY}
+    user-upsert: customer/upsert
+    customer-bulk-upsert: customer/bulk-upsert
+
 server:
   port: 8081
   servlet:
