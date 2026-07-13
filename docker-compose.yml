@@ -58,6 +58,8 @@ services:
   kafka:
     image: confluentinc/cp-kafka:7.5.0
     container_name: p2p-kafka
+#    ports:
+#      - "9092:9092"
     depends_on:
       zookeeper:
         condition: service_healthy
@@ -119,6 +121,9 @@ services:
       APP_MIN_VERSION_IOS: ${APP_MIN_VERSION_IOS:-1.5.7}
       APP_MIN_VERSION_ANDROID: ${APP_MIN_VERSION_ANDROID:-1.5.7}
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
+      # VWork CRM
+      VWORK_URL: ${VWORK_URL}
+      VWORK_API_KEY: ${VWORK_API_KEY}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
