@@ -42,7 +42,7 @@ class OtpServiceTest {
         when(vnfOtpSenderService.sendOtp("0900000000", VnfOtpSenderService.FN_REGISTER)).thenReturn(null);
 
         assertThrows(InvalidOtpException.class, () -> otpService.generateAndStore(
-                new PendingRegistration("0900000000", "hash", null, null), "203.0.113.8"));
+                new PendingRegistration("0900000000", "hash", null, null, null), "203.0.113.8"));
 
         verify(otpRateLimitService).assertCanRegisterRequest("0900000000", "203.0.113.8");
         verify(redisTemplate, never()).opsForValue();
