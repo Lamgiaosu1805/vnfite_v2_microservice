@@ -75,6 +75,7 @@ public class ContractService {
     private final AuthServiceClient        authServiceClient;
     private final VnfOtpSenderService      vnfOtpSenderService;
     private final LoanProductService       loanProductService;
+    private final OtpRateLimitService      otpRateLimitService;
 
     @Value("${app.otp.mock:true}")
     private boolean mockOtp;
@@ -158,6 +159,7 @@ public class ContractService {
             throw new InvalidLoanStateException("Hợp đồng đã được ký hoặc không ở trạng thái chờ ký.");
         }
 
+        otpRateLimitService.assertCanRequest(userId + ":" + contractId);
         String otp = resolveOtp(userId);
         redisTemplate.opsForValue().set(otpKey(contractId), otp, OTP_TTL);
 
@@ -175,6 +177,9 @@ public class ContractService {
             throw new InvalidLoanStateException("Hợp đồng đã được ký hoặc không ở trạng thái chờ ký.");
         }
 
+        String verifySubject = userId + ":" + contractId;
+        otpRateLimitService.assertCanVerify(verifySubject);
+
         String key = otpKey(contractId);
         String stored = redisTemplate.opsForValue().get(key);
         if (stored == null) {
@@ -182,8 +187,10 @@ public class ContractService {
                     "Phiên ký đã hết hạn. Vui lòng yêu cầu mã OTP mới.");
         }
         if (!stored.equals(otp)) {
+            otpRateLimitService.recordFailedVerify(verifySubject, key);
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Mã OTP không đúng. Vui lòng kiểm tra lại.");
         }
+        otpRateLimitService.clearVerifyFailures(verifySubject);
 
         // Khóa row khoản gọi vốn — tránh race với createOffer/sign khác đang chấp nhận offer
         // cùng lúc, khiến fundedAmount vượt quá amount.

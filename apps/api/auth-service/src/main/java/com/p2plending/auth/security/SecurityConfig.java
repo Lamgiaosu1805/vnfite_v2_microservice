@@ -37,6 +37,7 @@ public class SecurityConfig {
                         .requestMatchers(
                                 "/api/auth/check-phone",
                                 "/api/auth/register",
+                                "/api/auth/register/unblock-request",
                                 "/api/auth/register/verify",
                                 "/api/auth/login",
                                 "/api/auth/refresh",
