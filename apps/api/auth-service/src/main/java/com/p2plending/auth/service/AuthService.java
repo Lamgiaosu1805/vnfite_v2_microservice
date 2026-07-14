@@ -148,6 +148,7 @@ public class AuthService {
                 request.getPhone(),
                 passwordEncoder.encode(request.getPassword()),
                 StringUtils.hasText(request.getReferrerPhone()) ? request.getReferrerPhone() : null,
+                request.getType(),
                 null
         );
 
@@ -185,7 +186,7 @@ public class AuthService {
                 new TransactionSynchronization() {
                     @Override
                     public void afterCommit() {
-                        customerSyncService.vWorkRegister(apiKey, saved.getId(), pending.getReferrerPhone(), saved.getPhone());
+                        customerSyncService.vWorkRegister(apiKey, saved.getId(), pending.getReferrerPhone(), pending.getType(), saved.getPhone());
                     }
                 }
         );

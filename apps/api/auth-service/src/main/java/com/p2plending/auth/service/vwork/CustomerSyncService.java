@@ -16,13 +16,14 @@ public class CustomerSyncService {
     private final VWorkFeignService vWorkFeignService;
 
     @Async
-    public void vWorkRegister(String apiKey, String userId, String redfCode, String phone) {
+    public void vWorkRegister(String apiKey, String userId, String redfCode, String type, String phone) {
         try {
             UpsertCustomerRequest upsertRequest = new UpsertCustomerRequest();
             upsertRequest.setAppCode(Constant.APP_CODE);
             upsertRequest.setPhoneNumber(phone);
             upsertRequest.setExternalId(userId);
             upsertRequest.setRefCode(redfCode);
+            upsertRequest.setType(type);
 
             vWorkFeignService.upsertCustomer(apiKey, upsertRequest);
         } catch (Exception e) {
