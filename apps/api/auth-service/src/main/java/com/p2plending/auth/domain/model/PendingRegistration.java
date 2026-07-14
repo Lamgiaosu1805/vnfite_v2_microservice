@@ -11,5 +11,6 @@ public class PendingRegistration {
     private String phone;
     private String hashedPassword;
     private String referrerPhone;
+    private String type;
     private String otp;
 }
