@@ -1,6 +1,7 @@
 package com.p2plending.fec.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.p2plending.fec.config.FecProperties;
 import com.p2plending.fec.dto.FecLeadStatusCallbackRequest;
 import com.p2plending.fec.dto.FecLeadSubmitRequest;
@@ -108,7 +109,7 @@ public class FecLeadService {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid x-api-key");
         }
         String signature = RsaCrypto.extractSignatureValue(signatureHeader);
-        if (!RsaCrypto.verifySha256(rawBody, signature, properties.getFecPublicKey())) {
+        if (!verifyCallbackSignature(rawBody, signature)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Invalid signature");
         }
         log.info("FEC callback accepted: leadGenId={}, status={}, appId={}, appType={}, offerAmt={}, cashAmt={}",
@@ -118,6 +119,25 @@ public class FecLeadService {
 
     private String encrypt(String value) {
         return RsaCrypto.encryptPkcs1(value, properties.getFecPublicKey());
+    }
+
+    private boolean verifyCallbackSignature(String rawBody, String signature) {
+        if (RsaCrypto.verifySha256(rawBody, signature, properties.getFecPublicKey())) {
+            return true;
+        }
+
+        try {
+            JsonNode callbackJson = objectMapper.readTree(rawBody);
+            String compactJson = objectMapper.writeValueAsString(callbackJson);
+            boolean verified = !compactJson.equals(rawBody)
+                    && RsaCrypto.verifySha256(compactJson, signature, properties.getFecPublicKey());
+            if (verified) {
+                log.info("FEC callback signature verified with compact JSON normalization");
+            }
+            return verified;
+        } catch (Exception ex) {
+            return false;
+        }
     }
 
     private boolean verifyResponseSignature(String requestBody, String responseBody, String signatureHeader) {
