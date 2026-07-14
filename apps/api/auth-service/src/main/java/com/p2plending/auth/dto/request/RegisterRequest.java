@@ -17,7 +17,7 @@ public class RegisterRequest {
     @Size(min = 32, max = 100, message = "Password is required")
     private String password;
 
-    @VietnamesePhone(message = "Invalid Vietnamese phone number for referrer")
+//    @VietnamesePhone(message = "Invalid Vietnamese phone number for referrer")
     private String referrerPhone;
 
     @Schema(description = "Nguồn mở đăng ký tài khoản", example = "SALE")
