@@ -1,6 +1,7 @@
 package com.p2plending.auth.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.p2plending.auth.common.Constant;
 import com.p2plending.auth.config.RedisNamespaceProperties;
 import com.p2plending.auth.config.JwtProperties;
 import com.p2plending.auth.domain.entity.KycDocument;
@@ -25,6 +26,7 @@ import com.p2plending.auth.dto.response.DeviceSessionResponse;
 import com.p2plending.auth.dto.response.KycDocumentResponse;
 import com.p2plending.auth.dto.response.RegisterInitResponse;
 import com.p2plending.auth.dto.response.UserProfileResponse;
+import com.p2plending.auth.dto.response.vwork.ReferralResponse;
 import com.p2plending.auth.exception.DeviceConflictException;
 import com.p2plending.auth.exception.InvalidCredentialsException;
 import com.p2plending.auth.exception.InvalidOtpException;
@@ -116,6 +118,7 @@ public class AuthService {
     private final FcmTokenService               fcmTokenService;
     private final VnfOtpSenderService           vnfOtpSenderService;
     private final CustomerSyncService           customerSyncService;
+    private final VWorkFeignService             vWorkFeignService;
 
     @Value("${spring.vwork.api-key}")
     private String apiKey;
@@ -137,7 +140,16 @@ public class AuthService {
 
         if (StringUtils.hasText(request.getReferrerPhone())) {
             if (!userRepository.existsByPhone(request.getReferrerPhone())) {
-                throw new InvalidReferrerException("Mã giới thiệu không hợp lệ");
+                // Nếu chưa có → gọi kiểm tra CRM
+                try {
+                    ReferralResponse response = vWorkFeignService.checkReferral(apiKey, request.getReferrerPhone(), Constant.APP_CODE);
+                    if (response == null || !Boolean.TRUE.equals(response.getExists()) || response.getInfo() == null) {
+                        throw new InvalidReferrerException("Mã giới thiệu không hợp lệ");
+                    }
+                } catch (Exception ex) {
+                    log.error("Lỗi call kiểm tra mã giới thiệu bên CRM", ex);
+                }
+
             }
             if (request.getReferrerPhone().equals(request.getPhone())) {
                 throw new InvalidReferrerException("Không thể tự giới thiệu chính mình");

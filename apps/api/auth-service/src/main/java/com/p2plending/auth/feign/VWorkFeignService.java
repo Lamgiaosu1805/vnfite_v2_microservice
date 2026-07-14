@@ -4,6 +4,7 @@ import com.p2plending.auth.common.Constant;
 import com.p2plending.auth.config.FeignConfig;
 import com.p2plending.auth.dto.request.vwork.CustomerSyncRequest;
 import com.p2plending.auth.dto.request.vwork.UpsertCustomerRequest;
+import com.p2plending.auth.dto.response.vwork.ReferralResponse;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
@@ -22,4 +23,11 @@ public interface VWorkFeignService {
             consumes = MediaType.APPLICATION_JSON_VALUE)
     void bulkUpsertCustomers(@RequestHeader(Constant.X_API_KEY) String apiKey,
                              @RequestBody CustomerSyncRequest customerSyncRequest);
+
+    @GetMapping(value = "${spring.vwork.referral-check}",
+            produces = MediaType.APPLICATION_JSON_VALUE,
+            consumes = MediaType.APPLICATION_JSON_VALUE)
+    ReferralResponse checkReferral(@RequestHeader(Constant.X_API_KEY) String apiKey,
+                                   @RequestParam("ref_code") String refCode,
+                                   @RequestParam("app_code") String appCode);
 }
