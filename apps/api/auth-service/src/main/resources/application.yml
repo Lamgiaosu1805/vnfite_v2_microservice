@@ -67,6 +67,7 @@ spring:
     api-key: ${VWORK_API_KEY}
     user-upsert: customer/upsert
     customer-bulk-upsert: customer/bulk-upsert
+    referral-check: referral/check
 
 server:
   port: 8081
