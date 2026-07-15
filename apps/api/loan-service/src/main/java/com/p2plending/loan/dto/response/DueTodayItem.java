@@ -21,6 +21,11 @@ public class DueTodayItem {
     private BigDecimal lateFee;
     private BigDecimal paidAmount;
     private BigDecimal lateFeePaid;
+    private BigDecimal principalPaid;
+    private BigDecimal interestPaid;
+    private BigDecimal principalOutstanding;
+    private BigDecimal interestOutstanding;
+    private BigDecimal lateFeeOutstanding;
     private BigDecimal remaining;
     /** Tổng dư nợ còn lại của TẤT CẢ kỳ chưa thanh toán (kỳ này + mọi kỳ trước còn nợ). */
     private BigDecimal totalDebt;
