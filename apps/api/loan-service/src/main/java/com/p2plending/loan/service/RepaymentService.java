@@ -836,7 +836,25 @@ public class RepaymentService {
                     .message("Số dư khả dụng sau làm tròn không đủ để thu")
                     .build();
         }
-        doSettlePeriod(loan, due, payAmount, PaymentChannel.AUTO_DEBIT, null, schedules.size());
+        try {
+            doSettlePeriod(loan, due, payAmount, PaymentChannel.AUTO_DEBIT, null, schedules.size());
+        } catch (InvalidLoanStateException e) {
+            // TIKLUY rejects a debit that exceeds its locked-money balance. This is an
+            // insufficient-funds outcome for the sweep, not a technical processing failure.
+            if (isInsufficientAutoDebitBalance(e)) {
+                log.info("Auto-debit loan {}: TIKLUY reports insufficient locked balance: {}",
+                        loanId, e.getMessage());
+                return AutoDebitLoanResult.builder()
+                        .loanId(loan.getId())
+                        .loanCode(loan.getLoanCode())
+                        .borrowerId(loan.getBorrowerId())
+                        .status(AutoDebitLoanResultStatus.NO_BALANCE)
+                        .amountCollected(BigDecimal.ZERO)
+                        .message("Ví không đủ số dư khả dụng để thu tự động")
+                        .build();
+            }
+            throw e;
+        }
         boolean settledFull = due.getTotalOutstanding().signum() <= 0;
         return AutoDebitLoanResult.builder()
                 .loanId(loan.getId())
@@ -848,6 +866,13 @@ public class RepaymentService {
                 .amountCollected(payAmount)
                 .message(settledFull ? "Đã thu đủ kỳ đến hạn" : "Đã thu một phần kỳ đến hạn")
                 .build();
+    }
+
+    private boolean isInsufficientAutoDebitBalance(InvalidLoanStateException exception) {
+        String message = exception.getMessage();
+        return message != null && (
+                message.contains("Số tiền rút lớn hơn locked money")
+                        || message.contains("Số dư khả dụng không đủ"));
     }
 
     /**
