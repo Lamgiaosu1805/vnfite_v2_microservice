@@ -104,6 +104,22 @@ public class InternalUserController {
     }
 
     /**
+     * GET /internal/users/fcm-tokens-by-segment?kycStatus=
+     * Trả về (userId, fcmToken) lọc theo trạng thái KYC — dùng cho campaign thông báo
+     * marketing (cần userId để ghi lịch sử in-app cho đúng người, không chỉ push).
+     * kycStatus rỗng/không truyền = tất cả segment. Luôn loại tài khoản blacklist.
+     * Response: { "entries": [{userId, fcmToken}], "count": N }
+     */
+    @GetMapping("/fcm-tokens-by-segment")
+    public ResponseEntity<Map<String, Object>> getFcmTokensBySegment(
+            @RequestHeader(INTERNAL_SECRET_HEADER) String secret,
+            @RequestParam(required = false) KycStatus kycStatus) {
+        requireInternalSecret(secret);
+        List<FcmTokenService.TokenEntry> entries = fcmTokenService.getTokensBySegment(kycStatus);
+        return ResponseEntity.ok(Map.of("entries", entries, "count", entries.size()));
+    }
+
+    /**
      * PUT /internal/users/{userId}/kyc-decision
      * CMS admin duyệt hoặc từ chối KYC.
      * Khi duyệt: publish kyc.approved → payment-service tạo ví + VNF account.

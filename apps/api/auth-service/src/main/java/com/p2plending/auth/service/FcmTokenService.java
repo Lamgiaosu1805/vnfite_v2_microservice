@@ -1,6 +1,7 @@
 package com.p2plending.auth.service;
 
 import com.p2plending.auth.domain.entity.UserFcmToken;
+import com.p2plending.auth.domain.enums.KycStatus;
 import com.p2plending.auth.domain.repository.UserFcmTokenRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -68,4 +69,18 @@ public class FcmTokenService {
                 .filter(t -> t != null && !t.isBlank())
                 .toList();
     }
+
+    /**
+     * Lấy (userId, token) theo segment KYC — dùng cho campaign thông báo marketing.
+     * kycStatus null = tất cả segment.
+     */
+    @Transactional(readOnly = true)
+    public List<TokenEntry> getTokensBySegment(KycStatus kycStatus) {
+        return fcmTokenRepository.findUserIdAndTokenBySegment(kycStatus).stream()
+                .map(row -> new TokenEntry((String) row[0], (String) row[1]))
+                .filter(entry -> entry.fcmToken() != null && !entry.fcmToken().isBlank())
+                .toList();
+    }
+
+    public record TokenEntry(String userId, String fcmToken) {}
 }

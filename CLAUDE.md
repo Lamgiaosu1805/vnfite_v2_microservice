@@ -597,7 +597,9 @@ Unique constraint: `(loan_id, investor_id)` — mỗi cặp vay-investor chỉ c
 
 ### Notification Service
 
-Không có REST endpoint — chỉ nhận event từ Kafka.
+Chủ yếu nhận event từ Kafka (không có REST endpoint công khai cho user).
+
+**Campaign bắn thông báo marketing (`NotificationCampaign`, bảng `notification_campaigns`):** CMS (role `CONTENT`/`ADMIN`/`SUPER_ADMIN`) tạo campaign qua `cms-service` proxy (`/cms/notifications/campaigns`) → gọi internal API notification-service (`/internal/notification-campaigns`, header `X-Internal-Secret`, xem `InternalNotificationCampaignController`). Mỗi campaign có `campaignType` (`SYSTEM`|`PROMOTION`), `segmentKycStatus` (null = tất cả, hoặc lọc theo `APPROVED`/`PENDING`/`NONE`/`REJECTED`), `sendMode` (`NOW` gửi ngay | `SCHEDULED` đặt lịch lặp lại mỗi ngày trong `[startDate, endDate]` vào `scheduledTime` cố định). `NotificationCampaignScheduler` (`@Scheduled` mỗi phút, zone `Asia/Ho_Chi_Minh`) tự bắn campaign đến hạn — điều kiện fire dùng `now >= scheduledTime` (không exact-match phút) để tự "đuổi kịp" nếu service down đúng lúc đó, và `lastSentDate < today` để không gửi trùng ngày. Mỗi lần gửi: lấy `(userId, fcmToken)` theo segment từ auth-service (`GET /internal/users/fcm-tokens-by-segment?kycStatus=`, luôn loại blacklist), ghi `Notification` in-app cho từng user (`channel = "MARKETING_" + campaignType`) + push FCM qua `PushNotificationClient.pushToTokens`. Giới hạn hiện tại: segment chỉ lọc theo KYC status, chưa phân biệt được nhà đầu tư/người gọi vốn thực sự (cần nối thêm `loan-service`).
 
 ## Kafka Topics & Event Flow
 

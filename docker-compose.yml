@@ -246,6 +246,7 @@ services:
       LOAN_SERVICE_URL: ${LOAN_SERVICE_URL:-http://loan-service:8082}
       PAYMENT_SERVICE_URL: ${PAYMENT_SERVICE_URL:-http://payment-service:8086}
       CREDIT_SERVICE_URL: ${CREDIT_SERVICE_URL:-http://credit-service:8087}
+      NOTIFICATION_SERVICE_URL: ${NOTIFICATION_SERVICE_URL:-http://notification-service:8084}
       INTERNAL_API_SECRET: ${INTERNAL_API_SECRET:?INTERNAL_API_SECRET is required}
       PUSH_NOTIFICATION_URL: ${PUSH_NOTIFICATION_URL:-https://service.vnfite.com.vn/push-notification/v2/notification}
       PUSH_NOTIFICATION_ALIAS: ${PUSH_NOTIFICATION_ALIAS:-vnfite}
