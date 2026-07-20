@@ -155,6 +155,10 @@ public class ContractService {
     @Transactional(readOnly = true)
     public ContractSignInitResponse initSign(String contractId, String userId) {
         LoanContract contract = requireOwnedContract(contractId, userId);
+        if (contract.getContractType() == ContractType.LOAN_AGREEMENT) {
+            throw new InvalidLoanStateException(
+                    "Hợp đồng gọi vốn phải ký giấy tận nơi, không hỗ trợ ký điện tử qua OTP.");
+        }
         if (contract.getStatus() != ContractStatus.PENDING_SIGNATURE) {
             throw new InvalidLoanStateException("Hợp đồng đã được ký hoặc không ở trạng thái chờ ký.");
         }
@@ -173,6 +177,10 @@ public class ContractService {
     @Transactional
     public ContractResponse signContract(String contractId, String userId, String otp) {
         LoanContract contract = requireOwnedContract(contractId, userId);
+        if (contract.getContractType() == ContractType.LOAN_AGREEMENT) {
+            throw new InvalidLoanStateException(
+                    "Hợp đồng gọi vốn phải ký giấy tận nơi, không hỗ trợ ký điện tử qua OTP.");
+        }
         if (contract.getStatus() != ContractStatus.PENDING_SIGNATURE) {
             throw new InvalidLoanStateException("Hợp đồng đã được ký hoặc không ở trạng thái chờ ký.");
         }

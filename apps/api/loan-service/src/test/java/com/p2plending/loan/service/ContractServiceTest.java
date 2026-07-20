@@ -151,4 +151,36 @@ class ContractServiceTest {
         assertThat(investorContract.getStatus()).isEqualTo(ContractStatus.SIGNED);
         assertThat(loan.getStatus()).isEqualTo(LoanStatus.AWAITING_DISBURSEMENT);
     }
+
+    @Test
+    void initSign_rejectsLoanAgreement_mustBePaperSigned() {
+        LoanContract loanAgreement = LoanContract.builder()
+                .id("contract-loan")
+                .contractType(ContractType.LOAN_AGREEMENT)
+                .partyId("borrower-1")
+                .status(ContractStatus.PENDING_SIGNATURE)
+                .build();
+        when(contractRepository.findByIdAndIsDeletedFalse("contract-loan"))
+                .thenReturn(java.util.Optional.of(loanAgreement));
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                        () -> contractService.initSign("contract-loan", "borrower-1"))
+                .isInstanceOf(com.p2plending.loan.exception.InvalidLoanStateException.class);
+    }
+
+    @Test
+    void signContract_rejectsLoanAgreement_mustBePaperSigned() {
+        LoanContract loanAgreement = LoanContract.builder()
+                .id("contract-loan")
+                .contractType(ContractType.LOAN_AGREEMENT)
+                .partyId("borrower-1")
+                .status(ContractStatus.PENDING_SIGNATURE)
+                .build();
+        when(contractRepository.findByIdAndIsDeletedFalse("contract-loan"))
+                .thenReturn(java.util.Optional.of(loanAgreement));
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                        () -> contractService.signContract("contract-loan", "borrower-1", "000000"))
+                .isInstanceOf(com.p2plending.loan.exception.InvalidLoanStateException.class);
+    }
 }
