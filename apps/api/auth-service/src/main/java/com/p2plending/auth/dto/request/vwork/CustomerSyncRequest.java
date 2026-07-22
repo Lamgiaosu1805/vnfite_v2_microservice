@@ -55,6 +55,8 @@ public class CustomerSyncRequest {
 
         @JsonProperty("address")
         private String address;
-    }
 
+        @JsonProperty("created_at")
+        private String createdAt;
+    }
 }

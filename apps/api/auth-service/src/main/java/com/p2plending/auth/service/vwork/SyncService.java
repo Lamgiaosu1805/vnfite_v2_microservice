@@ -67,6 +67,7 @@ public class SyncService {
         CustomerSyncRequest.CustomerDto.CustomerDtoBuilder builder = CustomerSyncRequest.CustomerDto.builder()
                 .phoneNumber(user.getPhone())
                 .externalId(user.getId())
+                .createdAt(user.getCreatedAt().toString())
                 .isKyc(isKyc);
 
         if (isKyc) {

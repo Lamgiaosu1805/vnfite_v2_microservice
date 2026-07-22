@@ -165,7 +165,7 @@ public class KycService {
                 new TransactionSynchronization() {
                     @Override
                     public void afterCommit() {
-                        customerSyncService.vWorkEKYC(apiKey, userId, user.getPhone(), submission);
+                        customerSyncService.syncEKYC(apiKey, userId, user.getPhone(), submission);
                     }
                 }
         );
