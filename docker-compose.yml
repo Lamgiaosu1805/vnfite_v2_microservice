@@ -248,6 +248,9 @@ services:
       CREDIT_SERVICE_URL: ${CREDIT_SERVICE_URL:-http://credit-service:8087}
       NOTIFICATION_SERVICE_URL: ${NOTIFICATION_SERVICE_URL:-http://notification-service:8084}
       INTERNAL_API_SECRET: ${INTERNAL_API_SECRET:?INTERNAL_API_SECRET is required}
+      CORE_API_URL: ${CORE_API_URL:-http://host.docker.internal:8095}
+      CORE_TENANT_ID: ${CORE_TENANT_ID:-vnfite}
+      CORE_SERVICE_TOKEN_VNFITE: ${CORE_SERVICE_TOKEN_VNFITE:-}
       PUSH_NOTIFICATION_URL: ${PUSH_NOTIFICATION_URL:-https://service.vnfite.com.vn/push-notification/v2/notification}
       PUSH_NOTIFICATION_ALIAS: ${PUSH_NOTIFICATION_ALIAS:-vnfite}
       FILE_MANAGER_URL: ${FILE_MANAGER_URL:-https://service.vnfite.com.vn/file-manager/v2/file}

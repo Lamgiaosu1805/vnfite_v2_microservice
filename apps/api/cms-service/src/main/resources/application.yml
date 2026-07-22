@@ -59,6 +59,10 @@ cms:
     credit-url: ${CREDIT_SERVICE_URL:http://credit-service:8087}
     notification-url: ${NOTIFICATION_SERVICE_URL:http://notification-service:8084}
     internal-secret: ${INTERNAL_API_SECRET}
+  core:
+    base-url: ${CORE_API_URL:http://host.docker.internal:8095}
+    tenant-id: ${CORE_TENANT_ID:vnfite}
+    service-token: ${CORE_SERVICE_TOKEN_VNFITE:}
 
 push:
   notification:
