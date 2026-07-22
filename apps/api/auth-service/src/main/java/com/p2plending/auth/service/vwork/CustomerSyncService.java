@@ -16,7 +16,7 @@ public class CustomerSyncService {
     private final VWorkFeignService vWorkFeignService;
 
     @Async
-    public void vWorkRegister(String apiKey, String userId, String redfCode, String type, String phone) {
+    public void syncRegister(String apiKey, String userId, String redfCode, String type, String phone) {
         try {
             UpsertCustomerRequest upsertRequest = new UpsertCustomerRequest();
             upsertRequest.setAppCode(Constant.APP_CODE);
@@ -32,7 +32,7 @@ public class CustomerSyncService {
     }
 
     @Async
-    public void vWorkEKYC(String apiKey, String userId, String phone, KycSubmission kycSubmission) {
+    public void syncEKYC(String apiKey, String userId, String phone, KycSubmission kycSubmission) {
         try {
             UpsertCustomerRequest upsertRequest = new UpsertCustomerRequest();
             upsertRequest.setAppCode(Constant.APP_CODE);

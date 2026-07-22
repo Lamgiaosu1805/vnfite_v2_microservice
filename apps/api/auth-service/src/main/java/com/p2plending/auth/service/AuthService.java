@@ -198,7 +198,7 @@ public class AuthService {
                 new TransactionSynchronization() {
                     @Override
                     public void afterCommit() {
-                        customerSyncService.vWorkRegister(apiKey, saved.getId(), pending.getReferrerPhone(), pending.getType(), saved.getPhone());
+                        customerSyncService.syncRegister(apiKey, saved.getId(), pending.getReferrerPhone(), pending.getType(), saved.getPhone());
                     }
                 }
         );
