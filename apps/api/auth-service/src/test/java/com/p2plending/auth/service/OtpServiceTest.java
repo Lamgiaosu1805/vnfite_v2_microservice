@@ -13,6 +13,7 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.never;
@@ -45,6 +46,22 @@ class OtpServiceTest {
                 new PendingRegistration("0900000000", "hash", null, null, null), "203.0.113.8"));
 
         verify(otpRateLimitService).assertCanRegisterRequest("0900000000", "203.0.113.8");
+        verify(redisTemplate, never()).opsForValue();
+    }
+
+    @Test
+    void keepsExistingRegistrationOtpWithoutCallingGateway() {
+        ReflectionTestUtils.setField(otpService, "mockMode", false);
+        ReflectionTestUtils.setField(otpService, "redisNamespaceProperties", new RedisNamespaceProperties());
+        ReflectionTestUtils.setField(otpService, "objectMapper", new ObjectMapper());
+        when(redisTemplate.hasKey("dev:auth-service:pending_reg:0900000000")).thenReturn(true);
+
+        String result = otpService.generateAndStore(
+                new PendingRegistration("0900000000", "hash", null, null, null), "203.0.113.8");
+
+        assertThat(result).isEmpty();
+        verify(otpRateLimitService, never()).assertCanRegisterRequest(any(), any());
+        verify(vnfOtpSenderService, never()).sendOtp(any(), anyInt());
         verify(redisTemplate, never()).opsForValue();
     }
 }

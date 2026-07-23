@@ -33,6 +33,10 @@ public class OtpService {
     private final VnfOtpSenderService vnfOtpSenderService;
 
     public String generateAndStore(PendingRegistration pending, String clientIp) {
+        if (Boolean.TRUE.equals(redisTemplate.hasKey(pendingKey(pending.getPhone())))) {
+            log.info("Registration OTP is still active for phone={}, skip sending a new OTP", pending.getPhone());
+            return "";
+        }
         otpRateLimitService.assertCanRegisterRequest(pending.getPhone(), clientIp);
 
         String otp;

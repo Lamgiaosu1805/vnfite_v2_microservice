@@ -64,11 +64,10 @@ public class PasswordResetService {
 
     @Transactional(readOnly = true)
     public Map<String, String> initReset(ForgotPasswordRequest request, String clientIp) {
-        otpRateLimitService.assertCanRegisterRequest(request.getPhone(), clientIp);
-
         Optional<User> userOpt = userRepository.findByPhone(request.getPhone());
 
         if (userOpt.isEmpty()) {
+            otpRateLimitService.assertCanRegisterRequest(request.getPhone(), clientIp);
             log.info("Password reset requested for unknown phone={}", request.getPhone());
             return genericOkResponse(null);
         }
@@ -84,6 +83,12 @@ public class PasswordResetService {
                 throw new InvalidIdentityException("Số CCCD không khớp với thông tin đã đăng ký");
             }
         }
+
+        if (Boolean.TRUE.equals(redisTemplate.hasKey(otpKey(request.getPhone())))) {
+            return Map.of("message", "OTP trước đó vẫn còn hiệu lực. Vui lòng sử dụng mã đã nhận.");
+        }
+
+        otpRateLimitService.assertCanRegisterRequest(request.getPhone(), clientIp);
 
         String otp;
         if (mockMode) {

@@ -167,7 +167,9 @@ public class AuthService {
         String otp = otpService.generateAndStore(pending, clientIp);
 
         return RegisterInitResponse.builder()
-                .message("OTP đã được gửi đến số điện thoại của bạn")
+                .message(StringUtils.hasText(otp)
+                        ? "OTP đã được gửi đến số điện thoại của bạn"
+                        : "OTP trước đó vẫn còn hiệu lực. Vui lòng sử dụng mã đã nhận.")
                 .build();
     }
 
@@ -774,8 +776,6 @@ public class AuthService {
 
     @Transactional(readOnly = true)
     public Map<String, String> initDeviceReset(String phone, String cccdNumber, String issueDateStr, String clientIp) {
-        otpRateLimitService.assertCanRegisterRequest(phone, clientIp);
-
         User user = userRepository.findByPhone(phone)
                 .orElseThrow(() -> new InvalidCredentialsException("Số điện thoại không tồn tại trong hệ thống"));
 
@@ -794,6 +794,12 @@ public class AuthService {
                 || !kycOpt.get().getIssueDate().equals(issueDate)) {
             throw new InvalidCredentialsException("Thông tin CCCD không khớp hoặc tài khoản chưa xác minh danh tính");
         }
+
+        if (Boolean.TRUE.equals(redisTemplate.hasKey(deviceResetOtpKey(phone)))) {
+            return Map.of("message", "OTP trước đó vẫn còn hiệu lực. Vui lòng sử dụng mã đã nhận.");
+        }
+
+        otpRateLimitService.assertCanRegisterRequest(phone, clientIp);
 
         String otp;
         if (mockMode) {
