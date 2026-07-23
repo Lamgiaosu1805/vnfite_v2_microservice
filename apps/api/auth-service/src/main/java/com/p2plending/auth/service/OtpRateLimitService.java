@@ -25,6 +25,9 @@ public class OtpRateLimitService {
     private static final String REGISTER_GLOBAL_MINUTE_KEY = "otp_rate:register:global:minute";
     private static final String REGISTER_IP_PHONE_SET_PREFIX = "otp_rate:register:ip:phones:";
     private static final String REGISTER_IP_BLOCK_PREFIX = "otp_rate:register:ip:block:";
+    private static final String REGISTER_IP_STRIKE_PREFIX = "otp_rate:register:ip:strikes:";
+    private static final String REGISTER_DEVICE_DAILY_PREFIX = "otp_rate:register:device:day:";
+    private static final String REGISTER_DEVICE_PHONE_SET_PREFIX = "otp_rate:register:device:phones:";
     private static final String VERIFY_FAIL_PREFIX = "otp_verify:fail:";
     private static final String VERIFY_COOLDOWN_PREFIX = "otp_verify:cooldown:";
     private static final int MAX_CONSECUTIVE_REQUESTS = 2;
@@ -33,14 +36,19 @@ public class OtpRateLimitService {
     private static final Duration COOLDOWN = Duration.ofSeconds(60);
     private static final Duration VERIFY_FAIL_WINDOW = Duration.ofMinutes(5);
     private static final Duration VERIFY_COOLDOWN = Duration.ofMinutes(10);
-    private static final int MAX_REGISTER_PHONE_PER_HOUR = 3;
-    private static final int MAX_REGISTER_PHONE_PER_DAY = 8;
+    private static final int MAX_REGISTER_PHONE_PER_HOUR = 2;
+    private static final int MAX_REGISTER_PHONE_PER_DAY = 5;
     private static final int MAX_REGISTER_IP_PER_MINUTE = 5;
-    private static final int MAX_REGISTER_IP_PER_HOUR = 30;
+    private static final int MAX_REGISTER_IP_PER_HOUR = 15;
     private static final int MAX_REGISTER_GLOBAL_PER_MINUTE = 30;
-    private static final int MAX_REGISTER_DISTINCT_PHONES_PER_IP = 10;
+    private static final int MAX_REGISTER_DISTINCT_PHONES_PER_IP = 5;
     private static final Duration REGISTER_IP_PHONE_WINDOW = Duration.ofHours(1);
-    private static final Duration REGISTER_IP_BLOCK_WINDOW = Duration.ofHours(1);
+    private static final Duration REGISTER_IP_BLOCK_WINDOW = Duration.ofHours(24);
+    private static final Duration REGISTER_IP_STRIKE_WINDOW = Duration.ofDays(7);
+    private static final int MAX_REGISTER_IP_STRIKES = 2;
+    private static final int MAX_REGISTER_DEVICE_PER_DAY = 5;
+    private static final int MAX_REGISTER_DISTINCT_PHONES_PER_DEVICE = 3;
+    private static final Duration REGISTER_DEVICE_WINDOW = Duration.ofDays(1);
 
     private static final DefaultRedisScript<Long> REGISTER_LIMIT_SCRIPT = new DefaultRedisScript<>("""
             if redis.call('EXISTS', KEYS[7]) == 1 then
@@ -70,8 +78,29 @@ public class OtpRateLimitService {
             return 1
             """, Long.class);
 
+    private static final DefaultRedisScript<Long> DEVICE_LIMIT_SCRIPT = new DefaultRedisScript<>("""
+            local total = tonumber(redis.call('GET', KEYS[1]) or '0')
+            if total >= tonumber(ARGV[1]) then
+              return -1
+            end
+            local isMember = redis.call('SISMEMBER', KEYS[2], ARGV[3])
+            if isMember == 0 and redis.call('SCARD', KEYS[2]) >= tonumber(ARGV[2]) then
+              return -2
+            end
+            local nextValue = redis.call('INCR', KEYS[1])
+            if nextValue == 1 then
+              redis.call('EXPIRE', KEYS[1], tonumber(ARGV[4]))
+            end
+            redis.call('SADD', KEYS[2], ARGV[3])
+            if redis.call('TTL', KEYS[2]) < 0 then
+              redis.call('EXPIRE', KEYS[2], tonumber(ARGV[4]))
+            end
+            return 1
+            """, Long.class);
+
     private final StringRedisTemplate redisTemplate;
     private final RedisNamespaceProperties redisNamespaceProperties;
+    private final OtpIpBlockService otpIpBlockService;
 
     public void assertCanRequest(String phone) {
         if (!StringUtils.hasText(phone)) return;
@@ -130,6 +159,9 @@ public class OtpRateLimitService {
 
         if (result == null || result == 1L) return;
         int rejectedRule = Math.abs(result.intValue());
+        if (rejectedRule == 6) {
+            recordIpStrike(normalizedIp);
+        }
         if (rejectedRule == 6 || rejectedRule == 7) {
             throw new OtpRateLimitException(
                     "Địa chỉ mạng này đã yêu cầu OTP cho quá nhiều số điện thoại. Vui lòng thử lại sau "
@@ -142,6 +174,39 @@ public class OtpRateLimitService {
         throw new OtpRateLimitException(registerLimitMessage(rejectedRule) + " "
                 + Math.max(retryAfter == null ? 0L : retryAfter, 1L) + " giây.",
                 Math.max(retryAfter == null ? 0L : retryAfter, 1L));
+    }
+
+    public void assertCanRequestFromDevice(String phone, String deviceId) {
+        if (!StringUtils.hasText(phone) || !StringUtils.hasText(deviceId)) return;
+        String normalizedDevice = normalizeDeviceId(deviceId);
+        if (normalizedDevice == null) return;
+        List<String> keys = List.of(
+                qualifiedKey(REGISTER_DEVICE_DAILY_PREFIX + normalizedDevice),
+                qualifiedKey(REGISTER_DEVICE_PHONE_SET_PREFIX + normalizedDevice)
+        );
+        Long result = redisTemplate.execute(DEVICE_LIMIT_SCRIPT, keys,
+                String.valueOf(MAX_REGISTER_DEVICE_PER_DAY),
+                String.valueOf(MAX_REGISTER_DISTINCT_PHONES_PER_DEVICE),
+                phone.trim(),
+                String.valueOf(REGISTER_DEVICE_WINDOW.toSeconds()));
+        if (result == null || result == 1L) return;
+        throw new OtpRateLimitException(
+                result == -2L
+                        ? "Thiết bị này đã yêu cầu OTP cho quá nhiều số điện thoại. Vui lòng thử lại sau 24 giờ."
+                        : "Thiết bị này đã đạt giới hạn yêu cầu OTP trong ngày. Vui lòng thử lại sau 24 giờ.",
+                REGISTER_DEVICE_WINDOW.toSeconds());
+    }
+
+    private void recordIpStrike(String normalizedIp) {
+        String key = qualifiedKey(REGISTER_IP_STRIKE_PREFIX + normalizedIp);
+        Long strikes = redisTemplate.opsForValue().increment(key);
+        if (strikes != null && strikes == 1L) {
+            redisTemplate.expire(key, REGISTER_IP_STRIKE_WINDOW);
+        }
+        if (strikes != null && strikes >= MAX_REGISTER_IP_STRIKES) {
+            otpIpBlockService.blockAutomatically(normalizedIp,
+                    "Tự động chặn do tái phạm xoay nhiều số điện thoại để gửi OTP");
+        }
     }
 
     public void assertCanVerify(String subject) {
@@ -207,6 +272,11 @@ public class OtpRateLimitService {
         if (!StringUtils.hasText(clientIp)) return "unknown";
         String normalized = clientIp.trim();
         return normalized.matches("[0-9a-fA-F:.]{1,64}") ? normalized : "unknown";
+    }
+
+    private String normalizeDeviceId(String deviceId) {
+        String normalized = deviceId.trim();
+        return normalized.matches("[a-zA-Z0-9._:-]{8,128}") ? normalized : null;
     }
 
     private String requestCountKey(String phone) {

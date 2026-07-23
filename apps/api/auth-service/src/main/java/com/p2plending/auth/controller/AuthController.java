@@ -34,6 +34,7 @@ import com.p2plending.auth.service.FcmTokenService;
 import com.p2plending.auth.service.KycService;
 import com.p2plending.auth.service.PasswordResetService;
 import com.p2plending.auth.service.OtpIpBlockService;
+import com.p2plending.auth.service.OtpRateLimitService;
 import com.p2plending.auth.service.VnptEkycTokenService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -62,6 +63,7 @@ public class AuthController {
     private final VnptEkycTokenService   vnptEkycTokenService;
     private final BusinessProfileService businessProfileService;
     private final OtpIpBlockService       otpIpBlockService;
+    private final OtpRateLimitService     otpRateLimitService;
 
     /**
      * POST /api/auth/check-phone
@@ -85,6 +87,7 @@ public class AuthController {
     ) {
         String clientIp = resolveClientIp(servletRequest);
         otpIpBlockService.assertRegistrationAllowed(clientIp);
+        otpRateLimitService.assertCanRequestFromDevice(request.getPhone(), resolveDeviceId(servletRequest, clientIp));
         return ResponseEntity.ok(authService.registerInit(request, clientIp));
     }
 
@@ -112,6 +115,11 @@ public class AuthController {
             return realIp.trim();
         }
         return request.getRemoteAddr();
+    }
+
+    private String resolveDeviceId(HttpServletRequest request, String clientIp) {
+        String deviceId = request.getHeader("X-Device-Id");
+        return deviceId == null || deviceId.isBlank() ? "legacy:" + clientIp : deviceId.trim();
     }
 
     /**
@@ -190,6 +198,7 @@ public class AuthController {
             HttpServletRequest servletRequest) {
         String clientIp = resolveClientIp(servletRequest);
         otpIpBlockService.assertRegistrationAllowed(clientIp);
+        otpRateLimitService.assertCanRequestFromDevice(request.getPhone(), resolveDeviceId(servletRequest, clientIp));
         return ResponseEntity.ok(authService.initDeviceReset(
                 request.getPhone(), request.getCccdNumber(), request.getIssueDate(), clientIp));
     }
@@ -280,6 +289,7 @@ public class AuthController {
             HttpServletRequest servletRequest) {
         String clientIp = resolveClientIp(servletRequest);
         otpIpBlockService.assertRegistrationAllowed(clientIp);
+        otpRateLimitService.assertCanRequestFromDevice(request.getPhone(), resolveDeviceId(servletRequest, clientIp));
         return ResponseEntity.ok(passwordResetService.initReset(request, clientIp));
     }
 

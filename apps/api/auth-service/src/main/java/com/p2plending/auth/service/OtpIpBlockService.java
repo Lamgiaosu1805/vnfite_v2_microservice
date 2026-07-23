@@ -35,6 +35,29 @@ public class OtpIpBlockService {
     }
 
     @Transactional
+    public void blockAutomatically(String clientIp, String reason) {
+        String ip = normalizeIp(clientIp);
+        OtpIpBlock block = blockRepository.findByIpAddressAndIsDeletedFalse(ip).orElse(null);
+        if (block == null) {
+            block = OtpIpBlock.builder()
+                    .id(UUID.randomUUID().toString())
+                    .ipAddress(ip)
+                    .active(true)
+                    .reason(reason)
+                    .blockedBy("SYSTEM_SECURITY")
+                    .build();
+        } else {
+            block.setActive(true);
+            block.setReason(reason);
+            block.setBlockedBy("SYSTEM_SECURITY");
+            block.setUnblockedBy(null);
+            block.setUnblockedAt(null);
+            block.setDeleted(false);
+        }
+        blockRepository.save(block);
+    }
+
+    @Transactional
     public Map<String, String> createUnblockRequest(String phone, String note, String clientIp) {
         String ip = normalizeIp(clientIp);
         OtpIpBlock block = blockRepository.findByIpAddressAndIsDeletedFalse(ip).orElse(null);
